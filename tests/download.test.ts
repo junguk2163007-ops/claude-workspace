@@ -42,3 +42,12 @@ describe('한글 파일명 다운로드 헤더', () => {
     expect(zip.readUInt16LE(6) & 0x0800).toBe(0x0800);
   });
 });
+
+describe('ASCII 대체 이름', () => {
+  it('명시한 대체 이름을 쓴다', () => {
+    expect(contentDisposition('이력서_정민욱.pdf', 'attachment', 'resume-3.pdf')).toMatch(/^attachment; filename="resume-3.pdf"; filename\*=UTF-8''/);
+  });
+  it('한글만 있으면 document.pdf', () => {
+    expect(contentDisposition('이력서_정민욱_3단지.pdf')).toContain('filename="document.pdf"');
+  });
+});
