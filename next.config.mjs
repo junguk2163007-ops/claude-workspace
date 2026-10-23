@@ -1,4 +1,4 @@
-import type { NextConfig } from 'next';
+/** @type {import('next').NextConfig} */
 
 const securityHeaders = [
   { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive, nosnippet' },
@@ -8,11 +8,9 @@ const securityHeaders = [
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
 ];
 
-const nextConfig: NextConfig = {
-  output: 'standalone',
+const nextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ['better-sqlite3', 'playwright', 'playwright-core'],
-  outputFileTracingIncludes: { '/**/*': ['./assets/fonts/**/*', './seed.example/**/*'] },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
