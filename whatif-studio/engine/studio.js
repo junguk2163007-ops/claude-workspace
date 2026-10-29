@@ -14,6 +14,7 @@
   const DUR = topic.duration;
 
   document.body.classList.add(R.profile);
+  document.documentElement.classList.add(R.profile);
   if (renderMode) document.body.classList.add('render');
   const outCanvas = $('outCanvas');
   outCanvas.width = Math.round(R.W * scale);

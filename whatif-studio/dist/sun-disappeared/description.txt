@@ -1,0 +1,22 @@
+태양이 한순간 사라지면 우리는 8분 20초 뒤에야 알게 됩니다. 어둠, 꺼지는 달, 궤도 이탈, 영하의 지구, 얼어붙는 바다, 그리고 심해의 생명까지 66초 시뮬레이션.
+
+0:00 시작 · 8분 20초
+0:10 대낮의 암흑 · 달빛도 소멸
+0:22 초속 약 30km · 일주일 −18℃
+0:34 광합성 정지 · 바다 표면 결빙
+0:46 심해 열수구 · 실제론 불가능
+
+Sources:
+- Smithsonian NASM: https://howthingsfly.si.edu/ask-an-explainer/how-long-does-it-take-light-sun-get-earth
+- NASA NSSDC: https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html
+- LIGO/Virgo, Fermi, INTEGRAL (ApJL 2017): https://arxiv.org/abs/1710.05834
+- NASA Space Place: https://spaceplace.nasa.gov/moon-phases/
+- Wikipedia (Lux): https://en.wikipedia.org/wiki/Lux
+- Popular Science: https://www.popsci.com/science/article/2013-07/if-sun-went-out-how-long-could-life-earth-survive/
+- How It Works: https://www.howitworksdaily.com/life-without-the-sun/
+- NOAA Ocean Exploration: https://oceanexplorer.noaa.gov/edu/materials/chemosynthesis-fact-sheet.pdf
+- NASA Astrobiology: https://astrobiology.nasa.gov/news/living-in-a-dying-solar-system-part-2/
+
+장면과 소리는 모두 코드로 만든 과학 시뮬레이션입니다. 수치는 출처 기준이며 일부는 추정치입니다.
+
+#Shorts #WhatIf #태양

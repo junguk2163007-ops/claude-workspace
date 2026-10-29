@@ -1,0 +1,127 @@
+{
+  "slug": "sun-disappeared",
+  "title": "What If the Sun Disappeared?",
+  "langs": [
+    "ko"
+  ],
+  "ratios": [
+    "9x16"
+  ],
+  "channel": "What If 시리즈 (임시 기본값)",
+  "generatedAt": "2026-10-29T19:19:34.161Z",
+  "videos": [
+    {
+      "ratio": "9x16",
+      "file": "sun-disappeared_9x16.mp4",
+      "title": "What If the Sun Disappeared?",
+      "description": "태양이 한순간 사라지면 우리는 8분 20초 뒤에야 알게 됩니다. 어둠, 꺼지는 달, 궤도 이탈, 영하의 지구, 얼어붙는 바다, 그리고 심해의 생명까지 66초 시뮬레이션.\n\n0:00 시작 · 8분 20초\n0:10 대낮의 암흑 · 달빛도 소멸\n0:22 초속 약 30km · 일주일 −18℃\n0:34 광합성 정지 · 바다 표면 결빙\n0:46 심해 열수구 · 실제론 불가능\n\nSources:\n- Smithsonian NASM: https://howthingsfly.si.edu/ask-an-explainer/how-long-does-it-take-light-sun-get-earth\n- NASA NSSDC: https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html\n- LIGO/Virgo, Fermi, INTEGRAL (ApJL 2017): https://arxiv.org/abs/1710.05834\n- NASA Space Place: https://spaceplace.nasa.gov/moon-phases/\n- Wikipedia (Lux): https://en.wikipedia.org/wiki/Lux\n- Popular Science: https://www.popsci.com/science/article/2013-07/if-sun-went-out-how-long-could-life-earth-survive/\n- How It Works: https://www.howitworksdaily.com/life-without-the-sun/\n- NOAA Ocean Exploration: https://oceanexplorer.noaa.gov/edu/materials/chemosynthesis-fact-sheet.pdf\n- NASA Astrobiology: https://astrobiology.nasa.gov/news/living-in-a-dying-solar-system-part-2/\n\n장면과 소리는 모두 코드로 만든 과학 시뮬레이션입니다. 수치는 출처 기준이며 일부는 추정치입니다.\n\n#Shorts #WhatIf #태양",
+      "tags": [
+        "what if",
+        "what if the sun disappeared",
+        "태양",
+        "태양이 사라진다면",
+        "8분 20초",
+        "열수구",
+        "과학 시뮬레이션",
+        "만약에",
+        "과학",
+        "시뮬레이션",
+        "science"
+      ],
+      "hashtags": [
+        "#Shorts",
+        "#WhatIf",
+        "#태양"
+      ],
+      "categoryId": "28",
+      "defaultLanguage": "ko",
+      "privacyStatus": "private",
+      "selfDeclaredMadeForKids": false,
+      "containsSyntheticMedia": false,
+      "shorts": true,
+      "duration": 66,
+      "chapters": [
+        {
+          "start": 0,
+          "label": "시작 · 8분 20초"
+        },
+        {
+          "start": 10,
+          "label": "대낮의 암흑 · 달빛도 소멸"
+        },
+        {
+          "start": 22,
+          "label": "초속 약 30km · 일주일 −18℃"
+        },
+        {
+          "start": 34,
+          "label": "광합성 정지 · 바다 표면 결빙"
+        },
+        {
+          "start": 46,
+          "label": "심해 열수구 · 실제론 불가능"
+        }
+      ]
+    }
+  ],
+  "srt": [
+    "KO_SunDisappeared_LargeSub.srt",
+    "KO_SunDisappeared_Full.srt"
+  ],
+  "sources": [
+    {
+      "publisher": "Smithsonian NASM",
+      "title": "How long does it take light from the Sun to get to Earth?",
+      "url": "https://howthingsfly.si.edu/ask-an-explainer/how-long-does-it-take-light-sun-get-earth",
+      "usedFor": "햇빛 도달 시간 약 8분 20초 (평균 거리 약 1억 5천만 km)"
+    },
+    {
+      "publisher": "NASA NSSDC",
+      "title": "Earth Fact Sheet",
+      "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html",
+      "usedFor": "평균 공전 속도 29.78 km/s, 궤도 장반경 149.6백만 km"
+    },
+    {
+      "publisher": "LIGO/Virgo, Fermi, INTEGRAL (ApJL 2017)",
+      "title": "Gravitational Waves and Gamma-Rays from a Binary Neutron Star Merger: GW170817 and GRB 170817A",
+      "url": "https://arxiv.org/abs/1710.05834",
+      "usedFor": "중력의 변화도 빛의 속도로 전달 (중력파 속도 ≈ 광속)"
+    },
+    {
+      "publisher": "NASA Space Place",
+      "title": "What Are the Moon's Phases?",
+      "url": "https://spaceplace.nasa.gov/moon-phases/",
+      "usedFor": "달빛은 햇빛의 반사"
+    },
+    {
+      "publisher": "Wikipedia (Lux)",
+      "title": "Lux — illuminance examples",
+      "url": "https://en.wikipedia.org/wiki/Lux",
+      "usedFor": "직사광선 약 3만 2천~10만 lux"
+    },
+    {
+      "publisher": "Popular Science",
+      "title": "What would happen if the sun went out? (2013)",
+      "url": "https://www.popsci.com/science/article/2013-07/if-sun-went-out-how-long-could-life-earth-survive/",
+      "usedFor": "일주일 뒤 약 −18℃(0°F), 1년 뒤 약 −73℃(−100°F) — 추정치"
+    },
+    {
+      "publisher": "How It Works",
+      "title": "Life without the Sun",
+      "url": "https://www.howitworksdaily.com/life-without-the-sun/",
+      "usedFor": "광합성 즉시 정지, 작은 식물 몇 주·큰 나무 수십 년, 해양 표층 결빙과 심층 보존 — 추정치"
+    },
+    {
+      "publisher": "NOAA Ocean Exploration",
+      "title": "Chemosynthesis fact sheet",
+      "url": "https://oceanexplorer.noaa.gov/edu/materials/chemosynthesis-fact-sheet.pdf",
+      "usedFor": "열수구 생태계는 햇빛 대신 화학 에너지(화학합성)로 유지"
+    },
+    {
+      "publisher": "NASA Astrobiology",
+      "title": "Living in a Dying Solar System, Part 2",
+      "url": "https://astrobiology.nasa.gov/news/living-in-a-dying-solar-system-part-2/",
+      "usedFor": "약 50억 년 뒤 태양이 적색거성으로 부풂"
+    }
+  ]
+}

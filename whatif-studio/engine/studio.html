@@ -19,7 +19,8 @@
     flex-shrink: 0; border: 1px solid rgba(255,255,255,0.12);
   }
   body.landscape #stageWrap { width: 640px; height: 360px; }
-  body.landscape { flex-direction: column; overflow-y: auto; height: auto; min-height: 100%; }
+  body.landscape { flex-direction: column; justify-content: flex-start; overflow-y: auto; height: auto; min-height: 100%; }
+  html.landscape { display: block; height: auto; overflow: auto; padding: 0; }
   body.landscape #panel { width: 640px; max-height: none; }
   #outCanvas { display: block; width: 100%; height: 100%; }
   #go {

@@ -1,0 +1,40 @@
+{
+  "9x16": {
+    "ratio": "9x16",
+    "file": "dist/sun-disappeared/sun-disappeared_9x16.mp4",
+    "sheet": "dist/sun-disappeared/sun-disappeared_9x16_sheet.png",
+    "sheetTimes": [
+      1.2,
+      5.2,
+      23.2,
+      35.2,
+      47.4,
+      64.25
+    ],
+    "probe": {
+      "duration": 66,
+      "sizeMB": 17.25,
+      "video": {
+        "codec": "h264",
+        "width": 1080,
+        "height": 1920,
+        "fps": "30/1",
+        "pix_fmt": "yuv420p",
+        "frames": 1980
+      },
+      "audio": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      }
+    },
+    "checks": {
+      "duration": true,
+      "resolution": true,
+      "audioTrack": true,
+      "frames": true
+    },
+    "audioPeak": 0.457,
+    "seconds": 284.1
+  }
+}
