@@ -10,7 +10,10 @@
 
 ## 빠른 시작 (로컬)
 
+이 프로젝트는 `claude-workspace` 저장소의 `jobkit/` 폴더에 있습니다. 아래 명령은 모두 **`jobkit/` 폴더 안에서** 실행합니다.
+
 ```bash
+cd jobkit
 npm install                      # Node 20 이상. Playwright Chromium 이 필요합니다(아래 참고)
 cp .env.example .env.local       # APP_PASSWORD 를 꼭 바꾸세요
 npm run dev                      # http://localhost:3000 → 로그인
@@ -57,9 +60,12 @@ docker compose up -d --build      # http://localhost:3000
 
 단일 사용자·SQLite 앱이므로 **머신 1대 + 영구 볼륨 1개**로 운영합니다(여러 대로 늘리지 마세요). Chromium 때문에 메모리는 1GB를 권장합니다.
 
+`Dockerfile` 이 저장소 루트가 아니라 `jobkit/` 에 있으므로, 배포 서비스의 **빌드 기준 폴더(Root Directory / build context)를 `jobkit/`** 으로 지정해야 합니다.
+
 ### Fly.io
 
 ```bash
+cd jobkit                               # fly 명령은 jobkit/ 안에서 실행 (fly.toml 과 Dockerfile 이 있는 곳)
 cp fly.toml.example fly.toml            # app 이름 수정. 리전은 도쿄(nrt) 기본
 fly launch --no-deploy --copy-config
 fly volumes create jobkit_data --size 1 --region nrt
@@ -81,7 +87,7 @@ fly ssh sftp shell
 
 ### Railway
 
-1. 저장소를 연결하면 `Dockerfile` 로 빌드됩니다.
+1. `claude-workspace` 저장소를 연결하고, 서비스 Settings → **Root Directory** 를 `/jobkit` 으로 지정합니다. 그러면 `jobkit/Dockerfile` 로 빌드됩니다.
 2. 서비스에 **Volume** 을 추가하고 마운트 경로를 `/data` 로 지정합니다.
 3. Variables: `APP_PASSWORD`, `SESSION_SECRET` (필요하면 `PORT=3000`).
 4. 볼륨에 파일을 직접 올리는 방법이 마땅치 않으므로, 첫 실행(예시 시드) 뒤 `/profile` 에서 인적사항·사진·문구를 입력하는 방식을 권장합니다.
