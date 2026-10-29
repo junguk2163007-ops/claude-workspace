@@ -1,0 +1,78 @@
+{
+  "9x16": {
+    "ratio": "9x16",
+    "file": "dist/moon-vanish/moon-vanish_9x16.mp4",
+    "sheet": "dist/moon-vanish/moon-vanish_9x16_sheet.png",
+    "sheetTimes": [
+      1.2,
+      5,
+      23.4,
+      36.2,
+      48.2,
+      64.25
+    ],
+    "probe": {
+      "duration": 66,
+      "sizeMB": 11.76,
+      "video": {
+        "codec": "h264",
+        "width": 1080,
+        "height": 1920,
+        "fps": "30/1",
+        "pix_fmt": "yuv420p",
+        "frames": 1980
+      },
+      "audio": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      }
+    },
+    "checks": {
+      "duration": true,
+      "resolution": true,
+      "audioTrack": true,
+      "frames": true
+    },
+    "audioPeak": 0.43,
+    "seconds": 213.9
+  },
+  "16x9": {
+    "ratio": "16x9",
+    "file": "dist/moon-vanish/moon-vanish_16x9.mp4",
+    "sheet": "dist/moon-vanish/moon-vanish_16x9_sheet.png",
+    "sheetTimes": [
+      1.2,
+      5,
+      23.4,
+      36.2,
+      48.2,
+      64.25
+    ],
+    "probe": {
+      "duration": 66,
+      "sizeMB": 12.38,
+      "video": {
+        "codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "fps": "30/1",
+        "pix_fmt": "yuv420p",
+        "frames": 1980
+      },
+      "audio": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      }
+    },
+    "checks": {
+      "duration": true,
+      "resolution": true,
+      "audioTrack": true,
+      "frames": true
+    },
+    "audioPeak": 0.43,
+    "seconds": 214.1
+  }
+}
