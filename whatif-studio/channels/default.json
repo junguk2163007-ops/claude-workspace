@@ -1,0 +1,10 @@
+{
+  "name": "What If 시리즈 (임시 기본값)",
+  "_status": "정욱님 확인 전 임시 설정 — 제목 패턴·푸터·해시태그를 확정하면 이 파일을 고친다",
+  "titlePattern": "{title}",
+  "descriptionFooter": "장면과 소리는 모두 코드로 만든 과학 시뮬레이션입니다. 수치는 출처 기준이며 일부는 추정치입니다.",
+  "hashtags": ["#WhatIf", "#과학"],
+  "tags": ["what if", "만약에", "과학", "시뮬레이션", "science"],
+  "categoryId": "28",
+  "ownChannelIds": []
+}

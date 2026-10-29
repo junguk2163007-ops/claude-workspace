@@ -1,0 +1,1163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>만약 달이 갑자기 사라진다면? (대형 자막 & 상황별 사운드 에디션)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+  * { box-sizing: border-box; }
+  body, html {
+    margin: 0; height: 100%; background: #05070d; color: #fff;
+    font-family: 'Noto Sans KR', sans-serif; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; gap: 24px; padding: 16px;
+  }
+  #stageWrap {
+    position: relative; width: 360px; height: 640px; background: #000;
+    border-radius: 14px; overflow: hidden;
+    box-shadow: 0 0 50px rgba(120, 150, 220, 0.25);
+    flex-shrink: 0; border: 1px solid rgba(255,255,255,0.12);
+  }
+  #outCanvas { display: block; width: 100%; height: 100%; }
+  #go {
+    position: absolute; inset: 0;
+    background: radial-gradient(circle, rgba(18,24,44,0.94), rgba(5,7,14,0.98));
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; z-index: 20; text-align: center; padding: 24px;
+  }
+  .serif-title { font-family: 'Nanum Myeongjo', serif; font-size: 24px; font-weight: 800; line-height: 1.4; color: #dfe6f5; }
+  .play-btn {
+    background: #dfe6f5; color: #0f172a; border: none; padding: 13px 22px;
+    border-radius: 30px; font-weight: 700; font-size: 14px; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(200,215,245,0.25); transition: transform .15s;
+    width: 100%; max-width: 270px;
+  }
+  .play-btn:hover { transform: scale(1.03); }
+  .rec-btn { background: linear-gradient(135deg, #4a6fb5, #2f4a85); color: #fff; box-shadow: 0 4px 20px rgba(74,111,181,0.45); }
+
+  #panel {
+    width: 420px; max-height: 640px; background: #0d111b;
+    border: 1px solid #222c42; border-radius: 14px; padding: 18px;
+    display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  }
+  .p-title { font-size: 16px; font-weight: 700; color: #a9bde6; margin: 0; font-family: 'Nanum Myeongjo', serif; }
+  .p-desc { font-size: 12px; color: #9aa3b5; line-height: 1.5; margin: 0; }
+  .card { background: #141a28; border: 1px solid #263149; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; }
+  .card-h { font-size: 13px; font-weight: 700; color: #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+  .ctrl-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  input[type=range] { flex: 1; accent-color: #6f93d8; cursor: pointer; }
+  .action-btn { background: #4a6fb5; color: #fff; border: none; border-radius: 8px; padding: 10px; font-weight: 700; font-size: 12.5px; cursor: pointer; }
+  .action-btn.secondary { background: #263149; }
+  .srt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .dl-btn {
+    background: #182034; color: #fff; border: 1px solid #2f3d5c; border-radius: 8px;
+    padding: 9px 11px; font-size: 11.5px; font-weight: 700; cursor: pointer;
+    text-align: left; display: flex; flex-direction: column; gap: 3px;
+  }
+  .dl-btn:hover { background: #222d47; border-color: #a9bde6; }
+  .dl-btn span { font-size: 10px; color: #a9bde6; font-weight: 400; }
+  #recStatus { font-size: 11.5px; color: #dfe6f5; font-weight: 700; min-height: 16px; }
+  @media (max-width: 820px) {
+    body { flex-direction: column; overflow-y: auto; height: auto; }
+    #panel { width: 360px; max-height: none; }
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<div id="stageWrap">
+  <canvas id="outCanvas" width="720" height="1280"></canvas>
+  <div id="go">
+    <div style="font-size: 2.5em;">🌕🔊</div>
+    <div class="serif-title">만약 달이<br>갑자기 사라진다면?</div>
+    <div style="font-size: 12px; color: #9aa3b5; margin-bottom: 6px;">
+      대형 가독성 자막 · 상황별 리얼 효과음<br>
+      조석 · 자전축 · 일식 · 별빛까지 (66초)
+    </div>
+    <button class="play-btn" id="btnPreview">▶ 66초 시뮬레이션 재생</button>
+    <button class="play-btn rec-btn" id="btnRecordStart">🔴 재생 + MP4/WebM 영상 추출</button>
+  </div>
+</div>
+
+<div id="panel">
+  <h2 class="p-title">🎬 「만약 달이 갑자기 사라진다면?」 스튜디오</h2>
+  <p class="p-desc">
+    <b>1) 대형 자막:</b> 쇼츠에 맞춘 큰 폰트의 초단문 자막.<br>
+    <b>2) 과학 팩트:</b> 조석 1/3, 자전축 23.4°, 개기일식 소멸 등 장면별 핵심 수치를 상단에 표시합니다.<br>
+    <b>3) 상황별 사운드:</b> 귀뚜라미, 달 소멸 저음, 파도, 물방울, 시계 틱, 별빛 차임, 오르간 BGM.
+  </p>
+
+  <div class="card">
+    <div class="card-h">
+      <span>🔊 BGM & 효과음 볼륨</span>
+      <span id="volLabel" style="color:#a9bde6">BGM 30% / 효과음 80%</span>
+    </div>
+    <div class="ctrl-row">
+      <span>오르간</span>
+      <input type="range" id="bgmSlider" min="0" max="100" value="30">
+      <span>효과음</span>
+      <input type="range" id="sfxSlider" min="0" max="100" value="80">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <span>🎥 원클릭 영상 레코더 (자막·사운드 포함)</span>
+      <span id="timeLabel" style="color:#a9bde6; font-weight:700;">00.0s / 66.0s</span>
+    </div>
+    <div id="recStatus">대기 중 — 녹화 버튼을 누르면 처음부터 캡처됩니다.</div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+      <button class="action-btn" id="btnRecPanel">🔴 처음부터 녹화 시작</button>
+      <button class="action-btn secondary" id="btnStopSave">⏹ 정지 및 즉시 저장</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <span>📝 대형 초단문 .SRT 자막 다운로드</span>
+      <span style="font-size:11px; color:#4ade80;">준비 완료 ✔</span>
+    </div>
+    <div class="srt-grid">
+      <button class="dl-btn" onclick="downloadSRT(1)">
+        1. KO_LargeNarration.srt
+        <span>대형 가독성 자막 파일</span>
+      </button>
+      <button class="dl-btn" onclick="downloadSRT(2)">
+        2. KO_ScienceFact.srt
+        <span>상단 과학 팩트 + 자막 통합</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const outCanvas = $('outCanvas');
+const ctx2d = outCanvas.getContext('2d');
+const clamp = (x,a=0,b=1) => Math.min(b, Math.max(a, x));
+const K = (t,a,b) => clamp((t - a) / (b - a));
+const E = x => x * x * (3 - 2 * x);
+const L = (a,b,u) => a + (b - a) * u;
+const PI = Math.PI;
+const S = Math.sin;
+const TOTAL_DUR = 66.0;
+
+// === 1. 타임라인 ===
+const timelineData = [
+  { s: 0.0,  e: 4.0,  fact: "", sub: "", narLines: ["만약 달이", "갑자기 사라진다면?"], comment: true },
+  { s: 4.0,  e: 9.0,  fact: "지름 3,474km", sub: "지구의 약 1/4 크기, 평균 38만 km 거리", narLines: ["고요한 보름달 밤,", "달이 한순간 깜빡이더니", "흔적도 없이 꺼집니다."] },
+  { s: 9.0,  e: 15.0, fact: "밝기 약 1/250", sub: "보름달 약 0.25 lux → 별빛뿐인 밤 약 0.001 lux", narLines: ["밤길을 밝히던 달빛이", "갑자기 사라지자,", "세상이 칠흑같이 어두워집니다."] },
+  { s: 15.0, e: 22.0, fact: "조석 약 1/3 토막", sub: "달의 기조력은 태양의 약 2.2배, 해양학", narLines: ["바다가 더는 달에", "끌려오지 않습니다.", "밀물과 썰물의 폭이 크게 줄어듭니다."] },
+  { s: 22.0, e: 29.0, fact: "산호 동시 산란", sub: "달빛과 달 주기를 신호로 삼는 해양 생물", narLines: ["달빛을 신호로 번식하던", "산호와 바다 생물들이", "박자를 잃고 흩어집니다."] },
+  { s: 29.0, e: 35.0, fact: "자전축 흔들림", sub: "달이 지축 기울기(약 23.4°)를 안정시킵니다", narLines: ["달은 지구의 기울어진", "자전축을 붙잡아 주던 닻.", "닻이 풀린 지구는 수백만 년에 걸쳐", "계절이 크게 흔들릴 수 있습니다."] },
+  { s: 35.0, e: 41.0, fact: "하루 +1.7ms/100년", sub: "달의 조석 마찰로 서서히 느려지던 자전", narLines: ["달은 지구의 자전에", "브레이크를 걸어 주고 있었습니다.", "그 브레이크도 이제 사라집니다."] },
+  { s: 41.0, e: 47.0, fact: "개기일식 소멸", sub: "달과 태양의 겉보기 크기가 비슷해서 가능한 현상", narLines: ["태양을 완벽히 가리던", "마법 같은 개기일식도", "이제 영영 볼 수 없습니다."] },
+  { s: 47.0, e: 53.0, fact: "음력 달력 무의미", sub: "달 모양에 맞춘 절기와 명절의 기준이 사라짐", narLines: ["보름달에 소원을 빌던 추석,", "달을 보며 날을 세던 달력,", "모두 기준을 잃고 맙니다."] },
+  { s: 53.0, e: 60.0, fact: "별 가시성 UP", sub: "달빛이 없으면 어두운 별과 은하수까지 보입니다", narLines: ["하지만 달빛이 사라진 하늘엔", "오래 가려져 있던 별들이", "쏟아질 듯 선명해집니다."] },
+  { s: 60.0, e: 63.5, fact: "45억 년의 단짝", sub: "지구와 달은 약 45억 년을 함께했습니다", narLines: ["지구 곁을 45억 년 지키던", "단 하나의 위성, 달."] },
+  { s: 63.5, e: 66.0, fact: "", sub: "", narLines: ["늘 그 자리에 있던 은은한 달빛.", "오늘 밤, 잠깐 올려다보세요."], outro: true }
+];
+
+function secToSrt(sec) {
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = Math.floor(sec%60), ms = Math.round((sec - Math.floor(sec))*1000);
+  const p = (n,z=2) => String(n).padStart(z,'0');
+  return `${p(h)}:${p(m)}:${p(s)},${p(ms,3)}`;
+}
+
+function downloadSRT(mode) {
+  const blocks = [];
+  const NL = String.fromCharCode(10);
+  let srtIdx = 1;
+  timelineData.forEach((item) => {
+    const count = item.narLines.length;
+    const segDur = (item.e - item.s) / count;
+    item.narLines.forEach((line, i) => {
+      const subS = item.s + i * segDur;
+      const subE = item.s + (i + 1) * segDur;
+      const body = (mode === 2 && item.fact) ? `[${item.fact} - ${item.sub}]` + NL + line : line;
+      blocks.push(`${srtIdx++}` + NL + `${secToSrt(subS)} --> ${secToSrt(subE)}` + NL + body + NL);
+    });
+  });
+  const blob = new Blob([blocks.join(NL)], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = mode === 1 ? 'MoonVanish_LargeSub_KO.srt' : 'MoonVanish_Full_KO.srt';
+  a.click();
+}
+
+// === 2. Three.js 월드 ===
+const glRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+glRenderer.setSize(720, 1280);
+
+const sc = new THREE.Scene();
+sc.background = new THREE.Color(0x070b18);
+const fogObj = new THREE.FogExp2(0x070b18, 0.004);
+sc.fog = fogObj;
+const cam = new THREE.PerspectiveCamera(50, 9/16, 0.1, 1000);
+
+const hemi = new THREE.HemisphereLight(0x5b7fc0, 0x101a2a, 0.6);
+const moonLight = new THREE.DirectionalLight(0xbfd2ff, 1.0);
+moonLight.position.set(-12, 30, -20);
+const sunLight = new THREE.DirectionalLight(0xfff3d6, 0.0);
+sunLight.position.set(12, 4, 14);
+sc.add(hemi, moonLight, sunLight);
+
+const _tmpC = new THREE.Color();
+function bgMix(a, b, u) { sc.background.setHex(a).lerp(_tmpC.setHex(b), u); }
+function setBG(hex, fogHex, fogD) { sc.background.setHex(hex); fogObj.color.setHex(fogHex); fogObj.density = fogD; }
+function setLights(h, m, s, l) { hemi.intensity = h; moonLight.intensity = m; sunLight.intensity = s; lantern.intensity = l; }
+
+const M = (c, o={}) => new THREE.MeshLambertMaterial(Object.assign({ color: c }, o));
+const BX = (w,h,d) => new THREE.BoxGeometry(w,h,d);
+const CY = (rt,rb,h,s=16) => new THREE.CylinderGeometry(rt,rb,h,s);
+const SP = (r,w=20,h=16) => new THREE.SphereGeometry(r,w,h);
+const mesh = (g,m,x=0,y=0,z=0) => { const o = new THREE.Mesh(g,m); o.position.set(x,y,z); return o; };
+const glowTex = (() => {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64,64,4, 64,64,62);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.35, 'rgba(255,255,255,0.35)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0,0,128,128);
+  return new THREE.CanvasTexture(c);
+})();
+
+// --- 별 ---
+const STAR_N = 2200;
+const starPos = new Float32Array(STAR_N * 3);
+const starCol = new Float32Array(STAR_N * 3);
+for (let i = 0; i < STAR_N; i++) {
+  const th = Math.random() * PI * 2, ph = Math.acos(2 * Math.random() - 1), r = 300;
+  starPos[i*3] = r * Math.sin(ph) * Math.cos(th);
+  starPos[i*3+1] = r * Math.cos(ph);
+  starPos[i*3+2] = r * Math.sin(ph) * Math.sin(th);
+  const k = 0.65 + Math.random() * 0.35, warm = Math.random();
+  starCol[i*3] = k * (warm > 0.8 ? 1 : 0.85);
+  starCol[i*3+1] = k * 0.92;
+  starCol[i*3+2] = k * (warm < 0.3 ? 1 : 0.9);
+}
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+starGeo.setAttribute('color', new THREE.BufferAttribute(starCol, 3));
+const starMat = new THREE.PointsMaterial({ size: 2.4, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.4, fog: false, depthWrite: false });
+const stars = new THREE.Points(starGeo, starMat);
+sc.add(stars);
+
+// --- 달 텍스처 ---
+function makeMoonTex() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#d8d5cb'; g.fillRect(0,0,256,256);
+  for (let i = 0; i < 1800; i++) {
+    g.fillStyle = `rgba(${150+Math.random()*80|0},${148+Math.random()*80|0},${140+Math.random()*70|0},0.5)`;
+    g.fillRect(Math.random()*256, Math.random()*256, 2, 2);
+  }
+  g.fillStyle = 'rgba(120,118,112,0.55)';
+  [[90,90,42,30],[150,70,30,22],[110,150,48,34],[185,140,28,36],[70,190,26,18]].forEach(([x,y,rx,ry]) => {
+    g.beginPath(); g.ellipse(x,y,rx,ry,Math.random(),0,PI*2); g.fill();
+  });
+  for (let i = 0; i < 26; i++) {
+    const x = Math.random()*256, y = Math.random()*256, r = 3 + Math.random()*10;
+    g.strokeStyle = 'rgba(95,93,88,0.6)'; g.lineWidth = 1.5;
+    g.beginPath(); g.arc(x,y,r,0,PI*2); g.stroke();
+    g.fillStyle = 'rgba(255,255,250,0.18)';
+    g.beginPath(); g.arc(x-1,y-1,r*0.6,0,PI*2); g.fill();
+  }
+  return new THREE.CanvasTexture(c);
+}
+const moonTex = makeMoonTex();
+
+// --- 하늘의 달 (밤 장면) ---
+const gMoon = new THREE.Group();
+const moonMat = new THREE.MeshBasicMaterial({ map: moonTex, transparent: true, fog: false });
+const moonBall = new THREE.Mesh(SP(4, 32, 24), moonMat);
+const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xcfe0ff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+moonGlow.scale.setScalar(26);
+gMoon.add(moonBall, moonGlow);
+gMoon.position.set(-3, 16.5, -55);
+sc.add(gMoon);
+
+// --- 사람 ---
+function makePerson(shirtCol, scale = 0.9) {
+  const root = new THREE.Group();
+  root.scale.setScalar(scale);
+  const body = new THREE.Group();
+  root.add(body);
+  const skin = M(0xe8be9e), hair = M(0x1d1512), shirt = M(shirtCol), pants = M(0x1e293b);
+  const head = new THREE.Group();
+  head.position.set(0, 1.55, 0);
+  head.add(mesh(BX(0.75,0.75,0.75), skin));
+  head.add(mesh(BX(0.78,0.25,0.78), hair, 0, 0.3, 0));
+  head.add(mesh(BX(0.78,0.5,0.25), hair, 0, 0.1, -0.28));
+  head.add(mesh(BX(0.12,0.12,0.05), M(0x111111), -0.16, 0.02, 0.38));
+  head.add(mesh(BX(0.12,0.12,0.05), M(0x111111), 0.16, 0.02, 0.38));
+  const mouth = mesh(BX(0.14,0.09,0.06), M(0x7f1d1d), 0, -0.14, 0.38);
+  head.add(mouth);
+  body.add(head);
+  body.add(mesh(BX(0.8,1.0,0.45), shirt, 0, 0.7, 0));
+  const armL = new THREE.Group(); armL.position.set(0.55, 1.1, 0);
+  armL.add(mesh(BX(0.3,0.85,0.3), shirt, 0, -0.35, 0), mesh(BX(0.28,0.2,0.28), skin, 0, -0.8, 0));
+  const armR = new THREE.Group(); armR.position.set(-0.55, 1.1, 0);
+  armR.add(mesh(BX(0.3,0.85,0.3), shirt, 0, -0.35, 0), mesh(BX(0.28,0.2,0.28), skin, 0, -0.8, 0));
+  body.add(armL, armR);
+  body.add(mesh(BX(0.34,0.8,0.36), pants, 0.2, -0.2, 0), mesh(BX(0.34,0.8,0.36), pants, -0.2, -0.2, 0));
+  return { root, head, mouth, armL, armR };
+}
+
+// --- 지상 (밤/일식 공용) ---
+const gGround = new THREE.Group();
+gGround.add(mesh(BX(300,1,300), M(0x22302a), 0, -0.5, -40));
+[[-34,-4,-48,14,1.7],[28,-5,-58,16,1.5],[0,-6,-80,22,2.2]].forEach(([x,y,z,r,sx]) => {
+  const h = mesh(SP(r, 24, 16), M(0x15211d), x, y, z); h.scale.set(sx, 0.5, 1); gGround.add(h);
+});
+for (let i = 0; i < 16; i++) {
+  const x = (i % 2 ? 1 : -1) * (6 + (i * 7919 % 13)), z = -12 - (i * 104729 % 26);
+  gGround.add(mesh(CY(0.2,0.28,1.4,6), M(0x2a1d14), x, 0.7, z));
+  gGround.add(mesh(CY(0, 1.5, 4.2, 7), M(0x10231a), x, 3.2, z));
+}
+const people = [];
+[[-2.4,-7,0xd97706],[-1.0,-6.2,0x38bdf8],[0.4,-7.4,0xf43f5e],[1.8,-6.4,0x34d399],[-3.6,-9,0xa78bfa],[3.2,-8.6,0xfb923c]].forEach(([x,z,c]) => {
+  const p = makePerson(c, 0.9);
+  p.root.position.set(x, 0.54, z);
+  p.root.rotation.y = PI;
+  p.baseX = x;
+  gGround.add(p.root);
+  people.push(p);
+});
+const lantern = new THREE.PointLight(0xffc875, 0, 22);
+lantern.position.set(0.2, 1.6, -4.6);
+gGround.add(lantern);
+gGround.add(mesh(BX(0.3,0.4,0.3), new THREE.MeshBasicMaterial({ color: 0xffd9a0 }), 0.2, 0.2, -4.6));
+
+// 음력 팻말
+const signCanvas = document.createElement('canvas'); signCanvas.width = 256; signCanvas.height = 256;
+(() => {
+  const g = signCanvas.getContext('2d');
+  g.fillStyle = '#2a1f14'; g.fillRect(0,0,256,256);
+  g.strokeStyle = '#d6b892'; g.lineWidth = 8; g.strokeRect(6,6,244,244);
+  g.fillStyle = '#f3e3c8'; g.font = '700 30px "Noto Sans KR", sans-serif'; g.textAlign = 'center';
+  g.fillText('음력 8월 15일', 128, 60);
+  g.setLineDash([10, 9]); g.strokeStyle = '#e7d8c5'; g.lineWidth = 5;
+  g.beginPath(); g.arc(128, 135, 56, 0, PI*2); g.stroke();
+  g.setLineDash([]);
+  g.fillStyle = '#a8a29e'; g.font = '700 26px "Noto Sans KR", sans-serif';
+  g.fillText('보름달 없음', 128, 232);
+})();
+const signGroup = new THREE.Group();
+signGroup.add(mesh(new THREE.PlaneGeometry(1.5,1.5), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(signCanvas) }), 0, 0, 0));
+signGroup.add(mesh(BX(0.1,1.6,0.1), M(0x4a3524), 0, -1.1, -0.06));
+signGroup.position.set(-0.9, 2.2, -2.6);
+signGroup.visible = false;
+gGround.add(signGroup);
+sc.add(gGround);
+
+// --- 유성 ---
+const gMeteor = new THREE.Group();
+const meteors = [];
+for (let i = 0; i < 6; i++) {
+  const m = mesh(BX(0.14,0.14,8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, fog: false }));
+  gMeteor.add(m); meteors.push(m);
+}
+sc.add(gMeteor);
+
+// --- 바다 장면 ---
+const gOcean = new THREE.Group();
+const seaGeo = new THREE.PlaneGeometry(160, 160, 60, 60);
+seaGeo.rotateX(-PI / 2);
+const seaMat = new THREE.MeshLambertMaterial({ color: 0x1a4a7a, transparent: true, opacity: 0.9, emissive: 0x06182c });
+const sea = new THREE.Mesh(seaGeo, seaMat);
+const seaBase = Float32Array.from(seaGeo.attributes.position.array);
+const beach = mesh(new THREE.PlaneGeometry(160, 70), M(0xb8a07a), 0, 0.36, 0);
+beach.geometry.rotateX(-PI / 2);
+beach.rotation.x = -0.07;
+const gauge = new THREE.Group();
+gauge.add(mesh(BX(0.25,6,0.25), M(0xe2e8f0), 0, 1.0, 0));
+for (let i = 0; i < 6; i++) gauge.add(mesh(BX(0.6,0.12,0.3), M(i % 2 ? 0xef4444 : 0xf8fafc), 0, -1.5 + i * 1.0, 0.1));
+gauge.position.set(-3.2, 0, -3);
+const boat = new THREE.Group();
+boat.add(mesh(BX(1.8,0.5,4.2), M(0x7a4b2a), 0, 0, 0), mesh(BX(0.12,2.6,0.12), M(0xe2e8f0), 0, 1.4, 0.2), mesh(BX(0.05,1.8,1.2), M(0xf8fafc), 0, 1.5, -0.4));
+boat.position.set(4.2, 0, -4);
+gOcean.add(sea, beach, gauge, boat);
+for (let i = 0; i < 8; i++) gOcean.add(mesh(SP(0.6 + (i%3)*0.3, 8, 6), M(0x3b3f4a), -9 + i * 2.6, 0.6, 4 - (i*37 % 7)));
+sc.add(gOcean);
+
+// --- 산호 장면 ---
+const gReef = new THREE.Group();
+gReef.add(mesh(BX(80,1,80), M(0xb89a6a), 0, -1.2, -20));
+const coralCols = [0xff6f91, 0xffb347, 0xf9f871, 0xc780fa, 0xff8066];
+const coralBases = [];
+for (let i = 0; i < 30; i++) {
+  const cg = new THREE.Group();
+  const x = ((i * 53) % 17) - 8.5, z = -4 - ((i * 31) % 19);
+  const col = coralCols[i % 5];
+  for (let j = 0; j < 4; j++) {
+    const h = 0.8 + ((i + j) % 4) * 0.5;
+    cg.add(mesh(CY(0.08, 0.2, h, 6), M(col), (j - 1.5) * 0.22, h / 2 - 0.7, (j % 2) * 0.2));
+  }
+  cg.position.set(x, 0, z);
+  gReef.add(cg);
+  coralBases.push([x, z]);
+}
+const fishes = [];
+for (let i = 0; i < 26; i++) {
+  const f = new THREE.Group();
+  const c = i % 2 ? 0xff9f43 : 0x4cc9f0;
+  f.add(mesh(BX(0.5,0.22,0.12), M(c)), mesh(BX(0.16,0.22,0.1), M(c), -0.32, 0, 0));
+  f.userData = { x0: (i * 29 % 16) - 8, y0: 0.2 + (i % 5) * 0.55, z0: -5 - (i * 13 % 14), spd: 0.4 + (i % 4) * 0.2, ph: i };
+  gReef.add(f); fishes.push(f);
+}
+const SPAWN_N = 500;
+const spPos = new Float32Array(SPAWN_N * 3), spVel = new Float32Array(SPAWN_N);
+function resetSpawn(i, randomY) {
+  const b = coralBases[i % coralBases.length];
+  spPos[i*3] = b[0] + (Math.random() - 0.5) * 0.8;
+  spPos[i*3+1] = randomY ? Math.random() * 8 : -0.3;
+  spPos[i*3+2] = b[1] + (Math.random() - 0.5) * 0.8;
+  spVel[i] = 0.6 + Math.random() * 1.0;
+}
+for (let i = 0; i < SPAWN_N; i++) resetSpawn(i, true);
+const spawnGeo = new THREE.BufferGeometry();
+spawnGeo.setAttribute('position', new THREE.BufferAttribute(spPos, 3));
+const spawnMat = new THREE.PointsMaterial({ size: 0.16, color: 0xffd6e8, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+gReef.add(new THREE.Points(spawnGeo, spawnMat));
+const shaftMat = new THREE.MeshBasicMaterial({ color: 0xcfe6ff, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+[[-4,-12],[1,-16],[5,-10]].forEach(([x,z], i) => {
+  const sh = mesh(BX(2.6,30,0.05), shaftMat, x, 11, z);
+  sh.rotation.z = 0.18 + i * 0.05;
+  gReef.add(sh);
+});
+sc.add(gReef);
+
+// --- 우주 장면 ---
+const gSpace = new THREE.Group();
+const tiltG = new THREE.Group();
+const spinG = new THREE.Group();
+spinG.add(mesh(SP(3, 36, 28), M(0x1e5fb4)));
+for (let i = 0; i < 16; i++) {
+  const a = (i / 16) * PI * 2, b = ((i * 7) % 5 - 2) * 0.4;
+  const land = mesh(SP(0.7 + (i % 3) * 0.3, 10, 8), M(0x2f9e55), Math.cos(a)*Math.cos(b)*3, Math.sin(b)*3, Math.sin(a)*Math.cos(b)*3);
+  land.lookAt(0, 0, 0);
+  land.scale.set(1, 1, 0.3);
+  spinG.add(land);
+}
+tiltG.add(spinG);
+tiltG.add(mesh(CY(0.03, 0.03, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }), 0, 0, 0));
+const atmo = mesh(SP(3.25, 32, 24), new THREE.MeshBasicMaterial({ color: 0x6fb7ff, transparent: true, opacity: 0.22, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+gSpace.add(tiltG, atmo);
+const orbitG = new THREE.Group();
+const orbitRingMat = new THREE.MeshBasicMaterial({ color: 0xbcd0ff, transparent: true, opacity: 0.5 });
+const orbitRing = new THREE.Mesh(new THREE.TorusGeometry(5.5, 0.025, 6, 120), orbitRingMat);
+orbitRing.rotation.x = PI / 2;
+const ghostMoonMat = new THREE.MeshBasicMaterial({ map: moonTex, transparent: true });
+const ghostMoon = new THREE.Mesh(SP(0.8, 20, 16), ghostMoonMat);
+orbitG.add(orbitRing, ghostMoon);
+orbitG.rotation.x = 0.28;
+gSpace.add(orbitG);
+sc.add(gSpace);
+
+// --- 일식 장면 ---
+const gEclipse = new THREE.Group();
+const sunDisc = new THREE.Mesh(SP(2.3, 28, 20), new THREE.MeshBasicMaterial({ color: 0xfff1c9, fog: false }));
+const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffe2a8, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+const eclMoonMat = new THREE.MeshBasicMaterial({ color: 0x050507, transparent: true, fog: false });
+const eclMoon = new THREE.Mesh(SP(2.38, 28, 20), eclMoonMat);
+sunDisc.position.set(0, 14, -60); sunGlow.position.set(0, 14, -60.5); eclMoon.position.set(0, 14, -59);
+gEclipse.add(sunDisc, sunGlow, eclMoon);
+sc.add(gEclipse);
+
+function setScene(o) {
+  gGround.visible = !!o.ground; gMoon.visible = !!o.moon; gOcean.visible = !!o.ocean;
+  gReef.visible = !!o.reef; gSpace.visible = !!o.space; gEclipse.visible = !!o.eclipse;
+  gMeteor.visible = !!o.meteor; stars.visible = o.stars !== false;
+}
+
+let hud = null;
+
+function peoplePose(t, lookX, mouthOpen) {
+  people.forEach((p, i) => {
+    p.head.rotation.x = lookX;
+    p.head.rotation.y = S(t * 1.3 + i) * 0.12;
+    p.mouth.scale.set(mouthOpen ? 1.5 : 1, mouthOpen ? 2.4 + S(t * 8 + i) * 0.4 : 1, 1);
+    p.armL.rotation.z = 0.1; p.armR.rotation.z = -0.1;
+    p.armL.rotation.x = 0; p.armR.rotation.x = 0;
+  });
+}
+
+function updateWorld(t, dt) {
+  $('timeLabel').textContent = `${t.toFixed(1)}s / ${TOTAL_DUR.toFixed(1)}s`;
+  hud = null;
+  signGroup.visible = false;
+  stars.rotation.y = t * 0.012;
+  starMat.size = 2.4;
+
+  if (t < 9.0) {
+    // 보름달 → 소멸
+    setScene({ ground: true, moon: true });
+    const a = t < 4.6 ? 1 : (t < 5.2 ? 0.55 + 0.45 * S(t * 70) : 1 - E(K(t, 5.2, 6.2)));
+    moonMat.opacity = a;
+    moonGlow.material.opacity = 0.85 * a;
+    const flash = (t > 5.1 && t < 5.5) ? 1 - K(t, 5.1, 5.5) : 0;
+    moonGlow.scale.setScalar(26 + flash * 34);
+    gMoon.visible = a > 0.01;
+    setLights(0.16 + 0.42 * a, 1.0 * a, 0, 0);
+    bgMix(0x0a1230, 0x04060e, 1 - a);
+    setBG(sc.background.getHex(), 0x070b18, 0.004);
+    starMat.opacity = 0.35 + 0.6 * (1 - a);
+    peoplePose(t, -0.4, t > 5.2);
+    const sh = (t > 5.1 && t < 5.5) ? (Math.random() - 0.5) * 0.12 : 0;
+    cam.position.set(S(t * 0.3) * 0.25 + sh, 2.0 + sh, 3);
+    cam.lookAt(0, L(12, 10, K(t, 4, 9)), -55);
+  }
+  else if (t < 15.0) {
+    // 칠흑 같은 밤 (정면 컷, 랜턴)
+    setScene({ ground: true });
+    const u = K(t, 9, 15);
+    setBG(0x03050b, 0x03050b, 0.006);
+    setLights(0.2, 0, 0, E(K(t, 9.4, 10.6)) * 1.9);
+    starMat.opacity = 0.8;
+    peoplePose(t, -0.5, true);
+    people.forEach((p, i) => { p.armL.rotation.x = -0.4 + S(t * 3 + i) * 0.2; });
+    cam.position.set(L(0.9, -0.4, u), 1.7, -12);
+    cam.lookAt(0, 1.9, -6.5);
+  }
+  else if (t < 22.0) {
+    // 조석
+    setScene({ ocean: true });
+    const u = K(t, 15, 22);
+    setBG(0x060c1e, 0x060c1e, 0.006);
+    setLights(0.7, 0, 0, 0);
+    starMat.opacity = 0.9;
+    const level = L(0.5, -0.35, E(K(t, 16, 21))) + 0.06 * S(t * 1.1);
+    sea.position.y = level;
+    const arr = sea.geometry.attributes.position.array;
+    for (let i = 0; i < arr.length; i += 3) {
+      const x = seaBase[i], z = seaBase[i + 2];
+      arr[i + 1] = 0.18 * (S(x * 0.35 + t * 1.3) + S(z * 0.25 + t * 0.9)) * 0.5;
+    }
+    sea.geometry.attributes.position.needsUpdate = true;
+    boat.position.y = Math.max(level, 0.08) + 0.15;
+    boat.rotation.z = level < 0.08 ? 0.12 * E(u) : 0;
+    cam.position.set(S(t * 0.2) * 0.8, 3.2, 16);
+    cam.lookAt(0, 0.3, -14);
+  }
+  else if (t < 29.0) {
+    // 산호 산란
+    setScene({ reef: true, stars: false });
+    const u = K(t, 22, 29);
+    setBG(0x0a2a44, 0x0a2a44, 0.045);
+    setLights(L(0.95, 0.45, u), 0, 0, 0);
+    hemi.color.setHex(0x4aa3c8); hemi.groundColor.setHex(0x1c3550);
+    shaftMat.opacity = 0.14 * (1 - E(K(t, 24, 27)));
+    const spawning = t < 25.8;
+    const sp = spawnGeo.attributes.position.array;
+    for (let i = 0; i < SPAWN_N; i++) {
+      sp[i*3+1] += dt * spVel[i];
+      sp[i*3] += S(t * 2 + i) * dt * 0.2;
+      if (sp[i*3+1] > 8 && spawning) resetSpawn(i, false);
+    }
+    spawnGeo.attributes.position.needsUpdate = true;
+    spawnMat.opacity = spawning ? 0.9 : 0.9 * (1 - K(t, 25.8, 27.6));
+    fishes.forEach(f => {
+      const d = f.userData;
+      const x = d.x0 + S(t * d.spd + d.ph) * 3;
+      f.position.set(x, d.y0 + S(t * 1.3 + d.ph) * 0.15, d.z0);
+      f.rotation.y = Math.cos(t * d.spd + d.ph) > 0 ? 0 : PI;
+    });
+    cam.position.set(S(t * 0.25) * 1.2, 0.8, 2);
+    cam.lookAt(0, 0.3, -12);
+  }
+  else if (t < 41.0) {
+    // 자전축 & 자전
+    setScene({ space: true });
+    hemi.color.setHex(0x5b7fc0); hemi.groundColor.setHex(0x101a2a);
+    setBG(0x02030a, 0x02030a, 0.0);
+    setLights(0.18, 0, 1.5, 0);
+    sunLight.position.set(12, 4, 14);
+    starMat.opacity = 0.95;
+    const ghostA = 1 - E(K(t, 29, 31.2));
+    ghostMoonMat.opacity = ghostA;
+    ghostMoon.visible = ghostA > 0.01;
+    orbitRingMat.opacity = L(0.5, 0.18, E(K(t, 29, 31.2)));
+    const a = t * 0.7;
+    ghostMoon.position.set(5.5 * Math.cos(a), 0, 5.5 * Math.sin(a));
+    let tilt = 0.41;
+    if (t < 35) {
+      const u = E(K(t, 31, 35));
+      tilt = L(0.41, 1.2, u) + 0.12 * S(t * 3) * u;
+    } else {
+      tilt = 1.2 + 0.1 * S(t * 3);
+    }
+    tiltG.rotation.z = -tilt;
+    spinG.rotation.y = t * (t < 35 ? 0.6 : 0.6);
+    if (t < 35) {
+      hud = { big: `지축 기울기 ${(tilt * 180 / PI).toFixed(1)}°`, small: '현재 약 23.4°' };
+    } else {
+      const v = 1.7 * (1 - E(K(t, 36, 39)));
+      hud = { big: `하루 +${v.toFixed(1)}ms / 100년`, small: '달 조석 마찰에 의한 자전 감속' };
+    }
+    cam.position.set(S(t * 0.15) * 1.5, 4.5, 19);
+    cam.lookAt(0, 0, 0);
+  }
+  else if (t < 47.0) {
+    // 개기일식 소멸
+    setScene({ ground: true, eclipse: true });
+    const reveal = E(K(t, 43.4, 44.8));
+    bgMix(0x080c1c, 0x6db3f2, reveal);
+    setBG(sc.background.getHex(), reveal > 0.5 ? 0x9cc8f0 : 0x080c1c, 0.003);
+    setLights(L(0.22, 1.0, reveal), 0, L(0, 0.8, reveal), 0);
+    sunLight.position.set(0, 40, -20);
+    starMat.opacity = 0.9 * (1 - K(t, 43.3, 44.2));
+    eclMoonMat.opacity = 1 - reveal;
+    eclMoon.visible = reveal < 0.99;
+    const corona = t < 43.4 ? 1 : 1 - reveal * 0.2;
+    sunGlow.material.opacity = t < 43.4 ? 0.95 : 0.95;
+    sunGlow.scale.setScalar(t < 43.4 ? 20 + S(t * 5) * 1.0 : L(20, 60, reveal));
+    sunGlow.material.color.setHex(reveal > 0.3 ? 0xfff6dc : 0xdfe8ff);
+    sunDisc.material.color.setHex(0xfff1c9);
+    peoplePose(t, -0.45, false);
+    people.forEach(p => { p.armL.rotation.x = -0.8; p.armR.rotation.x = -0.8; });
+    cam.position.set(0, 2.0, 2);
+    cam.lookAt(0, 8, -60);
+  }
+  else if (t < 53.0) {
+    // 음력 달력
+    setScene({ ground: true });
+    const u = K(t, 47, 53);
+    setBG(0x03050b, 0x03050b, 0.006);
+    setLights(0.22, 0, 0, 1.9);
+    starMat.opacity = 0.85;
+    signGroup.visible = true;
+    peoplePose(t, 0.12, false);
+    cam.position.set(L(0.6, 0.0, u), 2.0, 2.2);
+    cam.lookAt(-0.2, 2.1, -6);
+  }
+  else if (t < 60.0) {
+    // 쏟아지는 별
+    setScene({ ground: true, meteor: true });
+    const u = K(t, 53, 60);
+    setBG(0x02030a, 0x02030a, 0.003);
+    setLights(0.25, 0, 0, 1.2);
+    starMat.opacity = 1.0;
+    starMat.size = 3.2;
+    stars.rotation.x = 0.25;
+    peoplePose(t, -0.5, false);
+    meteors.forEach((m, i) => {
+      const ph = ((t * 0.45 + i * 0.37) % 1);
+      const sx = -60 + i * 22, sy = 70 - (i % 3) * 8, sz = -90;
+      m.position.set(sx + ph * 70, sy - ph * 40, sz);
+      m.lookAt(sx + (ph + 0.01) * 70, sy - (ph + 0.01) * 40, sz);
+      m.visible = ph < 0.4;
+      m.material.opacity = 0.9 * (1 - ph / 0.4);
+    });
+    cam.position.set(S(t * 0.2) * 0.4, 1.2, 0);
+    cam.lookAt(0, L(11, 14, u), -30);
+  }
+  else {
+    // 홀로 남은 지구
+    setScene({ space: true });
+    const u = E(K(t, 60, 63.5));
+    stars.rotation.x = 0;
+    hemi.color.setHex(0x5b7fc0); hemi.groundColor.setHex(0x101a2a);
+    setBG(0x02030a, 0x02030a, 0.0);
+    setLights(0.2, 0, 1.5, 0);
+    sunLight.position.set(12, 4, 14);
+    starMat.opacity = 0.95;
+    ghostMoon.visible = false;
+    orbitRingMat.opacity = 0.12;
+    tiltG.rotation.z = -0.41;
+    spinG.rotation.y = t * 0.5;
+    cam.position.set(0, L(3, 1, u), L(30, 15, u));
+    cam.lookAt(0, 0, 0);
+  }
+}
+
+// === 4. 대형 자막 ===
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function safeWrapText(ctx, text, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) return [text];
+  const words = text.split(' ');
+  const lines = [];
+  let cur = '';
+  for (let w of words) {
+    const test = cur ? cur + ' ' + w : w;
+    if (ctx.measureText(test).width > maxWidth && cur) { lines.push(cur); cur = w; }
+    else { cur = test; }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+function renderComposite(t) {
+  glRenderer.render(sc, cam);
+  ctx2d.clearRect(0, 0, 720, 1280);
+
+  const item = timelineData.find(d => t >= d.s && t < d.e) || timelineData[timelineData.length - 1];
+  const sceneDur = item.e - item.s;
+  const sceneElapsed = Math.max(0, t - item.s);
+  const lineCount = (item.narLines && item.narLines.length) ? item.narLines.length : 1;
+  const segDur = sceneDur / lineCount;
+  const activeIdx = Math.min(lineCount - 1, Math.floor(sceneElapsed / segDur));
+  const segElapsed = sceneElapsed - activeIdx * segDur;
+  const activeParagraph = item.narLines ? item.narLines[activeIdx] : "";
+  const fadeIn = clamp(segElapsed / 0.32, 0, 1);
+  const fadeOut = clamp((segDur - segElapsed) / 0.25, 0, 1);
+  const paraAlpha = Math.min(fadeIn, fadeOut);
+  const paraSlideY = (1 - E(fadeIn)) * 10;
+  const factAlpha = clamp(sceneElapsed / 0.4, 0, 1);
+
+  if (item.outro) {
+    ctx2d.fillStyle = '#000000';
+    ctx2d.fillRect(0, 0, 720, 1280);
+    ctx2d.save();
+    ctx2d.globalAlpha = paraAlpha;
+    ctx2d.fillStyle = '#dfe6f5';
+    ctx2d.font = '700 36px "Nanum Myeongjo", serif';
+    ctx2d.textAlign = 'center';
+    safeWrapText(ctx2d, activeParagraph, 600).forEach((ln, i) => ctx2d.fillText(ln, 360, 610 + i * 46 + paraSlideY, 640));
+    ctx2d.restore();
+    ctx2d.save();
+    ctx2d.globalAlpha = factAlpha;
+    ctx2d.font = '400 22px "Nanum Myeongjo", serif';
+    ctx2d.fillStyle = '#8f98ab';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText('만약 달이 갑자기 사라진다면?', 360, 720, 600);
+    ctx2d.restore();
+    return;
+  }
+
+  ctx2d.drawImage(glRenderer.domElement, 0, 0, 720, 1280);
+
+  if (item.comment) {
+    if (t < 2.3) {
+      ctx2d.save();
+      ctx2d.fillStyle = 'rgba(10, 14, 26, 0.88)';
+      ctx2d.strokeStyle = 'rgba(200, 215, 245, 0.25)';
+      ctx2d.lineWidth = 2;
+      roundRect(ctx2d, 50, 85, 620, 100, 16);
+      ctx2d.fill(); ctx2d.stroke();
+      ctx2d.fillStyle = '#c3cadb'; ctx2d.font = '500 18px "Noto Sans KR"'; ctx2d.textAlign = 'left';
+      ctx2d.fillText('@밤하늘러버 · 3시간 전', 80, 120);
+      ctx2d.fillStyle = '#ffffff'; ctx2d.font = '700 24px "Noto Sans KR"';
+      ctx2d.fillText('달이 갑자기 사라지면 어떻게 될까요?', 80, 158, 560);
+      ctx2d.fillStyle = 'rgba(10, 14, 26, 0.88)';
+      roundRect(ctx2d, 50, 200, 620, 100, 16);
+      ctx2d.fill(); ctx2d.stroke();
+      ctx2d.fillStyle = '#c3cadb'; ctx2d.font = '500 18px "Noto Sans KR"';
+      ctx2d.fillText('@curious_mind · 1일 전', 80, 235);
+      ctx2d.fillStyle = '#ffffff'; ctx2d.font = '700 24px "Noto Sans KR"';
+      ctx2d.fillText('바닷물은 어떻게 되는지 궁금해요!', 80, 272, 560);
+      ctx2d.restore();
+    }
+    ctx2d.save();
+    ctx2d.textAlign = 'center';
+    ctx2d.fillStyle = '#ffffff';
+    ctx2d.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx2d.shadowBlur = 12;
+    ctx2d.font = '700 44px "Nanum Myeongjo", serif';
+    ctx2d.fillText('만약 달이', 360, 800, 600);
+    ctx2d.fillText('갑자기 사라진다면?', 360, 860, 600);
+    const cnt = Math.max(1, 3 - Math.floor(t * 0.85));
+    ctx2d.textAlign = 'left';
+    ctx2d.font = '700 88px "Nanum Myeongjo", serif';
+    ctx2d.fillText(String(cnt), 72, 990);
+    ctx2d.font = '500 24px "Nanum Myeongjo", serif';
+    ctx2d.fillText('달이 사라지기까지', 72, 1030);
+    ctx2d.restore();
+    return;
+  }
+
+  if (item.fact) {
+    ctx2d.save();
+    ctx2d.globalAlpha = factAlpha;
+    ctx2d.textAlign = 'left';
+    ctx2d.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx2d.shadowBlur = 14;
+    ctx2d.fillStyle = '#e4ecff';
+    ctx2d.font = '700 52px "Nanum Myeongjo", serif';
+    ctx2d.fillText(item.fact, 50, 165, 620);
+    ctx2d.font = '500 21px "Nanum Myeongjo", serif';
+    ctx2d.fillStyle = '#c3cadb';
+    ctx2d.fillText(item.sub, 52, 205, 620);
+    ctx2d.restore();
+  }
+
+  if (hud) {
+    ctx2d.save();
+    ctx2d.globalAlpha = factAlpha;
+    ctx2d.textAlign = 'center';
+    ctx2d.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx2d.shadowBlur = 12;
+    ctx2d.fillStyle = '#ffd98a';
+    ctx2d.font = '700 40px "Nanum Myeongjo", serif';
+    ctx2d.fillText(hud.big, 360, 430, 640);
+    ctx2d.fillStyle = '#c3cadb';
+    ctx2d.font = '500 20px "Nanum Myeongjo", serif';
+    ctx2d.fillText(hud.small, 360, 468, 640);
+    ctx2d.restore();
+  }
+
+  if (activeParagraph) {
+    ctx2d.save();
+    ctx2d.globalAlpha = paraAlpha;
+    const grad = ctx2d.createRadialGradient(360, 285, 10, 360, 285, 240);
+    grad.addColorStop(0, 'rgba(4, 6, 12, 0.82)');
+    grad.addColorStop(1, 'rgba(4, 6, 12, 0)');
+    ctx2d.fillStyle = grad;
+    ctx2d.fillRect(40, 220, 640, 115);
+    ctx2d.textAlign = 'center';
+    ctx2d.fillStyle = '#ffffff';
+    ctx2d.shadowColor = 'rgba(0,0,0,0.95)';
+    ctx2d.shadowBlur = 12;
+    ctx2d.font = '700 36px "Nanum Myeongjo", serif';
+    const wrappedLines = safeWrapText(ctx2d, activeParagraph, 600);
+    const startY = wrappedLines.length === 1 ? 292 : 272;
+    wrappedLines.forEach((ln, idx) => ctx2d.fillText(ln, 360, startY + idx * 44 + paraSlideY, 620));
+    ctx2d.restore();
+  }
+}
+
+// === 5. Web Audio ===
+let audioCtx, masterGain, bgmGain, sfxGain, streamDest;
+let mediaRecorder, recordedChunks = [], isRecording = false;
+let t0 = 0, last = 0, playing = false;
+
+function updateAudioGains() {
+  const b = Number($('bgmSlider').value), s = Number($('sfxSlider').value);
+  if (bgmGain) bgmGain.gain.value = (b / 100) * 0.42;
+  if (sfxGain) sfxGain.gain.value = (s / 100) * 0.80;
+  $('volLabel').textContent = `BGM ${b}% / 효과음 ${s}%`;
+}
+$('bgmSlider').oninput = updateAudioGains;
+$('sfxSlider').oninput = updateAudioGains;
+
+function scheduleMoonScore() {
+  if (audioCtx) audioCtx.close();
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  bgmGain = audioCtx.createGain();
+  sfxGain = audioCtx.createGain();
+  streamDest = audioCtx.createMediaStreamDestination();
+  updateAudioGains();
+  bgmGain.connect(masterGain);
+  sfxGain.connect(masterGain);
+  masterGain.connect(audioCtx.destination);
+  masterGain.connect(streamDest);
+
+  const now = audioCtx.currentTime + 0.1;
+  t0 = performance.now() / 1000;
+
+  const nb = audioCtx.createBuffer(1, audioCtx.sampleRate * 4, audioCtx.sampleRate);
+  const data = nb.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+
+  function playTextureNoise(startT, dur, f1, f2, q, gainVal, type = 'bandpass') {
+    const src = audioCtx.createBufferSource();
+    src.buffer = nb; src.loop = true;
+    const flt = audioCtx.createBiquadFilter();
+    flt.type = type; flt.Q.value = q;
+    flt.frequency.setValueAtTime(f1, now + startT);
+    flt.frequency.exponentialRampToValueAtTime(f2, now + startT + dur);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, now + startT);
+    g.gain.linearRampToValueAtTime(gainVal, now + startT + Math.min(0.6, dur / 3));
+    g.gain.setValueAtTime(gainVal, now + startT + dur - Math.min(0.6, dur / 3));
+    g.gain.exponentialRampToValueAtTime(0.0001, now + startT + dur);
+    src.connect(flt); flt.connect(g); g.connect(sfxGain);
+    src.start(now + startT); src.stop(now + startT + dur + 0.05);
+  }
+
+  function playSnapCrash(startT, freq, dur, vol = 0.3) {
+    const src = audioCtx.createBufferSource();
+    src.buffer = nb;
+    const flt = audioCtx.createBiquadFilter();
+    flt.type = 'bandpass';
+    flt.frequency.setValueAtTime(freq, now + startT);
+    flt.frequency.exponentialRampToValueAtTime(Math.max(120, freq * 0.2), now + startT + dur);
+    flt.Q.value = 2.0;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(vol, now + startT);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + startT + dur);
+    src.connect(flt); flt.connect(g); g.connect(sfxGain);
+    src.start(now + startT); src.stop(now + startT + dur + 0.05);
+  }
+
+  // 귀뚜라미
+  function playCrickets(startT, dur, vol) {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine'; osc.frequency.value = 4300;
+    const g = audioCtx.createGain();
+    g.gain.value = vol * 0.5;
+    const lfo = audioCtx.createOscillator();
+    lfo.frequency.value = 7;
+    const lg = audioCtx.createGain();
+    lg.gain.value = vol * 0.5;
+    lfo.connect(lg); lg.connect(g.gain);
+    const env = audioCtx.createGain();
+    env.gain.setValueAtTime(0.0001, now + startT);
+    env.gain.linearRampToValueAtTime(1, now + startT + 0.5);
+    env.gain.setValueAtTime(1, now + startT + dur - 0.2);
+    env.gain.linearRampToValueAtTime(0.0001, now + startT + dur);
+    osc.connect(g); g.connect(env); env.connect(sfxGain);
+    osc.start(now + startT); lfo.start(now + startT);
+    osc.stop(now + startT + dur + 0.05); lfo.stop(now + startT + dur + 0.05);
+  }
+
+  function playSwell(startT, dur, vol = 0.2) {
+    const src = audioCtx.createBufferSource();
+    src.buffer = nb; src.loop = true;
+    const flt = audioCtx.createBiquadFilter();
+    flt.type = 'bandpass'; flt.Q.value = 3;
+    flt.frequency.setValueAtTime(300, now + startT);
+    flt.frequency.exponentialRampToValueAtTime(3500, now + startT + dur);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, now + startT);
+    g.gain.exponentialRampToValueAtTime(vol, now + startT + dur);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + startT + dur + 0.08);
+    src.connect(flt); flt.connect(g); g.connect(sfxGain);
+    src.start(now + startT); src.stop(now + startT + dur + 0.15);
+  }
+
+  function playSubDrop(startT, dur, vol = 0.5) {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(120, now + startT);
+    osc.frequency.exponentialRampToValueAtTime(28, now + startT + dur);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(vol, now + startT);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + startT + dur);
+    osc.connect(g); g.connect(sfxGain);
+    osc.start(now + startT); osc.stop(now + startT + dur + 0.05);
+  }
+
+  function playThump(startT, vol = 0.4) {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(75, now + startT);
+    osc.frequency.exponentialRampToValueAtTime(40, now + startT + 0.3);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(vol, now + startT);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + startT + 0.35);
+    osc.connect(g); g.connect(sfxGain);
+    osc.start(now + startT); osc.stop(now + startT + 0.4);
+  }
+
+  function playDrone(startT, dur, vol) {
+    [55, 82.4].forEach(f => {
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sawtooth'; osc.frequency.value = f;
+      const flt = audioCtx.createBiquadFilter();
+      flt.type = 'lowpass'; flt.frequency.value = 260;
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.0001, now + startT);
+      g.gain.linearRampToValueAtTime(vol, now + startT + 1.5);
+      g.gain.setValueAtTime(vol, now + startT + dur - 1.5);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + startT + dur);
+      osc.connect(flt); flt.connect(g); g.connect(sfxGain);
+      osc.start(now + startT); osc.stop(now + startT + dur + 0.05);
+    });
+  }
+
+  function playWaves(startT, dur, vol) {
+    const src = audioCtx.createBufferSource();
+    src.buffer = nb; src.loop = true;
+    const flt = audioCtx.createBiquadFilter();
+    flt.type = 'lowpass'; flt.frequency.value = 900;
+    const g = audioCtx.createGain();
+    g.gain.value = vol * 0.5;
+    const lfo = audioCtx.createOscillator();
+    lfo.frequency.value = 0.2;
+    const lg = audioCtx.createGain();
+    lg.gain.value = vol * 0.5;
+    lfo.connect(lg); lg.connect(g.gain);
+    const env = audioCtx.createGain();
+    env.gain.setValueAtTime(0.0001, now + startT);
+    env.gain.linearRampToValueAtTime(1, now + startT + 0.8);
+    env.gain.setValueAtTime(1, now + startT + dur - 0.8);
+    env.gain.linearRampToValueAtTime(0.0001, now + startT + dur);
+    src.connect(flt); flt.connect(g); g.connect(env); env.connect(sfxGain);
+    src.start(now + startT); lfo.start(now + startT);
+    src.stop(now + startT + dur + 0.05); lfo.stop(now + startT + dur + 0.05);
+  }
+
+  function playBubble(startT, freq, vol = 0.1) {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now + startT);
+    osc.frequency.exponentialRampToValueAtTime(freq * 2.2, now + startT + 0.09);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(vol, now + startT);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + startT + 0.12);
+    osc.connect(g); g.connect(sfxGain);
+    osc.start(now + startT); osc.stop(now + startT + 0.15);
+  }
+
+  function playChime(startT, freq, vol = 0.09) {
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine'; osc.frequency.value = freq;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, now + startT);
+    g.gain.linearRampToValueAtTime(vol, now + startT + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + startT + 1.8);
+    osc.connect(g); g.connect(sfxGain);
+    osc.start(now + startT); osc.stop(now + startT + 1.9);
+  }
+
+  // --- 상황별 효과음 배치 ---
+  // (0~5.2초) 고요한 밤: 귀뚜라미 + 잔잔한 바람
+  playCrickets(0.0, 5.2, 0.05);
+  playTextureNoise(0.0, 5.0, 500, 600, 1.5, 0.03);
+  // (4.4~6.4초) 달 소멸: 상승 스웰 → 충격 → 저음 하강
+  playSwell(4.4, 0.8, 0.22);
+  playSnapCrash(5.2, 260, 1.6, 0.38);
+  playSubDrop(5.2, 2.2, 0.55);
+  // (9~15초) 불안한 드론 + 놀란 숨소리
+  playDrone(9.0, 6.0, 0.08);
+  playSnapCrash(9.6, 1200, 0.25, 0.10);
+  playSnapCrash(10.4, 1100, 0.30, 0.09);
+  // (15~22초) 파도와 썰물
+  playWaves(15.0, 7.0, 0.24);
+  playTextureNoise(17.0, 4.0, 1200, 300, 1.2, 0.08);
+  // (22~29초) 물속 + 물방울 + 산란 차임
+  playTextureNoise(22.0, 7.0, 320, 200, 1.0, 0.06, 'lowpass');
+  for (let i = 0; i < 18; i++) playBubble(22.2 + i * 0.37 + (i % 3) * 0.05, 420 + ((i * 97) % 500), 0.08);
+  [23.0, 23.6, 24.3, 25.0, 25.6].forEach((tc, i) => playChime(tc, [1047, 1319, 1568, 1175, 1397][i], 0.05));
+  // (29~35초) 지축 흔들림: 땅울림 + 삐걱임
+  playTextureNoise(29.0, 6.0, 140, 60, 1.0, 0.22);
+  playSubDrop(30.0, 3.0, 0.4);
+  playSnapCrash(32.0, 320, 1.2, 0.2);
+  playSnapCrash(33.8, 280, 1.0, 0.18);
+  // (35~41초) 시계 틱 (점점 드물어지다 멈춤)
+  [35.2, 35.9, 36.7, 37.6, 38.6, 39.7].forEach((tt, i) => playSnapCrash(tt, i % 2 ? 2200 : 2800, 0.06, 0.18));
+  // (41~47초) 일식 정적 → 빛의 귀환
+  playSwell(41.0, 2.4, 0.14);
+  playSnapCrash(43.4, 4000, 0.7, 0.18);
+  [1319, 1568, 1976].forEach((f, i) => playChime(43.4 + i * 0.08, f, 0.06));
+  // (47~53초) 쓸쓸한 바람
+  playTextureNoise(47.0, 6.0, 500, 800, 2.0, 0.07);
+  // (53~60초) 별빛 차임 + 귀뚜라미 복귀
+  playCrickets(53.0, 7.0, 0.03);
+  [53.6, 54.4, 55.1, 56.0, 56.9, 57.7, 58.6].forEach((tc, i) => playChime(tc, [880, 988, 1175, 1319, 1568, 1319, 1175][i], 0.07));
+  // (60~63.5초) 지구의 심장 박동
+  [60.2, 61.0, 61.8, 62.6].forEach(tt => playThump(tt, 0.4));
+
+  function playOrganChord(freqs, startT, dur, vol = 0.08) {
+    freqs.forEach(f => {
+      ['sine', 'triangle'].forEach((type, idx) => {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(f * (idx === 1 ? 2 : 1), now + startT);
+        g.gain.setValueAtTime(0.0001, now + startT);
+        g.gain.linearRampToValueAtTime(vol * (idx === 1 ? 0.25 : 1), now + startT + 1.2);
+        g.gain.setValueAtTime(vol * (idx === 1 ? 0.25 : 1), now + startT + dur - 1.2);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + startT + dur);
+        osc.connect(g); g.connect(bgmGain);
+        osc.start(now + startT); osc.stop(now + startT + dur + 0.1);
+      });
+    });
+  }
+
+  const organProg = [
+    [0.0,  6.0,  [110.00, 164.81, 220.00, 261.63]],
+    [4.0,  11.0, [110.00, 164.81, 220.00, 329.63]],
+    [15.0, 7.0,  [87.31, 130.81, 174.61, 261.63]],
+    [22.0, 7.0,  [98.00, 146.83, 196.00, 293.66]],
+    [29.0, 6.0,  [82.41, 123.47, 164.81, 246.94]],
+    [35.0, 6.0,  [87.31, 130.81, 174.61, 220.00]],
+    [41.0, 6.0,  [98.00, 146.83, 196.00, 246.94]],
+    [47.0, 6.0,  [110.00, 164.81, 220.00, 261.63]],
+    [53.0, 7.0,  [130.81, 196.00, 261.63, 329.63]],
+    [60.0, 6.0,  [130.81, 196.00, 261.63, 392.00]]
+  ];
+  organProg.forEach(([st, d, notes]) => playOrganChord(notes, st, d, 0.08));
+}
+
+// === 6. 레코더 및 루프 ===
+function startSimulation(recordMode = false) {
+  $('go').style.display = 'none';
+  scheduleMoonScore();
+  last = 0;
+  playing = true;
+
+  if (recordMode) {
+    recordedChunks = [];
+    const vStream = outCanvas.captureStream(60);
+    const mixed = new MediaStream([...vStream.getVideoTracks(), ...streamDest.stream.getAudioTracks()]);
+    const mimes = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
+    const mime = mimes.find(m => MediaRecorder.isTypeSupported(m)) || '';
+    mediaRecorder = new MediaRecorder(mixed, { mimeType: mime, videoBitsPerSecond: 8000000 });
+    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+      const blob = new Blob(recordedChunks, { type: mime || 'video/webm' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `WhatIf_MoonVanish_Final.${ext}`;
+      a.click();
+      $('recStatus').textContent = `✅ 저장 완료! (WhatIf_MoonVanish_Final.${ext})`;
+      $('recStatus').style.color = '#4ade80';
+      isRecording = false;
+    };
+    mediaRecorder.start(200);
+    isRecording = true;
+    $('recStatus').textContent = '🔴 66초 실시간 렌더링 & 사운드 녹화 중...';
+    $('recStatus').style.color = '#f87171';
+  } else {
+    $('recStatus').textContent = '▶ 대형 자막 & 상황별 효과음 시뮬레이션 재생 중';
+    $('recStatus').style.color = '#a9bde6';
+  }
+}
+
+$('btnPreview').onclick = () => startSimulation(false);
+$('btnRecordStart').onclick = () => startSimulation(true);
+$('btnRecPanel').onclick = () => {
+  if (isRecording && mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  startSimulation(true);
+};
+$('btnStopSave').onclick = () => {
+  if (isRecording && mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    playing = false;
+  }
+};
+
+function loop() {
+  requestAnimationFrame(loop);
+  if (!playing) {
+    updateWorld(0, 0.016);
+    renderComposite(0);
+    return;
+  }
+  const nowSec = performance.now() / 1000;
+  const t = Math.max(0, nowSec - t0);
+  const dt = Math.min(0.05, Math.max(0.001, t - last));
+  last = t;
+
+  if (t >= TOTAL_DUR) {
+    if (isRecording && mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      playing = false;
+      return;
+    }
+    startSimulation(false);
+    return;
+  }
+  updateWorld(t, dt);
+  renderComposite(t);
+}
+loop();
+</script>
+</body>
+</html>

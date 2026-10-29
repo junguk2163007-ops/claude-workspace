@@ -1,0 +1,40 @@
+{
+  "reference": "reference/태양이_갑자기_사라진다면.html",
+  "slug": "moon-vanish",
+  "video": {
+    "samples": 132,
+    "identicalFrames": 120,
+    "meanAbsDiff": 0.1283,
+    "worst": [
+      {
+        "t": 52.5,
+        "pctPixelsOver16": 1.6,
+        "max": 201
+      },
+      {
+        "t": 52,
+        "pctPixelsOver16": 1.592,
+        "max": 201
+      },
+      {
+        "t": 51.5,
+        "pctPixelsOver16": 1.547,
+        "max": 201
+      },
+      {
+        "t": 51,
+        "pctPixelsOver16": 1.52,
+        "max": 201
+      }
+    ]
+  },
+  "srt": {
+    "largeSubIdentical": true,
+    "fullIdentical": true
+  },
+  "audio": {
+    "maxSampleDiff": 0.00375,
+    "snrDb": 54.1,
+    "peak": 0.434
+  }
+}

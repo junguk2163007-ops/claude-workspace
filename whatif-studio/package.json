@@ -1,0 +1,16 @@
+{
+  "name": "whatif-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "What If 과학 시뮬레이션 영상 자동 제작 (엔진 + 장면 라이브러리 + 주제 데이터)",
+  "scripts": {
+    "build": "node build.mjs",
+    "render": "node render.mjs",
+    "verify": "node scripts/verify-reference.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "optionalDependencies": {
+    "playwright": "1.63.0"
+  }
+}

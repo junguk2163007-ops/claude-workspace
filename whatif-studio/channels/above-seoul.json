@@ -1,0 +1,10 @@
+{
+  "name": "Above Seoul",
+  "titlePattern": "Above Seoul | {title}",
+  "_example": "Above Seoul | Rooftop at Night",
+  "descriptionFooter": "Seoul, South Korea · Filmed on iPhone",
+  "hashtags": ["#Seoul"],
+  "tags": ["seoul", "korea", "rooftop"],
+  "categoryId": "19",
+  "ownChannelIds": []
+}

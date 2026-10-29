@@ -1,0 +1,8 @@
+node_modules/
+.cache/
+dist/*/verify/*.f32
+dist/*/.work/
+*.log
+# 업로드 인증 정보는 저장소 밖(~/.config/whatif-studio/)에 둔다. 혹시 모를 사본도 차단.
+client_secret*.json
+token*.json

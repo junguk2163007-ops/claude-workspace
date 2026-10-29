@@ -1,0 +1,115 @@
+{
+  "slug": "moon-vanish",
+  "title": "만약 달이 갑자기 사라진다면?",
+  "langs": [
+    "ko"
+  ],
+  "ratios": [
+    "9x16"
+  ],
+  "channel": "What If 시리즈 (임시 기본값)",
+  "generatedAt": "2026-10-29T17:00:56.671Z",
+  "videos": [
+    {
+      "ratio": "9x16",
+      "file": "moon-vanish_9x16.mp4",
+      "title": "만약 달이 갑자기 사라진다면?",
+      "description": "달이 한순간 사라지면 밤하늘, 조석, 산호, 자전축, 하루의 길이, 일식, 달력까지 무엇이 바뀔까요? 66초 시뮬레이션.\n\n0:00 시작 · 지름 3,474km\n0:15 조석 약 1/3 토막 · 산호 동시 산란\n0:29 자전축 흔들림 · 하루 +1.7ms/100년\n0:41 개기일식 소멸 · 음력 달력 무의미\n0:53 별 가시성 UP · 45억 년의 단짝\n\nSources:\n- ESA: https://www.esa.int/ESA_Multimedia/Images/2021/09/Moon_facts_Age\n- NASA StarChild: https://starchild.gsfc.nasa.gov/docs/StarChild/solar_system_level2/moon_facts.html\n- NOAA: https://oceanservice.noaa.gov/education/tutorial_tides/tides02_cause.html\n- Wikipedia (Lux): https://en.wikipedia.org/wiki/Lux\n- eLife: https://elifesciences.org/articles/09991\n- Nature: https://dx.doi.org/10.1038/361615a0\n- Proc. R. Soc. A: https://pmc.ncbi.nlm.nih.gov/articles/PMC5247521/\n\n장면과 소리는 모두 코드로 만든 과학 시뮬레이션입니다. 수치는 출처 기준이며 일부는 추정치입니다.\n\n#Shorts #WhatIf #달",
+      "tags": [
+        "what if",
+        "달",
+        "달이 사라진다면",
+        "조석",
+        "자전축",
+        "개기일식",
+        "과학 시뮬레이션",
+        "만약에",
+        "과학",
+        "시뮬레이션",
+        "science"
+      ],
+      "hashtags": [
+        "#Shorts",
+        "#WhatIf",
+        "#달"
+      ],
+      "categoryId": "28",
+      "defaultLanguage": "ko",
+      "privacyStatus": "private",
+      "selfDeclaredMadeForKids": false,
+      "containsSyntheticMedia": false,
+      "shorts": true,
+      "duration": 66,
+      "chapters": [
+        {
+          "start": 0,
+          "label": "시작 · 지름 3,474km"
+        },
+        {
+          "start": 15,
+          "label": "조석 약 1/3 토막 · 산호 동시 산란"
+        },
+        {
+          "start": 29,
+          "label": "자전축 흔들림 · 하루 +1.7ms/100년"
+        },
+        {
+          "start": 41,
+          "label": "개기일식 소멸 · 음력 달력 무의미"
+        },
+        {
+          "start": 53,
+          "label": "별 가시성 UP · 45억 년의 단짝"
+        }
+      ]
+    }
+  ],
+  "srt": [
+    "KO_MoonVanish_LargeSub.srt",
+    "KO_MoonVanish_Full.srt"
+  ],
+  "sources": [
+    {
+      "publisher": "ESA",
+      "title": "Moon facts: Age",
+      "url": "https://www.esa.int/ESA_Multimedia/Images/2021/09/Moon_facts_Age",
+      "usedFor": "달의 나이 약 45억 년"
+    },
+    {
+      "publisher": "NASA StarChild",
+      "title": "Facts about the Moon",
+      "url": "https://starchild.gsfc.nasa.gov/docs/StarChild/solar_system_level2/moon_facts.html",
+      "usedFor": "달 지름 약 3,474~3,476km, 평균 거리"
+    },
+    {
+      "publisher": "NOAA",
+      "title": "Tides and Water Levels: What Causes Tides?",
+      "url": "https://oceanservice.noaa.gov/education/tutorial_tides/tides02_cause.html",
+      "usedFor": "태양 기조력은 달의 약 절반"
+    },
+    {
+      "publisher": "Wikipedia (Lux)",
+      "title": "Lux — illuminance examples",
+      "url": "https://en.wikipedia.org/wiki/Lux",
+      "usedFor": "보름달 0.05~0.3 lux, 별빛 0.0002 lux 수준 (추정치 범위)"
+    },
+    {
+      "publisher": "eLife",
+      "title": "Signaling cascades and the importance of moonlight in coral broadcast mass spawning (2015)",
+      "url": "https://elifesciences.org/articles/09991",
+      "usedFor": "달빛 변화와 산호 동시 산란"
+    },
+    {
+      "publisher": "Nature",
+      "title": "Laskar, Joutel & Robutel (1993) Stabilization of the Earth's obliquity by the Moon",
+      "url": "https://dx.doi.org/10.1038/361615a0",
+      "usedFor": "달이 자전축 기울기를 안정화"
+    },
+    {
+      "publisher": "Proc. R. Soc. A",
+      "title": "Stephenson, Morrison & Hohenkerk (2016) Measurement of the Earth's rotation: 720 BC to AD 2015",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5247521/",
+      "usedFor": "하루 길이 증가 약 +1.8ms/100년 (조석 마찰 예측 +2.3ms)"
+    }
+  ]
+}
