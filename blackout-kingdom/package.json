@@ -1,0 +1,11 @@
+{
+  "name": "blackout-kingdom",
+  "private": true,
+  "version": "0.1.0",
+  "description": "정전의 왕국 - 사이드스크롤 마이크로 전략 게임",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.js",
+    "test": "node tests/sim.test.js"
+  }
+}
