@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>전기실 진단노트</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="시설관리 전기팀 신입사원을 위한 전기 실력 진단과 역추적 학습">
+<meta name="theme-color" content="#0F1B33">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="진단노트">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <button class="brand" type="button" data-action="nav" data-view="home" aria-label="홈으로">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M13.5 2 5 13.2h5.6L9.8 22 19 10.4h-5.7z" fill="currentColor"/></svg>
+      </span>
+      <span class="brand-text">
+        <span class="brand-name">전기실 진단노트</span>
+        <span class="brand-sub">시설관리 전기팀 · 신입 학습</span>
+      </span>
+    </button>
+    <div id="topAction" class="top-action"></div>
+  </div>
+  <div class="tape" aria-hidden="true"></div>
+</header>
+
+<main id="app" class="wrap" tabindex="-1"></main>
+
+<footer class="disclaimer wrap">
+  <p>교육용 자료입니다. 실제 현장 작업은 반드시 선임자 지시와 사내 안전 절차를 우선합니다.</p>
+</footer>
+
+<nav class="tabbar" id="tabbar" aria-label="주요 화면">
+  <div class="tabbar-in">
+    <button type="button" class="tab" data-action="nav" data-view="home">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      <span>홈</span>
+    </button>
+    <button type="button" class="tab" data-action="nav" data-view="records">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 9.5h18M3 14.5h18M9 4v16" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      <span>이해도 기록</span>
+    </button>
+    <button type="button" class="tab" data-action="nav" data-view="map">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 4v13.5M15 6.5V20" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      <span>학습 지도</span>
+    </button>
+  </div>
+</nav>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="data/fields.js"></script>
+<script src="data/questions.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
