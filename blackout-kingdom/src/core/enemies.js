@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { emit, nextId, sign } from './util.js';
 import { spawnCoins } from './coins.js';
 import { blockingSwordsman, damageSwordsman } from './swordsmen.js';
+import { hitArcher } from './archers.js';
 
 export function spawnEnemy(world, kind, side) {
   const def = CONFIG.enemies.kinds[kind];
@@ -113,6 +114,17 @@ function updateGround(world, e, def, dt) {
   }
 
   if (touchingKing(world, e)) hitKing(world, e);
+  hitNearbyArcher(world, e, def, dt);
+}
+
+// 지나가다 닿은 궁수를 공격
+function hitNearbyArcher(world, e, def, dt) {
+  e.hitCd = Math.max(0, (e.hitCd || 0) - dt);
+  if (e.hitCd > 0) return;
+  const a = world.archers.find((a) => a.invuln <= 0 && Math.abs(a.x - e.x) < e.w / 2 + 3);
+  if (!a) return;
+  hitArcher(world, a);
+  e.hitCd = def.attackInterval;
 }
 
 // 코인 도둑: 방벽 틈으로 스며들어 땅의 코인이나 왕의 코인을 훔쳐 어둠으로 달아난다.
@@ -168,7 +180,10 @@ function updateFlyer(world, e, def, dt) {
   e.diveCd = Math.max(0, e.diveCd - dt);
 
   if (e.state === 'dive') {
-    const dx = king.x - e.x;
+    // 급강하 목표: 노린 궁수가 아직 있으면 그 궁수, 아니면 왕
+    const prey = e.diveTarget ? world.archers.find((a) => a.id === e.diveTarget) : null;
+    const tx = prey ? prey.x : king.x;
+    const dx = tx - e.x;
     const dy = -12 - e.y;
     const d = Math.hypot(dx, dy) || 1;
     const sp = def.speed * 1.9;
@@ -178,7 +193,9 @@ function updateFlyer(world, e, def, dt) {
     e.y += e.vy * dt;
     e.facing = sign(dx) || e.facing;
     if (d < 6 || e.y > -9) {
-      if (touchingKing(world, e)) hitKing(world, e);
+      if (prey) {
+        if (Math.abs(prey.x - e.x) < e.w / 2 + 3) hitArcher(world, prey);
+      } else if (touchingKing(world, e)) hitKing(world, e);
       e.state = 'rise';
       e.diveCd = 3.5;
     }
@@ -204,8 +221,18 @@ function updateFlyer(world, e, def, dt) {
   e.vy = (ty - e.y) * 3;
   e.y += e.vy * dt;
 
-  if (near && Math.abs(king.x - e.x) < 24 && e.diveCd <= 0 && king.hurtTimer <= 0) {
+  if (e.diveCd > 0) return;
+  if (near && Math.abs(king.x - e.x) < 24 && king.hurtTimer <= 0) {
     e.state = 'dive';
+    e.diveTarget = null;
+    emit(world, 'flyerDive', { x: e.x, y: e.y, kind: e.kind });
+    return;
+  }
+  // 바로 아래 궁수를 노림
+  const prey = world.archers.find((a) => a.invuln <= 0 && Math.abs(a.x - e.x) < 20);
+  if (prey) {
+    e.state = 'dive';
+    e.diveTarget = prey.id;
     emit(world, 'flyerDive', { x: e.x, y: e.y, kind: e.kind });
   }
 }

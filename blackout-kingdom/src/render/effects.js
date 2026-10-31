@@ -27,9 +27,9 @@ export function createEffects() {
         add({ x, y, vx: rand(-70, 70), vy: rand(-110, -30), max: rand(0.8, 1.5), color, size: rand(1.5, 2.6), gravity: 120, drag: 3.2, shape: 'feather', spin: rand(-8, 8) });
       }
     },
-    smoke(x, y, n = 10) {
+    smoke(x, y, n = 10, colors = ['#140d1f', '#140d1f', '#4b2d73']) {
       for (let i = 0; i < n; i++) {
-        add({ x: x + rand(-4, 4), y: y + rand(-4, 4), vx: rand(-35, 35), vy: rand(-50, -10), max: rand(0.5, 0.9), color: i % 3 ? '#140d1f' : '#4b2d73', size: rand(3, 6), drag: 2.5, shape: 'puff' });
+        add({ x: x + rand(-4, 4), y: y + rand(-4, 4), vx: rand(-35, 35), vy: rand(-50, -10), max: rand(0.5, 0.9), color: colors[i % colors.length], size: rand(3, 6), drag: 2.5, shape: 'puff' });
       }
     },
     sparks(x, y, color = '#fff6d0', n = 5) {

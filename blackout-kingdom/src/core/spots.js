@@ -1,6 +1,6 @@
 import { CONFIG } from '../config.js';
 import { emit } from './util.js';
-import { spawnArcher } from './archers.js';
+import { spawnArcher, rearmArcher } from './archers.js';
 import { spawnSwordsman } from './swordsmen.js';
 
 // "투자 자리": 왕이 코인을 던져 넣으면 무언가가 지어지는 곳.
@@ -62,8 +62,11 @@ function completeSpot(world, spot) {
   world.king.investLock = true;
   if (spot.kind === 'archerPost') {
     spot.hires++;
-    spot.cost = Math.min(spot.cost + 1, spot.maxCost);
-    spawnArcher(world, spot.x);
+    // 맨손 궁수를 다시 무장시키면 가격은 오르지 않음
+    if (!rearmArcher(world, spot.x)) {
+      spot.cost = Math.min(spot.cost + 1, spot.maxCost);
+      spawnArcher(world, spot.x);
+    }
   } else if (spot.kind === 'swordPost') {
     spot.hires++;
     spot.cost = Math.min(spot.cost + 1, spot.maxCost);

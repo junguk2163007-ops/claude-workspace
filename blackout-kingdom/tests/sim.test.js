@@ -69,6 +69,36 @@ check('날아다니는 괴물이 땅 밑이나 하늘 끝으로 사라지지 않
   check('검사가 맞으면 체력이 줄거나 후퇴함', (ev2.swordsmanHit || 0) > 0, `${ev2.swordsmanHit || 0}번 맞음`);
 }
 
+// 궁수 피격 시험: 방벽 없이 궁수 1명에게 기는 그림자 떼가 닥침
+{
+  const w3 = createWorld(11);
+  w3.animals.length = 0;
+  w3.king.x = -600;
+  w3.archers[0].x = 100;
+  for (let i = 0; i < 6; i++) { spawnEnemy(w3, 'crawler', 1); w3.enemies[i].x = 130 + i * 6; }
+  const ev3 = {};
+  for (let i = 0; i < 60 * 20; i++) {
+    stepWorld(w3, dt, { move: 0, invest: false });
+    for (const ev of w3.events) ev3[ev.type] = (ev3[ev.type] || 0) + 1;
+    w3.events.length = 0;
+  }
+  check('궁수가 맞으면 활을 잃음', (ev3.archerDisarmed || 0) > 0);
+  check('맨손 궁수가 또 맞으면 사라짐', (ev3.archerLost || 0) > 0 && w3.archers.length === 0, `남은 궁수 ${w3.archers.length}`);
+
+  // 다시 무장: 맨손 궁수가 있을 때 궁수 깃발에 투자
+  const w4 = createWorld(12);
+  w4.archers[0].armed = false;
+  const post = w4.spots.find((s) => s.kind === 'archerPost');
+  w4.king.x = post.x;
+  w4.king.coins = 10;
+  const cost = post.cost;
+  for (let i = 0; i < 60 * 3; i++) {
+    stepWorld(w4, dt, { move: 0, invest: true });
+    w4.events.length = 0;
+  }
+  check('맨손 궁수가 다시 활을 듦 (새로 뽑지 않음, 가격 그대로)', w4.archers.length === 1 && w4.archers[0].armed && post.cost === cost);
+}
+
 const all = [world.king, ...world.archers, ...world.animals, ...world.enemies, ...world.coins, ...world.arrows];
 check('숫자가 깨지지 않음 (NaN 없음)', all.every((e) => Number.isFinite(e.x) && Number.isFinite(e.y)));
 check('화살을 쐈다', (counts.arrowFired || 0) > 20, `${counts.arrowFired}발`);

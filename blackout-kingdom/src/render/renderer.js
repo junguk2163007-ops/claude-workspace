@@ -106,6 +106,21 @@ export function createRenderer(canvas) {
         fx.sparkle(ev.x, ev.y, 3, COLORS.goldLight);
         break;
       }
+      case 'archerDisarmed':
+        // 활이 튕겨 나감
+        fx.chips(ev.x, 6);
+        fx.sparks(ev.x, ev.y, '#ffb0a0', 6);
+        fx.text(ev.x, -30, '활을 잃었다!', '#ff9a8a', 7);
+        break;
+      case 'archerLost':
+        fx.smoke(ev.x, ev.y, 10, ['#8a8794', '#5c5866', '#b5b0bd']);
+        fx.text(ev.x, -30, '궁수를 잃었다…', '#ff6b6b', 8);
+        r.toast = { text: '궁수 한 명을 잃었다…', life: 0, max: 3 };
+        break;
+      case 'archerRearmed':
+        fx.sparkle(ev.x, ev.y, 10, '#c8ffc0');
+        fx.text(ev.x, -30, '다시 활을 들었다!', '#a8f0a0', 7);
+        break;
       case 'archerPickup':
         fx.sparkle(ev.x, ev.y, 4, COLORS.goldLight);
         break;
@@ -643,7 +658,46 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
+  // 활을 잃은 궁수: 두건 벗겨진 맨손, 뛸 땐 두 팔을 들고 허둥지둥
+  function drawUnarmed(a) {
+    shadow(a.x, 4.5);
+    const moving = Math.abs(a.vx) > 3;
+    const phase = r.time * 15 + a.id;
+    ctx.save();
+    ctx.translate(a.x, moving ? -Math.abs(Math.sin(phase)) * 1.3 : 0);
+    ctx.scale(a.facing, 1);
+    if (a.invuln > 0 && Math.floor(r.time * 20) % 2) ctx.globalAlpha = 0.5;
+    legs(phase, moving, '#3a2c20');
+    ctx.fillStyle = '#5a4632';
+    ctx.fillRect(-3, -13, 6, 7.5);
+    ctx.fillStyle = '#3f7a45';
+    ctx.fillRect(-3.4, -13.5, 6.8, 2);
+    ctx.fillStyle = '#e9c39b';
+    ctx.fillRect(-2.6, -18.5, 5.4, 5);
+    ctx.fillStyle = '#6b4a2b';
+    ctx.fillRect(-2.8, -19.3, 5.8, 1.8);
+    ctx.fillRect(-2.8, -18, 1.3, 2.5);
+    ctx.fillStyle = '#1a1020';
+    ctx.fillRect(1.4, -16.6, 0.8, 0.9);
+    ctx.fillStyle = '#e9c39b';
+    if (moving) {
+      const flail = Math.sin(phase * 1.3) * 1.2;
+      ctx.fillRect(-3.8, -18 + flail, 1.3, 5);
+      ctx.fillRect(2.6, -18 - flail, 1.3, 5);
+    } else {
+      ctx.fillRect(1.6, -12.5, 1.3, 5);
+    }
+    // 식은땀
+    if (Math.sin(r.time * 3 + a.id) > 0) {
+      ctx.fillStyle = '#9fd8ff';
+      ctx.fillRect(-3.6, -20, 0.9, 1.4);
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   function drawArcher(a) {
+    if (!a.armed) { drawUnarmed(a); return; }
     shadow(a.x, 4.5);
     const moving = Math.abs(a.vx) > 3;
     const phase = r.time * 12 + a.id;

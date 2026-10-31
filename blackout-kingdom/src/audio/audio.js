@@ -169,6 +169,15 @@ export function createAudio() {
   };
 
   SOUNDS.coinGiven = SOUNDS.coinCollected;
+  SOUNDS.archerDisarmed = (ev, v) => {
+    noise({ dur: 0.1, vol: 0.14 * v, freq: 1800, q: 3 });
+    tone({ freq: 600, to: 300, type: 'triangle', dur: 0.25, vol: 0.09 * v, delay: 0.05 });
+  };
+  SOUNDS.archerLost = (ev, v) => {
+    tone({ freq: 330, to: 300, type: 'triangle', dur: 0.4, vol: 0.1 * v });
+    tone({ freq: 262, to: 220, type: 'triangle', dur: 0.7, vol: 0.1 * v, delay: 0.3 });
+  };
+  SOUNDS.archerRearmed = SOUNDS.swordsmanRecovered;
   SOUNDS.archerPickup = (ev, v) => tone({ freq: 2600, type: 'triangle', dur: 0.05, vol: 0.04 * v });
 
   // 같은 소리가 한순간에 너무 많이 겹치지 않게

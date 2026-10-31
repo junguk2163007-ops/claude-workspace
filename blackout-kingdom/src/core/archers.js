@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { emit, nextId, sign, clamp } from './util.js';
 import { fireArrow } from './arrows.js';
+import { spawnCoins } from './coins.js';
 
 export function spawnArcher(world, x) {
   const { rng } = world;
@@ -14,6 +15,8 @@ export function spawnArcher(world, x) {
     idle: rng.range(0.3, 1.2),
     cooldown: rng.range(0.2, 0.8),
     aiming: false,
+    armed: true,     // 활을 잃으면 false (맨손으로 도망)
+    invuln: 0,       // 맞은 직후 잠깐 무적
     carry: 0,        // 주워 든 코인
     giveTimer: 0,
     coinTarget: null,
@@ -41,6 +44,55 @@ function guardX(world, side) {
     }
   }
   return wallX !== null ? wallX - side * cfg.guardOffset : side * cfg.guardDefault;
+}
+
+// 적에게 맞음: 처음엔 활을 잃고 맨손으로 마을로 도망, 맨손일 때 또 맞으면 사라진다.
+export function hitArcher(world, a) {
+  if (a.invuln > 0) return;
+  if (a.carry > 0) spawnCoins(world, a.x, -16, a.carry);
+  a.carry = 0;
+  a.coinTarget = null;
+  if (a.armed) {
+    a.armed = false;
+    a.invuln = 1.2;
+    a.aiming = false;
+    a.targetX = world.rng.range(-40, 40);
+    emit(world, 'archerDisarmed', { x: a.x, y: -12, facing: a.facing });
+  } else {
+    world.archers.splice(world.archers.indexOf(a), 1);
+    emit(world, 'archerLost', { x: a.x, y: -10 });
+  }
+}
+
+// 궁수 깃발에 투자하면: 맨손 궁수가 있으면 그 사람이 먼저 다시 활을 든다
+export function rearmArcher(world, nearX) {
+  let best = null;
+  for (const a of world.archers) {
+    if (!a.armed && (!best || Math.abs(a.x - nearX) < Math.abs(best.x - nearX))) best = a;
+  }
+  if (!best) return false;
+  best.armed = true;
+  best.cooldown = 0.5;
+  emit(world, 'archerRearmed', { x: best.x, y: -14 });
+  return true;
+}
+
+// 맨손 궁수: 마을 중심 근처에서 서성이며 숨어 있음
+function updateUnarmed(world, a, dt, threat) {
+  a.aiming = false;
+  a.idle -= dt;
+  if (a.idle <= 0 && Math.abs(a.targetX - a.x) < 3) {
+    a.targetX = world.rng.range(-45, 45);
+    a.idle = world.rng.range(1, 3);
+  }
+  const dx = a.targetX - a.x;
+  if (Math.abs(dx) > 2) {
+    a.vx = sign(dx) * CONFIG.archer.walk * (threat ? 2 : 0.7);
+    a.facing = sign(dx);
+    a.x += a.vx * dt;
+  } else {
+    a.vx = 0;
+  }
 }
 
 // 주우러 갈 코인: 왕 바로 옆 코인은 왕 몫, 다른 궁수가 노리는 코인은 양보
@@ -98,6 +150,8 @@ export function updateArchers(world, dt) {
 
   world.archers.forEach((a, i) => {
     a.cooldown -= dt;
+    a.invuln = Math.max(0, a.invuln - dt);
+    if (!a.armed) { updateUnarmed(world, a, dt, threat); return; }
     deliver(world, a, dt);
     let target = null;
     let moveTo = null;
