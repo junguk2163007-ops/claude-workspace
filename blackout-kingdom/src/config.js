@@ -52,6 +52,20 @@ export const CONFIG = {
     max: 8,
   },
 
+  // 검사: 방벽 바깥 맨 앞줄에서 적을 막는다
+  swordsman: {
+    max: 4,
+    hp: 6,
+    walk: 34,
+    reach: 12,          // 칼이 닿는 거리
+    damage: 1,
+    attackInterval: 0.75,
+    recoverTime: 12,    // 쓰러진 뒤 마을에서 회복하는 시간
+    regen: 0.25,        // 조용할 때 초당 회복량
+    frontOffset: 14,    // 방벽 바깥 몇 픽셀에 설지
+    frontDefault: 110,  // 방벽이 없으면 중심에서 이만큼
+  },
+
   // 어둠 생물. cost = 습격 예산에서 차지하는 값, unlock = 몇 단계부터 나오는지
   enemies: {
     spawnDistance: 700,
@@ -79,6 +93,7 @@ export const CONFIG = {
   // 코인을 던져 투자하는 자리
   spots: [
     { kind: 'archerPost', x: -30, cost: 3, maxCost: 6 },
+    { kind: 'swordPost', x: 30, cost: 4, maxCost: 7 },
     { kind: 'barricade', x: -160, cost: 4, hp: 8 },
     { kind: 'barricade', x: 160, cost: 4, hp: 8 },
   ],
@@ -87,6 +102,6 @@ export const CONFIG = {
   // 손맛 연출 (화면 쪽에서 쓰는 값)
   juice: {
     hitstop: { enemyKilled: 0.07, animalKilled: 0.035, spotComplete: 0.05 },
-    shake: { enemyKilled: 2.5, kingHit: 4, spotComplete: 3, wallBroken: 5, wallHit: 0.8 },
+    shake: { swordSwing: 0.7, enemyKilled: 2.5, kingHit: 4, spotComplete: 3, wallBroken: 5, wallHit: 0.8 },
   },
 };

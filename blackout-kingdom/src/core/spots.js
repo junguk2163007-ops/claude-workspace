@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { emit } from './util.js';
 import { spawnArcher } from './archers.js';
+import { spawnSwordsman } from './swordsmen.js';
 
 // "투자 자리": 왕이 코인을 던져 넣으면 무언가가 지어지는 곳.
 export function createSpot(def, id) {
@@ -21,6 +22,7 @@ export function createSpot(def, id) {
 
 export function canInvest(world, spot) {
   if (spot.kind === 'archerPost' && world.archers.length >= CONFIG.archer.max) return false;
+  if (spot.kind === 'swordPost' && world.swordsmen.length >= CONFIG.swordsman.max) return false;
   if (spot.kind === 'barricade' && spot.built) return false;
   return spot.paid + spot.pending < spot.cost;
 }
@@ -59,10 +61,15 @@ export function throwCoin(world, spot) {
 
 function completeSpot(world, spot) {
   spot.paid = 0;
+  world.king.investLock = true;
   if (spot.kind === 'archerPost') {
     spot.hires++;
     spot.cost = Math.min(spot.cost + 1, spot.maxCost);
     spawnArcher(world, spot.x);
+  } else if (spot.kind === 'swordPost') {
+    spot.hires++;
+    spot.cost = Math.min(spot.cost + 1, spot.maxCost);
+    spawnSwordsman(world, spot.x);
   } else if (spot.kind === 'barricade') {
     spot.built = true;
     spot.hp = spot.maxHp;

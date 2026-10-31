@@ -11,6 +11,7 @@ export function createKing() {
     coins: CONFIG.king.startCoins,
     investTimer: 0,
     investing: false,
+    investLock: false, // 무언가 완성되면 키를 한 번 뗄 때까지 투자 멈춤 (실수로 코인 낭비 방지)
     hurtTimer: 0,
     spotId: null,
   };
@@ -34,8 +35,10 @@ export function updateKing(world, dt, intent) {
   k.investing = false;
   if (!intent.invest) {
     k.investTimer = 0;
+    k.investLock = false;
     return;
   }
+  if (k.investLock) return;
   k.investTimer -= dt;
   if (spot && k.coins > 0 && canInvest(world, spot)) {
     k.investing = true;

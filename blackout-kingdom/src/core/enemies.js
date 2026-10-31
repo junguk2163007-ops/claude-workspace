@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { emit, nextId, sign } from './util.js';
 import { spawnCoins } from './coins.js';
+import { blockingSwordsman, damageSwordsman } from './swordsmen.js';
 
 export function spawnEnemy(world, kind, side) {
   const def = CONFIG.enemies.kinds[kind];
@@ -83,10 +84,18 @@ function updateGround(world, e, def, dt) {
   const dir = sign(targetX - e.x);
   if (dir) e.facing = dir;
 
-  const wall = dir ? blockingWall(world, e, dir) : null;
-  e.attacking = !!wall;
+  // 검사가 앞을 막으면 검사와 싸우고, 방벽이 막으면 방벽을 부순다
+  const sword = dir ? blockingSwordsman(world, e, dir) : null;
+  const wall = dir && !sword ? blockingWall(world, e, dir) : null;
+  e.attacking = !!(sword || wall);
   e.vx = 0;
-  if (wall) {
+  if (sword) {
+    e.attackTimer -= dt;
+    if (e.attackTimer <= 0) {
+      e.attackTimer = def.attackInterval;
+      damageSwordsman(world, sword, def.attack);
+    }
+  } else if (wall) {
     e.attackTimer -= dt;
     if (e.attackTimer <= 0) {
       e.attackTimer = def.attackInterval;
@@ -123,7 +132,8 @@ function updateThief(world, e, def, dt) {
   }
   const dir = sign(targetX - e.x) || e.facing;
   e.facing = dir;
-  e.vx = dir * def.speed * (e.carrying ? 1.1 : 1);
+  // 도둑은 방벽 틈으로 빠져나가지만 검사는 못 지나간다
+  e.vx = blockingSwordsman(world, e, dir) ? 0 : dir * def.speed * (e.carrying ? 1.1 : 1);
   e.x += e.vx * dt;
 
   if (e.carrying > 0) {

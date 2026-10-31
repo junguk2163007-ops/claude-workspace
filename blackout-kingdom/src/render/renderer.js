@@ -109,7 +109,7 @@ export function createRenderer(canvas) {
         fx.confetti(ev.x, -36);
         fx.ring(ev.x, -20, COLORS.goldLight, 40);
         fx.dust(ev.x, 10);
-        fx.text(ev.x, -60, ev.kind === 'archerPost' ? '궁수 합류!' : '방벽 완성!', COLORS.goldLight, 9);
+        fx.text(ev.x, -60, { archerPost: '궁수 합류!', swordPost: '검사 합류!', barricade: '방벽 완성!' }[ev.kind], COLORS.goldLight, 9);
         break;
       case 'arrowHit':
         fx.sparks(ev.x, ev.y, ev.target === 'enemy' ? '#d9b8ff' : '#fff6d0');
@@ -162,6 +162,21 @@ export function createRenderer(canvas) {
         };
         break;
       }
+      case 'swordSwing':
+        fx.slash(ev.x, ev.y, ev.facing);
+        fx.sparks(ev.x + ev.facing * 3, ev.y, '#f4f7ff', 3);
+        break;
+      case 'swordsmanHit':
+        fx.sparks(ev.x, ev.y, '#ffb0a0', 4);
+        break;
+      case 'swordsmanDown':
+        fx.text(ev.x, -32, '후퇴!', '#ff9a8a', 8);
+        fx.dust(ev.x, 6);
+        break;
+      case 'swordsmanRecovered':
+        fx.text(ev.x, -32, '복귀!', '#a8f0a0', 8);
+        fx.sparkle(ev.x, -14, 8, '#c8ffc0');
+        break;
       case 'flyerDive':
         fx.sparks(ev.x, ev.y, '#d9b8ff', 4);
         break;
@@ -223,6 +238,7 @@ export function createRenderer(canvas) {
     for (const c of world.coins) if (c.grounded) drawCoin(c.x, c.y, c.spin, c.id, true);
     for (const a of world.animals) drawAnimal(world, a);
     for (const e of world.enemies) drawEnemy(e);
+    for (const s of world.swordsmen) drawSwordsman(s);
     for (const a of world.archers) drawArcher(a);
     drawKing(king, world);
     for (const a of world.arrows) if (!a.stuck) drawArrow(a);
@@ -386,6 +402,29 @@ export function createRenderer(canvas) {
       ctx.stroke();
       ctx.fillStyle = '#4a321c';
       ctx.fillRect(-4, -1.5, 8, 1.5);
+    } else if (s.kind === 'swordPost') {
+      // 무기 거치대: 기둥 + 둥근 방패 + 엇갈린 칼
+      ctx.fillStyle = '#5b3d22';
+      ctx.fillRect(-1, -24, 2, 24);
+      ctx.fillRect(-6, -18, 12, 1.5);
+      ctx.strokeStyle = '#cfd6e0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-6, -27); ctx.lineTo(5, -12);
+      ctx.moveTo(6, -27); ctx.lineTo(-5, -12);
+      ctx.stroke();
+      ctx.fillStyle = '#d4af37';
+      ctx.beginPath();
+      ctx.arc(0, -19, 4.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#7a2e2e';
+      ctx.beginPath();
+      ctx.arc(0, -19, 3.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#d4af37';
+      ctx.fillRect(-0.5, -21.5, 1, 5);
+      ctx.fillStyle = '#4a321c';
+      ctx.fillRect(-4, -1.5, 8, 1.5);
     } else if (s.kind === 'barricade') {
       if (s.built) {
         const dmg = 1 - s.hp / s.maxHp;
@@ -442,6 +481,7 @@ export function createRenderer(canvas) {
 
     let label;
     if (s.kind === 'archerPost') label = world.archers.length >= CONFIG.archer.max ? '궁수 가득' : '궁수 고용';
+    else if (s.kind === 'swordPost') label = world.swordsmen.length >= CONFIG.swordsman.max ? '검사 가득' : '검사 고용';
     else label = s.built ? `방벽 ${s.hp}/${s.maxHp}` : '방벽 짓기';
     ctx.fillStyle = '#120c18';
     ctx.fillText(label, s.x + 0.5, -59.5);
@@ -643,6 +683,76 @@ export function createRenderer(canvas) {
       ctx.fillRect(tx - pull * 4 + 9, -11.7, 1.6, 1.4);
     }
     ctx.restore();
+  }
+
+  function drawSwordsman(s) {
+    const downed = s.state === 'downed';
+    const moving = Math.abs(s.vx) > 3;
+    const phase = r.time * (downed ? 6 : 12) + s.id;
+    shadow(s.x, 5);
+    ctx.save();
+    ctx.translate(s.x, moving && !downed ? -Math.abs(Math.sin(phase)) : 0);
+    ctx.scale(s.facing, 1);
+    if (s.flash > 0 && Math.floor(r.time * 30) % 2) ctx.globalAlpha = 0.45;
+    if (downed) {
+      // 비틀거리며 후퇴 (몸을 숙이고 흐릿하게)
+      ctx.rotate(0.25);
+      ctx.globalAlpha *= 0.7;
+    }
+    legs(phase, moving, '#3a3440');
+    // 갑옷과 붉은 겉옷
+    ctx.fillStyle = '#8c95a3';
+    ctx.fillRect(-3.6, -14.5, 7.2, 9);
+    ctx.fillStyle = '#9a3b3b';
+    ctx.fillRect(-1.4, -14, 2.8, 7);
+    ctx.fillStyle = '#4a3a2a';
+    ctx.fillRect(-3.6, -7.8, 7.2, 1.3);
+    // 투구와 깃털 장식
+    ctx.fillStyle = '#b9c2cf';
+    ctx.fillRect(-3.1, -20.5, 6.2, 6.2);
+    ctx.fillStyle = '#1a1020';
+    ctx.fillRect(0.4, -18.4, 2.7, 0.9);
+    ctx.fillStyle = '#c0392b';
+    const plume = Math.sin(r.time * 4 + s.id) * 0.6;
+    ctx.fillRect(-1.2, -22.5, 1.6, 2.2);
+    ctx.fillRect(-3 + plume, -23.2, 2.4, 1.4);
+    // 칼: 휘두를 땐 위에서 아래로 크게 내리침
+    ctx.save();
+    ctx.translate(1.2, -12.5);
+    const ang = s.swing > 0 ? -2.0 + (1 - s.swing) * 2.9 : downed ? 0.9 : -0.7;
+    ctx.rotate(ang);
+    ctx.fillStyle = '#e6ebf2';
+    ctx.fillRect(1, -0.55, 9, 1.1);
+    ctx.fillStyle = '#d4af37';
+    ctx.fillRect(0.6, -1.7, 0.9, 3.4);
+    ctx.fillStyle = '#5a3f1c';
+    ctx.fillRect(-1.2, -0.5, 1.8, 1);
+    ctx.restore();
+    // 방패 (앞쪽)
+    ctx.fillStyle = '#d4af37';
+    ctx.beginPath();
+    ctx.ellipse(3.8, -10, 2.4, 4.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#6b4a2b';
+    ctx.beginPath();
+    ctx.ellipse(3.9, -10, 1.7, 3.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+
+    if (downed) {
+      // 회복 중: 머리 위에 회복 게이지
+      const p = 1 - s.recover / CONFIG.swordsman.recoverTime;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(s.x - 7, -29, 14, 2);
+      ctx.fillStyle = '#a8f0a0';
+      ctx.fillRect(s.x - 7, -29, 14 * clamp(p, 0, 1), 2);
+    } else if (s.hp < s.maxHp - 0.01) {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(s.x - 7, -29, 14, 2);
+      ctx.fillStyle = '#7fd36b';
+      ctx.fillRect(s.x - 7, -29, 14 * (s.hp / s.maxHp), 2);
+    }
   }
 
   function drawAnimal(world, a) {

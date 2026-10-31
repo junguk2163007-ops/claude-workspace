@@ -7,6 +7,7 @@ export function createEffects() {
   const particles = [];
   const texts = [];
   const rings = [];
+  const slashes = [];
 
   function add(p) {
     if (particles.length > 600) return;
@@ -55,6 +56,10 @@ export function createEffects() {
     ring(x, y, color = '#ffe27a', maxR = 26) {
       rings.push({ x, y, color, maxR, life: 0, max: 0.4 });
     },
+    // 칼 휘두른 궤적 (초승달 모양)
+    slash(x, y, facing) {
+      slashes.push({ x, y, facing, life: 0, max: 0.16 });
+    },
     text(x, y, str, color = '#ffe27a', size = 8) {
       texts.push({ x, y, str, color, size, life: 0, max: 0.9 });
     },
@@ -83,6 +88,11 @@ export function createEffects() {
         r.life += dt;
         if (r.life >= r.max) rings.splice(i, 1);
       }
+      for (let i = slashes.length - 1; i >= 0; i--) {
+        const sl = slashes[i];
+        sl.life += dt;
+        if (sl.life >= sl.max) slashes.splice(i, 1);
+      }
     },
 
     // ctx는 월드 좌표로 변환된 상태
@@ -95,6 +105,21 @@ export function createEffects() {
         ctx.beginPath();
         ctx.arc(r.x, r.y, r.maxR * easeOut(p), 0, Math.PI * 2);
         ctx.stroke();
+      }
+      for (const sl of slashes) {
+        const p = sl.life / sl.max;
+        ctx.save();
+        ctx.translate(sl.x, sl.y);
+        ctx.scale(sl.facing, 1);
+        ctx.globalAlpha = 1 - p;
+        ctx.fillStyle = '#f4f7ff';
+        ctx.beginPath();
+        const a0 = -1.6 + p * 0.6;
+        const a1 = 1.0 + p * 0.4;
+        ctx.arc(-3, 0, 9, a0, a1);
+        ctx.arc(-5, 0, 7.5, a1, a0, true);
+        ctx.fill();
+        ctx.restore();
       }
       for (const p of particles) {
         const k = 1 - p.life / p.max;

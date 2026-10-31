@@ -6,6 +6,7 @@ import { createRng } from './util.js';
 import { createKing, updateKing } from './king.js';
 import { createSpot, updateThrownCoins } from './spots.js';
 import { spawnArcher, updateArchers } from './archers.js';
+import { updateSwordsmen } from './swordsmen.js';
 import { updateArrows } from './arrows.js';
 import { spawnAnimal, updateAnimals } from './animals.js';
 import { updateEnemies } from './enemies.js';
@@ -22,6 +23,7 @@ export function createWorld(seed = Date.now()) {
     king: createKing(),
     spots: [],
     archers: [],
+    swordsmen: [],
     arrows: [],
     animals: [],
     enemies: [],
@@ -42,6 +44,7 @@ export function stepWorld(world, dt, intent) {
   updateKing(world, dt, intent);
   updateThrownCoins(world, dt);
   updateArchers(world, dt);
+  updateSwordsmen(world, dt);
   updateArrows(world, dt);
   updateAnimals(world, dt);
   updateEnemies(world, dt);

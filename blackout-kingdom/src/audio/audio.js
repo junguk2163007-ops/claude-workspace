@@ -125,6 +125,23 @@ export function createAudio() {
       tone({ freq: 392, to: 370, type: 'triangle', dur: 0.3, vol: 0.08 });
       tone({ freq: 311, to: 294, type: 'triangle', dur: 0.5, vol: 0.08, delay: 0.25 });
     },
+    swordSwing: (ev, v) => {
+      // 쇳소리 "챙!"
+      noise({ dur: 0.08, vol: 0.12 * v, freq: 5000, q: 2 });
+      tone({ freq: 2200 + Math.random() * 300, type: 'square', dur: 0.05, vol: 0.05 * v });
+      tone({ freq: 1250, type: 'triangle', dur: 0.25, vol: 0.06 * v, delay: 0.01 });
+    },
+    swordsmanHit: (ev, v) => {
+      noise({ dur: 0.08, vol: 0.12 * v, freq: 600, q: 1.5 });
+      tone({ freq: 180, to: 120, type: 'square', dur: 0.08, vol: 0.05 * v });
+    },
+    swordsmanDown: (ev, v) => {
+      tone({ freq: 440, to: 220, type: 'triangle', dur: 0.4, vol: 0.1 * v });
+    },
+    swordsmanRecovered: (ev, v) => {
+      tone({ freq: 523, type: 'triangle', dur: 0.12, vol: 0.09 * v });
+      tone({ freq: 784, type: 'triangle', dur: 0.2, vol: 0.09 * v, delay: 0.1 });
+    },
     flyerDive: (ev, v) => {
       tone({ freq: 1500, to: 500, type: 'sawtooth', dur: 0.35, vol: 0.05 * v });
       noise({ dur: 0.3, vol: 0.06 * v, freq: 4000, to: 1200, q: 4 });
