@@ -52,19 +52,25 @@ export const CONFIG = {
     max: 8,
   },
 
+  // 어둠 생물. cost = 습격 예산에서 차지하는 값, unlock = 몇 단계부터 나오는지
   enemies: {
     spawnDistance: 700,
     chaseKingRadius: 90,
     kinds: {
-      shade:     { hp: 2, coins: 1, w: 12, h: 13, speed: 34, attack: 1, attackInterval: 1.0 },
-      bigShade:  { hp: 5, coins: 3, w: 18, h: 22, speed: 22, attack: 2, attackInterval: 1.4 },
+      shade:    { name: '그림자',     hp: 2, coins: 1, w: 12, h: 13, speed: 34, attack: 1, attackInterval: 1.0, cost: 1, unlock: 1 },
+      crawler:  { name: '기는 그림자', hp: 1, coins: 1, w: 11, h: 7,  speed: 64, attack: 1, attackInterval: 0.7, cost: 1, unlock: 2 },
+      thief:    { name: '코인 도둑',  hp: 2, coins: 2, w: 9,  h: 15, speed: 44, attack: 0, attackInterval: 1.0, cost: 2, unlock: 3, steals: true },
+      bigShade: { name: '덩치',       hp: 6, coins: 3, w: 18, h: 22, speed: 22, attack: 2, attackInterval: 1.4, cost: 3, unlock: 3 },
     },
   },
 
+  // 습격 단계(레벨): 단계가 오를수록 예산이 커지고 새로운 괴물이 섞여 나온다
   waves: {
     firstDelay: 35,
     interval: 40,
     warnTime: 5,
+    budgetBase: 2,
+    budgetPerLevel: 2.2,
   },
 
   // 코인을 던져 투자하는 자리

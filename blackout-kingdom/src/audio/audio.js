@@ -117,6 +117,14 @@ export function createAudio() {
       noise({ dur: 0.5, vol: 0.25 * v, freq: 500, to: 100, type: 'lowpass' });
       tone({ freq: 120, to: 40, type: 'sawtooth', dur: 0.4, vol: 0.1 * v });
     },
+    coinStolen: (ev, v) => {
+      // 낄낄거리듯 내려가는 음
+      [1800, 1500, 1200].forEach((f, i) => tone({ freq: f, to: f * 0.8, type: 'square', dur: 0.06, vol: 0.05 * v, delay: i * 0.06 }));
+    },
+    thiefEscaped: () => {
+      tone({ freq: 392, to: 370, type: 'triangle', dur: 0.3, vol: 0.08 });
+      tone({ freq: 311, to: 294, type: 'triangle', dur: 0.5, vol: 0.08, delay: 0.25 });
+    },
     waveIncoming: () => {
       tone({ freq: 55, to: 45, type: 'sawtooth', dur: 1.6, vol: 0.14, attack: 0.4 });
       tone({ freq: 82, to: 70, type: 'sine', dur: 1.6, vol: 0.12, attack: 0.4 });

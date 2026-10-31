@@ -10,6 +10,7 @@ function check(name, ok, detail = '') {
 
 const world = createWorld(12345);
 const counts = {};
+const spawnedKinds = {};
 const dt = 1 / 60;
 
 // 왕이 사냥터를 왔다 갔다 하면서 코인을 줍고, 가끔 궁수 깃발에 투자하는 시나리오
@@ -24,10 +25,16 @@ for (let i = 0; i < 60 * 300; i++) {
   } else {
     intent.move = Math.sin(t / 9) > 0 ? 1 : -1;
   }
+  const before = new Set(world.enemies.map((e) => e.id));
   stepWorld(world, dt, intent);
+  for (const e of world.enemies) if (!before.has(e.id)) spawnedKinds[e.kind] = (spawnedKinds[e.kind] || 0) + 1;
   for (const ev of world.events) counts[ev.type] = (counts[ev.type] || 0) + 1;
   world.events.length = 0;
 }
+
+const kindsSeen = new Set(Object.keys(spawnedKinds));
+check('습격 단계가 올라감', world.waves.level >= 6, `${world.waves.level}단계`);
+check('여러 종류의 적이 나옴', ['shade', 'crawler', 'thief', 'bigShade'].every((k) => kindsSeen.has(k)), [...kindsSeen].join(','));
 
 const all = [world.king, ...world.archers, ...world.animals, ...world.enemies, ...world.coins, ...world.arrows];
 check('숫자가 깨지지 않음 (NaN 없음)', all.every((e) => Number.isFinite(e.x) && Number.isFinite(e.y)));
@@ -40,6 +47,7 @@ check('습격이 왔다', (counts.waveIncoming || 0) > 3, `${counts.waveIncoming
 check('적을 쓰러뜨렸다', (counts.enemyKilled || 0) > 3, `${counts.enemyKilled}마리`);
 check('왕의 코인이 음수가 아님', world.king.coins >= 0, `${world.king.coins}개`);
 console.log('이벤트 통계:', counts);
+console.log('등장한 적:', spawnedKinds);
 
 if (failures) {
   console.log(`\n${failures}개 실패`);

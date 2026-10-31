@@ -35,7 +35,7 @@ export function createRenderer(canvas) {
   const r = {
     W: 0, H: 0, dpr: 1, S: 1, groundY: 0, ui: 1, safeL: 0, safeT: 0,
     camX: 0, shake: 0, flash: 0, time: 0,
-    hudBump: 0, flyCoins: [], banner: null,
+    hudBump: 0, flyCoins: [], banner: null, toast: null,
     kingPhase: 0, dustAcc: 0,
     spotAlpha: new Map(), slotPulse: new Map(), wallWobble: new Map(),
     touchMode: false,
@@ -154,9 +154,22 @@ export function createRenderer(canvas) {
       case 'waveIncoming': {
         const s = ev.sides;
         const dir = s.length > 1 ? '양쪽' : s[0] < 0 ? '왼쪽' : '오른쪽';
-        r.banner = { text: `어둠이 몰려온다 — ${dir}!`, life: 0, max: 3.6, sides: s };
+        const fresh = ev.fresh.map((k) => CONFIG.enemies.kinds[k].name).join(', ');
+        r.banner = {
+          text: `습격 ${ev.level}단계 — ${dir}에서 어둠이 몰려온다!`,
+          sub: fresh ? `새로운 적: ${fresh}` : null,
+          life: 0, max: fresh ? 4.6 : 3.6, sides: s,
+        };
         break;
       }
+      case 'coinStolen':
+        fx.text(ev.x, ev.y - 8, ev.fromKing ? '도둑맞음!' : '-1', '#c99bff', ev.fromKing ? 8 : 7);
+        fx.sparkle(ev.x, ev.y, 6, '#c99bff');
+        if (ev.fromKing) r.shake = Math.max(r.shake, 2);
+        break;
+      case 'thiefEscaped':
+        r.toast = { text: `코인 도둑이 코인 ${ev.coins}개를 들고 달아났다…`, life: 0, max: 3 };
+        break;
     }
   }
 
@@ -686,6 +699,108 @@ export function createRenderer(canvas) {
   }
 
   function drawEnemy(e) {
+    if (e.kind === 'crawler') drawCrawler(e);
+    else if (e.kind === 'thief') drawThief(e);
+    else drawShade(e);
+    // 튼튼한 적은 체력바
+    if (e.maxHp >= 3 && e.hp < e.maxHp) {
+      const top = e.y - e.h - 6;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(e.x - 8, top, 16, 2);
+      ctx.fillStyle = '#b48cff';
+      ctx.fillRect(e.x - 8, top, 16 * (e.hp / e.maxHp), 2);
+    }
+  }
+
+  function enemyRim() {
+    ctx.strokeStyle = 'rgba(160,110,235,0.85)';
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+  }
+
+  function eyeGlow(x, y, rad, color) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // 기는 그림자: 낮고 길쭉, 다리가 바글바글
+  function drawCrawler(e) {
+    const t = r.time;
+    const body = e.flash > 0 ? '#ffffff' : '#0b0712';
+    shadow(e.x, 6);
+    ctx.save();
+    ctx.translate(e.x, 0);
+    ctx.scale(e.facing, 1);
+    ctx.strokeStyle = body;
+    ctx.lineWidth = 0.8;
+    for (let i = 0; i < 3; i++) {
+      const lx = -3 + i * 3;
+      const ph = Math.sin(t * 28 + i * 2 + e.id) * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(lx, -3.5); ctx.lineTo(lx - 2 + ph, -5.5); ctx.lineTo(lx - 3 + ph, 0);
+      ctx.moveTo(lx, -3.5); ctx.lineTo(lx + 2 - ph, -5.5); ctx.lineTo(lx + 3 - ph, 0);
+      ctx.stroke();
+    }
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.ellipse(-0.5, -4.2, 5.5, 2.8, 0, 0, Math.PI * 2);
+    ctx.ellipse(4.6, -4.4, 2.5, 2.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    enemyRim();
+    if (e.flash <= 0) {
+      eyeGlow(5.5, -5, 2.5, 'rgba(255,120,80,0.35)');
+      ctx.fillStyle = '#ff9a6b';
+      ctx.fillRect(4.8, -5.3, 0.9, 0.9);
+      ctx.fillRect(6.2, -5.3, 0.9, 0.9);
+    }
+    ctx.restore();
+  }
+
+  // 코인 도둑: 깡마른 두건 그림자, 등에 자루 (훔칠수록 불룩 + 반짝)
+  function drawThief(e) {
+    const t = r.time;
+    const run = Math.abs(e.vx) > 1;
+    const phase = t * 16 + e.id;
+    const body = e.flash > 0 ? '#ffffff' : '#0b0712';
+    shadow(e.x, 4);
+    ctx.save();
+    ctx.translate(e.x, run ? -Math.abs(Math.sin(phase)) * 1.2 : 0);
+    ctx.scale(e.facing, 1);
+    legs(phase, run, body);
+    const sack = 2.2 + Math.min(e.carrying, 4) * 0.7;
+    ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#2a1d33';
+    ctx.beginPath();
+    ctx.ellipse(-4.2, -9.5, sack, sack * 1.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (e.carrying > 0 && Math.sin(t * 6 + e.id) > 0.3) {
+      ctx.fillStyle = COLORS.goldLight;
+      ctx.fillRect(-4.8, -11, 1, 1);
+    }
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.moveTo(-3.5, -5.5);
+    ctx.lineTo(3.5, -5.5);
+    ctx.lineTo(2.6, -13);
+    ctx.lineTo(0.5, -15.5);
+    ctx.lineTo(-4, -14.8 + Math.sin(t * 8) * 0.6);
+    ctx.lineTo(-2.2, -12);
+    ctx.closePath();
+    ctx.fill();
+    enemyRim();
+    if (e.flash <= 0) {
+      eyeGlow(2, -12, 2.4, 'rgba(255,220,90,0.3)');
+      ctx.fillStyle = '#ffe066';
+      ctx.fillRect(1, -12.6, 1, 0.8);
+      ctx.fillRect(2.5, -12.6, 1, 0.8);
+    }
+    ctx.restore();
+  }
+
+  function drawShade(e) {
     const t = r.time;
     const big = e.kind === 'bigShade';
     const w = e.w;
@@ -714,9 +829,7 @@ export function createRenderer(canvas) {
     ctx.closePath();
     ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#0b0712';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(160,110,235,0.85)';
-    ctx.lineWidth = 0.9;
-    ctx.stroke();
+    enemyRim();
 
     // 눈 (가끔 깜빡임)
     const blink = Math.sin(t * 0.9 + e.id * 3) > 0.96;
@@ -734,14 +847,6 @@ export function createRenderer(canvas) {
       if (big) ctx.fillRect(w * 0.16, ey - 3, 1.2, 1.2);
     }
     ctx.restore();
-
-    // 큰 적은 체력바
-    if (big && e.hp < e.maxHp) {
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(e.x - 8, -h - 6, 16, 2);
-      ctx.fillStyle = '#b48cff';
-      ctx.fillRect(e.x - 8, -h - 6, 16 * (e.hp / e.maxHp), 2);
-    }
   }
 
   function drawArrow(a) {
@@ -845,6 +950,31 @@ export function createRenderer(canvas) {
     ctx.fillStyle = r.hudBump > 0.5 ? COLORS.goldLight : '#ffffff';
     ctx.fillText(String(shown), 0, 0);
     ctx.restore();
+
+    // 습격 단계와 다음 습격까지 남은 시간
+    const w = world.waves;
+    const next = Math.max(0, Math.ceil(w.timer));
+    const info = `습격 ${w.level}단계 · 다음 습격 ${next}초`;
+    ctx.font = `${8.5 * u}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const iy = base.y + 12 * u;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillText(info, base.x - 7 * u + 1, iy + 1);
+    ctx.fillStyle = next <= CONFIG.waves.warnTime ? '#ffb3d9' : '#bfb3d6';
+    ctx.fillText(info, base.x - 7 * u, iy);
+
+    if (r.toast) {
+      r.toast.life += dt;
+      if (r.toast.life > r.toast.max) r.toast = null;
+      else {
+        const p = r.toast.life / r.toast.max;
+        ctx.globalAlpha = p > 0.75 ? (1 - p) / 0.25 : 1;
+        ctx.fillStyle = '#d9b8ff';
+        ctx.fillText(r.toast.text, base.x - 7 * u, iy + 13 * u);
+        ctx.globalAlpha = 1;
+      }
+    }
   }
 
   function drawBanner(dt) {
@@ -874,6 +1004,13 @@ export function createRenderer(canvas) {
     ctx.fillText(b.text, r.W / 2 + 2, y + 2);
     ctx.fillStyle = '#e4ccff';
     ctx.fillText(b.text, r.W / 2, y);
+    if (b.sub) {
+      ctx.font = `bold ${10 * u}px system-ui, sans-serif`;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillText(b.sub, r.W / 2 + 1.5, y + 18 * u + 1.5);
+      ctx.fillStyle = '#ffb3d9';
+      ctx.fillText(b.sub, r.W / 2, y + 18 * u);
+    }
     ctx.globalAlpha = 1;
   }
 

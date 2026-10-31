@@ -13,7 +13,7 @@ export function fireArrow(world, archer, target) {
   const T = clamp(dist / cfg.arrowSpeed, 0.35, 1.1);
   // 움직이는 목표는 조금 앞을 노린다 + 멀수록 조금씩 빗나감
   const tx = target.x + (target.vx || 0) * T + world.rng.range(-1, 1) * cfg.spread * (dist / cfg.range);
-  const ty = -target.h * 0.5;
+  const ty = (target.y || 0) - target.h * 0.5 + (target.vy || 0) * T;
   world.arrows.push({
     x: sx,
     y: sy,
@@ -27,7 +27,8 @@ export function fireArrow(world, archer, target) {
 }
 
 function hits(arrow, t) {
-  return Math.abs(arrow.x - t.x) < t.w / 2 + 1 && arrow.y > -t.h - 1 && arrow.y < 1;
+  const ty = t.y || 0;
+  return Math.abs(arrow.x - t.x) < t.w / 2 + 1 && arrow.y > ty - t.h - 1 && arrow.y < ty + 1;
 }
 
 export function updateArrows(world, dt) {
