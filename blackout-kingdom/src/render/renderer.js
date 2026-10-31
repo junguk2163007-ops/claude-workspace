@@ -162,6 +162,9 @@ export function createRenderer(canvas) {
         };
         break;
       }
+      case 'flyerDive':
+        fx.sparks(ev.x, ev.y, '#d9b8ff', 4);
+        break;
       case 'coinStolen':
         fx.text(ev.x, ev.y - 8, ev.fromKing ? '도둑맞음!' : '-1', '#c99bff', ev.fromKing ? 8 : 7);
         fx.sparkle(ev.x, ev.y, 6, '#c99bff');
@@ -699,7 +702,9 @@ export function createRenderer(canvas) {
   }
 
   function drawEnemy(e) {
-    if (e.kind === 'crawler') drawCrawler(e);
+    if (e.kind === 'bat') drawBat(e);
+    else if (e.kind === 'wraith') drawWraith(e);
+    else if (e.kind === 'crawler') drawCrawler(e);
     else if (e.kind === 'thief') drawThief(e);
     else drawShade(e);
     // 튼튼한 적은 체력바
@@ -725,6 +730,93 @@ export function createRenderer(canvas) {
     ctx.arc(x, y, rad, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // 하늘에 있는 적의 그림자는 높을수록 작고 흐리게
+  function flyerShadow(e) {
+    const k = clamp(1 + e.y / 110, 0.2, 1);
+    ctx.fillStyle = `rgba(0,0,0,${0.3 * k})`;
+    ctx.beginPath();
+    ctx.ellipse(e.x, 0, e.w * 0.45 * k + 1, 1.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 날개 그림자: 퍼덕이는 박쥐 모양. 급강하할 땐 날개를 접고 눈이 붉어짐
+  function drawBat(e) {
+    const t = r.time;
+    const dive = e.state === 'dive';
+    const body = e.flash > 0 ? '#ffffff' : '#0b0712';
+    flyerShadow(e);
+    ctx.save();
+    ctx.translate(e.x, e.y - e.h / 2);
+    ctx.scale(e.facing, 1);
+    if (dive) ctx.rotate(0.5);
+    const flap = dive ? -0.6 : Math.sin(t * 22 + e.id);
+    const wy = -flap * 5;
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    for (const sd of [-1, 1]) {
+      ctx.moveTo(sd * 1.5, -1);
+      ctx.lineTo(sd * 8.5, wy - 1);
+      ctx.lineTo(sd * 7, wy + 1.8);
+      ctx.lineTo(sd * 5.3, wy + 0.6);
+      ctx.lineTo(sd * 3.8, wy + 2);
+      ctx.lineTo(sd * 2.5, 1.5);
+      ctx.closePath();
+    }
+    ctx.fill();
+    enemyRim();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 2.6, 3.2, 0, 0, Math.PI * 2);
+    ctx.moveTo(-1.8, -2.4); ctx.lineTo(-1.2, -4.6); ctx.lineTo(-0.4, -2.8);
+    ctx.moveTo(1.8, -2.4); ctx.lineTo(1.2, -4.6); ctx.lineTo(0.4, -2.8);
+    ctx.fill();
+    if (e.flash <= 0) {
+      const eye = dive ? '#ff5c7a' : '#9ff3ff';
+      eyeGlow(0.8, -0.8, 2.2, dive ? 'rgba(255,80,110,0.4)' : 'rgba(150,240,255,0.3)');
+      ctx.fillStyle = eye;
+      ctx.fillRect(0, -1.2, 0.9, 0.9);
+      ctx.fillRect(1.5, -1.2, 0.9, 0.9);
+    }
+    ctx.restore();
+  }
+
+  // 망령: 반투명한 유령. 너덜너덜한 옷자락이 뒤로 흩날림
+  function drawWraith(e) {
+    const t = r.time;
+    flyerShadow(e);
+    ctx.save();
+    ctx.translate(e.x, e.y - e.h / 2 + Math.sin(t * 2 + e.id) * 1.2);
+    ctx.scale(e.facing, 1);
+    eyeGlow(0, 0, 13, 'rgba(140,80,220,0.13)');
+    ctx.globalAlpha = 0.88;
+    ctx.beginPath();
+    ctx.arc(0, -2.5, 6.5, Math.PI, 0);
+    ctx.lineTo(6.5, 3);
+    const N = 6;
+    for (let i = 0; i <= N; i++) {
+      const p = i / N;
+      const x = 6.5 - p * 13 - p * 4;
+      const y = 7 + Math.sin(t * 9 + i * 1.6 + e.id) * 1.6 + (i % 2) * 1.5;
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#170c26';
+    ctx.fill();
+    enemyRim();
+    ctx.globalAlpha = 1;
+    if (e.flash <= 0) {
+      ctx.fillStyle = '#efe6ff';
+      ctx.beginPath();
+      ctx.ellipse(1.2, -3, 1, 1.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(4, -3, 1, 1.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#05030a';
+      ctx.beginPath();
+      ctx.ellipse(2.8, 0.8, 1.1, 1.6 + Math.sin(t * 3) * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   // 기는 그림자: 낮고 길쭉, 다리가 바글바글

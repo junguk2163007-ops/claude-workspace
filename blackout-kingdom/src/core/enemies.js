@@ -23,6 +23,15 @@ export function spawnEnemy(world, kind, side) {
     attacking: false,
     carrying: 0,   // 도둑이 훔친 코인 수
   });
+  if (def.flying) {
+    const e = world.enemies[world.enemies.length - 1];
+    e.alt = world.rng.range(def.altitude[0], def.altitude[1]);
+    e.y = e.alt;
+    e.vy = 0;
+    e.state = 'cruise';
+    e.diveCd = 0;
+    e.flyT = world.rng.range(0, 10);
+  }
 }
 
 export function damageEnemy(world, e, dmg, fromDir) {
@@ -142,6 +151,55 @@ function updateThief(world, e, def, dt) {
   }
 }
 
+// 날아다니는 괴물: 마을 하늘을 맴돌다가 왕이 아래로 지나가면 급강하 → 다시 솟구침
+function updateFlyer(world, e, def, dt) {
+  const king = world.king;
+  e.flyT += dt;
+  e.diveCd = Math.max(0, e.diveCd - dt);
+
+  if (e.state === 'dive') {
+    const dx = king.x - e.x;
+    const dy = -12 - e.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const sp = def.speed * 1.9;
+    e.vx = (dx / d) * sp;
+    e.vy = (dy / d) * sp;
+    e.x += e.vx * dt;
+    e.y += e.vy * dt;
+    e.facing = sign(dx) || e.facing;
+    if (d < 6 || e.y > -9) {
+      if (touchingKing(world, e)) hitKing(world, e);
+      e.state = 'rise';
+      e.diveCd = 3.5;
+    }
+    return;
+  }
+
+  if (e.state === 'rise') {
+    e.vy = -def.speed;
+    e.vx = e.facing * def.speed * 0.6;
+    e.x += e.vx * dt;
+    e.y += e.vy * dt;
+    if (e.y <= e.alt) e.state = 'cruise';
+    return;
+  }
+
+  const near = Math.abs(king.x - e.x) < 160;
+  const targetX = near ? king.x : Math.sin(e.flyT * 0.7 + e.id) * 50;
+  const dir = sign(targetX - e.x);
+  e.vx = Math.abs(targetX - e.x) > 3 ? dir * def.speed : 0;
+  e.x += e.vx * dt;
+  if (dir) e.facing = dir;
+  const ty = e.alt + Math.sin(e.flyT * 3 + e.id) * 5;
+  e.vy = (ty - e.y) * 3;
+  e.y += e.vy * dt;
+
+  if (near && Math.abs(king.x - e.x) < 24 && e.diveCd <= 0 && king.hurtTimer <= 0) {
+    e.state = 'dive';
+    emit(world, 'flyerDive', { x: e.x, y: e.y, kind: e.kind });
+  }
+}
+
 export function updateEnemies(world, dt) {
   for (let i = world.enemies.length - 1; i >= 0; i--) {
     const e = world.enemies[i];
@@ -154,7 +212,8 @@ export function updateEnemies(world, dt) {
       continue;
     }
 
-    if (def.steals) updateThief(world, e, def, dt);
+    if (def.flying) updateFlyer(world, e, def, dt);
+    else if (def.steals) updateThief(world, e, def, dt);
     else updateGround(world, e, def, dt);
   }
 }

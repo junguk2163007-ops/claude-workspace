@@ -125,6 +125,10 @@ export function createAudio() {
       tone({ freq: 392, to: 370, type: 'triangle', dur: 0.3, vol: 0.08 });
       tone({ freq: 311, to: 294, type: 'triangle', dur: 0.5, vol: 0.08, delay: 0.25 });
     },
+    flyerDive: (ev, v) => {
+      tone({ freq: 1500, to: 500, type: 'sawtooth', dur: 0.35, vol: 0.05 * v });
+      noise({ dur: 0.3, vol: 0.06 * v, freq: 4000, to: 1200, q: 4 });
+    },
     waveIncoming: () => {
       tone({ freq: 55, to: 45, type: 'sawtooth', dur: 1.6, vol: 0.14, attack: 0.4 });
       tone({ freq: 82, to: 70, type: 'sine', dur: 1.6, vol: 0.12, attack: 0.4 });

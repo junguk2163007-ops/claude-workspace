@@ -61,6 +61,9 @@ export const CONFIG = {
       crawler:  { name: '기는 그림자', hp: 1, coins: 1, w: 11, h: 7,  speed: 64, attack: 1, attackInterval: 0.7, cost: 1, unlock: 2 },
       thief:    { name: '코인 도둑',  hp: 2, coins: 2, w: 9,  h: 15, speed: 44, attack: 0, attackInterval: 1.0, cost: 2, unlock: 3, steals: true },
       bigShade: { name: '덩치',       hp: 6, coins: 3, w: 18, h: 22, speed: 22, attack: 2, attackInterval: 1.4, cost: 3, unlock: 3 },
+      // 날아다니는 괴물: 방벽을 넘어와 왕에게 급강하한다
+      bat:      { name: '날개 그림자', hp: 1, coins: 2, w: 12, h: 7,  speed: 58, attack: 1, attackInterval: 1.0, cost: 2, unlock: 4, flying: true, altitude: [-74, -52] },
+      wraith:   { name: '망령',       hp: 4, coins: 4, w: 15, h: 16, speed: 30, attack: 1, attackInterval: 1.0, cost: 4, unlock: 6, flying: true, altitude: [-64, -46] },
     },
   },
 

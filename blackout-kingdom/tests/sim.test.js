@@ -11,6 +11,7 @@ function check(name, ok, detail = '') {
 const world = createWorld(12345);
 const counts = {};
 const spawnedKinds = {};
+const killedKinds = {};
 const dt = 1 / 60;
 
 // 왕이 사냥터를 왔다 갔다 하면서 코인을 줍고, 가끔 궁수 깃발에 투자하는 시나리오
@@ -28,13 +29,20 @@ for (let i = 0; i < 60 * 300; i++) {
   const before = new Set(world.enemies.map((e) => e.id));
   stepWorld(world, dt, intent);
   for (const e of world.enemies) if (!before.has(e.id)) spawnedKinds[e.kind] = (spawnedKinds[e.kind] || 0) + 1;
-  for (const ev of world.events) counts[ev.type] = (counts[ev.type] || 0) + 1;
+  for (const ev of world.events) {
+    counts[ev.type] = (counts[ev.type] || 0) + 1;
+    if (ev.type === 'enemyKilled') killedKinds[ev.kind] = (killedKinds[ev.kind] || 0) + 1;
+  }
   world.events.length = 0;
 }
 
 const kindsSeen = new Set(Object.keys(spawnedKinds));
 check('습격 단계가 올라감', world.waves.level >= 6, `${world.waves.level}단계`);
-check('여러 종류의 적이 나옴', ['shade', 'crawler', 'thief', 'bigShade'].every((k) => kindsSeen.has(k)), [...kindsSeen].join(','));
+check('여러 종류의 적이 나옴', ['shade', 'crawler', 'thief', 'bigShade', 'bat', 'wraith'].every((k) => kindsSeen.has(k)), [...kindsSeen].join(','));
+
+check('날아다니는 괴물을 쓰러뜨림', (killedKinds.bat || 0) + (killedKinds.wraith || 0) > 0, JSON.stringify(killedKinds));
+const flyersOk = world.enemies.filter((e) => e.alt !== undefined).every((e) => e.y <= 0 && e.y > -200);
+check('날아다니는 괴물이 땅 밑이나 하늘 끝으로 사라지지 않음', flyersOk);
 
 const all = [world.king, ...world.archers, ...world.animals, ...world.enemies, ...world.coins, ...world.arrows];
 check('숫자가 깨지지 않음 (NaN 없음)', all.every((e) => Number.isFinite(e.x) && Number.isFinite(e.y)));
