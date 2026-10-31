@@ -49,6 +49,9 @@ export const CONFIG = {
     huntRange: 650,     // 평소 사냥하러 돌아다니는 범위
     guardOffset: 18,    // 방벽 안쪽 몇 픽셀에서 지킬지
     guardDefault: 70,   // 방벽이 없으면 중심에서 이만큼
+    coinSeek: 180,      // 위협이 없을 때 이 거리 안의 코인을 주우러 감
+    deliverRadius: 26,  // 왕이 이만큼 가까이 오면 들고 있던 코인을 건네줌
+    carryReturn: 6,     // 이만큼 모으면 마을로 돌아와 왕을 기다림
   },
 
   // 검사: 방벽 바깥 맨 앞줄에서 적을 막는다

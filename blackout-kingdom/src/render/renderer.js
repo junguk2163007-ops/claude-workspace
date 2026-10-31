@@ -100,6 +100,15 @@ export function createRenderer(canvas) {
         fx.sparkle(ev.x, ev.y - 3, 5, COLORS.goldLight);
         break;
       }
+      case 'coinGiven': {
+        const s = toScreen(ev.x, ev.y);
+        r.flyCoins.push({ sx: s.x, sy: s.y, t: 0, dur: 0.45 + Math.random() * 0.1 });
+        fx.sparkle(ev.x, ev.y, 3, COLORS.goldLight);
+        break;
+      }
+      case 'archerPickup':
+        fx.sparkle(ev.x, ev.y, 4, COLORS.goldLight);
+        break;
       case 'coinSlotted':
         fx.sparkle(ev.x, ev.y, 6);
         fx.ring(ev.x, ev.y, COLORS.gold, 7);
@@ -683,6 +692,33 @@ export function createRenderer(canvas) {
       ctx.fillRect(tx - pull * 4 + 9, -11.7, 1.6, 1.4);
     }
     ctx.restore();
+    drawCarry(a);
+  }
+
+  // 궁수 머리 위: 들고 있는 코인 (작은 더미 + 숫자)
+  function drawCarry(a) {
+    if (!a.carry) return;
+    const bob = Math.sin(r.time * 4 + a.id) * 0.8;
+    const n = Math.min(a.carry, 5);
+    for (let i = 0; i < n; i++) {
+      ctx.fillStyle = COLORS.goldDark;
+      ctx.beginPath();
+      ctx.ellipse(a.x, -24 - i * 1.3 + bob + 0.5, 2.6, 1, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = COLORS.gold;
+      ctx.beginPath();
+      ctx.ellipse(a.x, -24 - i * 1.3 + bob, 2.6, 1, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (a.carry > 1) {
+      ctx.font = 'bold 5px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#120c18';
+      ctx.fillText(String(a.carry), a.x + 3.8, -25 + bob + 0.4);
+      ctx.fillStyle = COLORS.goldLight;
+      ctx.fillText(String(a.carry), a.x + 3.4, -25 + bob);
+    }
   }
 
   function drawSwordsman(s) {

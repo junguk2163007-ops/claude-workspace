@@ -168,6 +168,9 @@ export function createAudio() {
     },
   };
 
+  SOUNDS.coinGiven = SOUNDS.coinCollected;
+  SOUNDS.archerPickup = (ev, v) => tone({ freq: 2600, type: 'triangle', dur: 0.05, vol: 0.04 * v });
+
   // 같은 소리가 한순간에 너무 많이 겹치지 않게
   const MIN_GAP = { coinBounce: 0.03, coinCollected: 0.02, arrowFired: 0.03, arrowMiss: 0.05, animalStartled: 0.15, wallHit: 0.08 };
 

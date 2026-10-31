@@ -75,6 +75,8 @@ check('화살을 쐈다', (counts.arrowFired || 0) > 20, `${counts.arrowFired}�
 check('동물을 사냥했다', (counts.animalKilled || 0) > 3, `${counts.animalKilled}마리`);
 check('코인을 주웠다', (counts.coinCollected || 0) > 3, `${counts.coinCollected}개`);
 check('코인을 투자했다', (counts.coinSlotted || 0) > 0, `${counts.coinSlotted}개`);
+check('궁수가 코인을 주웠다', (counts.archerPickup || 0) > 0, `${counts.archerPickup || 0}개`);
+check('궁수가 왕에게 코인을 건넸다', (counts.coinGiven || 0) > 0, `${counts.coinGiven || 0}개`);
 check('궁수를 고용했다', world.archers.length > 1, `궁수 ${world.archers.length}명`);
 check('검사를 고용했다', world.swordsmen.length > 0, `검사 ${world.swordsmen.length}명`);
 check('습격이 왔다', (counts.waveIncoming || 0) > 3, `${counts.waveIncoming}번`);
