@@ -23,6 +23,7 @@
 ## 기술 스택 (확정)
 - **순수 JavaScript + HTML5 Canvas**, ES 모듈, **빌드 도구 없음**, 외부 라이브러리 없음.
 - 소리: Web Audio로 직접 합성 (파일 없음). 나중에 파일로 교체 가능.
+- 배경음악: `src/audio/music.js`가 실시간 작곡·연주 (화음 진행/악기/BPM을 코드에서 조절).
 - 코드 보관: `junguk2163007-ops/claude-workspace` (비공개) 저장소의 `blackout-kingdom/` 폴더.
 - 호스팅: 게임 전용 **공개** 저장소를 따로 만들어 GitHub Pages로 배포 예정 (정욱이 빈 공개 저장소를 만들어 주면 진행). 임시로 claude.ai 비공개 미리보기 링크 사용.
 
@@ -32,9 +33,10 @@ index.html          화면 틀 + 터치 버튼
 src/config.js       모든 밸런스 숫자 (여기만 고치면 난이도 조절)
 src/core/           게임 규칙. Canvas/DOM/window 사용 금지! (Node에서도 돌아가야 함)
   world.js          규칙 본체: createWorld(), stepWorld(world, dt, intent)
-  king/coins/animals/archers/arrows/enemies/spots/waves.js
+  king/coins/animals/archers/swordsmen/arrows/enemies/spots/waves.js
 src/render/         화면 그리기 + 연출(파티클, 흔들림). world를 읽기만 함
-src/audio/audio.js  이벤트 → 소리 표(SOUNDS)
+src/audio/audio.js  이벤트 → 소리 표(SOUNDS), 압축기, 음악 연결
+src/audio/music.js  배경음악 (평온 ↔ 긴장, setIntensity)
 src/input/input.js  키보드·터치 → intent { move, invest }
 src/main.js         위 것들을 연결하는 게임 루프 (히트스톱 포함)
 tests/sim.test.js   화면 없이 5분 시뮬레이션하는 시험
@@ -48,7 +50,13 @@ tools/serve.js      설치 없는 로컬 웹 서버
 - 시험: `npm test`
 
 ## 현재 상태
-- 마일스톤: **M1 (쾌감 한 장면) — 구현 완료, 정욱 피드백 대기**
+- 마일스톤: **M1+ (M1 + 정욱 1차 피드백 반영) — 정욱 확인 대기**
+- 1차 피드백 반영 (배경음악 / 괴물 다양화 / 비행 괴물 / 검사):
+  - 습격 단계(레벨): 단계마다 예산↑, 새 괴물 해금 시 배너로 소개, HUD에 단계·다음 습격 시간
+  - 괴물: 그림자(1~), 기는 그림자(2~, 빠름), 코인 도둑(3~, 땅/왕의 코인을 훔쳐 도주), 덩치(3~, 방벽 파괴), 날개 그림자(4~, 비행·급강하), 망령(6~, 비행·튼튼)
+  - 검사: 검사 고용 자리(x=30, 4코인~, 최대 4명). 방벽 바깥 앞줄에서 막고 벰. 쓰러지면 마을로 후퇴→12초 회복→복귀
+  - 배경음악: Am–F–C–G 진행의 잔잔한 음악, 적이 나오면 Am–Bb–Am–E + 북소리로 전환. 🎵/N 키로 끄기
+  - 무언가 완성되면 투자 키를 한 번 떼야 다음 투자 (코인 낭비 방지)
 - M1 내용:
   - 왕 좌우 이동 (가속, 걷기 흔들림, 망토, 흙먼지)
   - 닭/황금닭 사냥: 궁수가 포물선 화살로 사냥 → 깃털 + 코인이 톡 튀어 바운스 → 왕이 지나가면 자석처럼 깡총 → HUD로 날아가 쌓임 (연속 줍기 시 음 높아짐)
@@ -58,6 +66,6 @@ tools/serve.js      설치 없는 로컬 웹 서버
 - 아직 없음: 게임 오버, 낮/밤, 전력/빛(M2), 백성 기벽(M3)
 
 ## 다음 할 일
-1. 정욱이 M1을 해보고 피드백 → 손맛 다듬기
+1. 정욱이 M1+를 해보고 피드백 → 손맛·밸런스 다듬기 (코인 도둑이 너무 잘 도망가는지 확인 필요)
 2. 게임 전용 공개 저장소가 생기면 GitHub Pages로 배포
 3. M2: 중심 발전소, 빛 반경, 어둠 표현, 전력이 닿아야 작동하는 건물
