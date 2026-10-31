@@ -22,14 +22,18 @@
   };
   const UNKNOWN = -1;
 
-  /* ───────── 저장소: localStorage, 막혀 있으면 메모리 ───────── */
+  /* ───────── 저장소: sessionStorage, 막혀 있으면 메모리 ─────────
+   * 같은 탭에서 새로고침하면 기록이 남고, 탭을 닫거나 새로 접속하면 초기화된다.
+   * 예전 버전이 localStorage에 남긴 기록은 지운다.
+   */
+  try { window.localStorage.removeItem(STORE_KEY); } catch (e) { /* 무시 */ }
   const store = (function () {
     let available = false;
     let memory = null;
     try {
       const k = '__elec_probe__';
-      window.localStorage.setItem(k, '1');
-      window.localStorage.removeItem(k);
+      window.sessionStorage.setItem(k, '1');
+      window.sessionStorage.removeItem(k);
       available = true;
     } catch (e) {
       available = false;
@@ -39,7 +43,7 @@
       load() {
         if (available) {
           try {
-            const raw = window.localStorage.getItem(STORE_KEY);
+            const raw = window.sessionStorage.getItem(STORE_KEY);
             if (raw) return JSON.parse(raw);
           } catch (e) { /* 손상된 기록은 무시하고 메모리 사용 */ }
         }
@@ -49,7 +53,7 @@
         memory = data;
         if (!available) return;
         try {
-          window.localStorage.setItem(STORE_KEY, JSON.stringify(data));
+          window.sessionStorage.setItem(STORE_KEY, JSON.stringify(data));
         } catch (e) {
           available = false;
         }
@@ -57,7 +61,7 @@
       clear() {
         memory = null;
         if (!available) return;
-        try { window.localStorage.removeItem(STORE_KEY); } catch (e) { /* 무시 */ }
+        try { window.sessionStorage.removeItem(STORE_KEY); } catch (e) { /* 무시 */ }
       }
     };
   })();
@@ -433,7 +437,7 @@
       const d = state.fields[f.id];
       return `
         <button type="button" class="fcard${f.id === r.fieldId ? ' is-rec' : ''}" data-action="open-field" data-field="${f.id}" aria-label="${esc(fname(f.id))}, ${s.label}, 도달 ${lvText(d.reached)}">
-          <span class="fcard-top"><span class="fcard-no">F-${pad(f.id)}</span><span class="lamp ${s.cls}" aria-hidden="true"></span></span>
+          <span class="fcard-top"><span class="fcard-no">F-${pad(f.id)}${f.id === r.fieldId ? '<span class="fcard-rec">추천</span>' : ''}</span><span class="lamp ${s.cls}" aria-hidden="true"></span></span>
           <span class="fcard-name">${esc(f.name)}</span>
           <span class="fcard-foot">
             <span class="fcard-st ${s.cls}">${s.sym} ${s.label}</span>
@@ -443,18 +447,26 @@
     }).join('');
 
     return `
-      ${store.isAvailable() ? '' : '<p class="notice">이 브라우저에서는 기록 저장이 막혀 있어요. 지금 기록은 이 창을 닫으면 사라지니, ‘이해도 기록’에서 내보내기로 보관하세요.</p>'}
+      ${store.isAvailable() ? '' : '<p class="notice">이 브라우저에서는 기록 저장이 막혀 있어요. 새로고침하면 기록이 사라지니, 필요하면 ‘이해도 기록’에서 내보내기로 보관하세요.</p>'}
       ${fresh ? `
         <section class="intro">
           <h1 class="page-title">무엇을 모르는지부터 찾아요</h1>
           <p>쉬운 질문부터 한 문제씩 드려요. 틀리거나 모르면 정답만 알려 주지 않고, 그 답을 이해하는 데 필요한 기초 개념까지 거슬러 올라가 함께 짚어요.</p>
         </section>` : ''}
       ${recBlock(r)}
-      <section class="tally" aria-label="진단 현황">
-        <div><b>${diagnosed}<small style="font-size:0.6em;color:var(--muted)">/${FIELDS.length}</small></b><span>진단한 분야</span></div>
-        <div class="ok"><b>${counts.o}</b><span>○ 이해</span></div>
-        <div class="mid"><b>${counts.tri}</b><span>△ 부분 이해</span></div>
-        <div class="bad"><b>${counts.x}</b><span>✕ 보강 필요</span></div>
+      <section class="board" aria-label="진단 현황">
+        <div class="board-head">
+          <div>
+            <p class="eyebrow">진단 현황</p>
+            <p class="board-num"><b>${diagnosed}</b><span>/ ${FIELDS.length} 분야 진단</span></p>
+          </div>
+          <ul class="board-legend">
+            <li class="ok"><i></i>이해 <b>${counts.o}</b></li>
+            <li class="mid"><i></i>부분 <b>${counts.tri}</b></li>
+            <li class="bad"><i></i>보강 <b>${counts.x}</b></li>
+          </ul>
+        </div>
+        <div class="cells" aria-hidden="true">${FIELDS.map(f => `<span class="cell ${STATUS[statusOf(f.id)].cls}">${pad(f.id)}</span>`).join('')}</div>
       </section>
       <section class="sec">
         <div class="sec-head">
@@ -462,7 +474,7 @@
           <p>12개 분야예요. 카드를 누르면 핵심 지식과 ‘이 분야 진단 시작’ 버튼이 나와요.</p>
         </div>
         <div class="grid">${cards}</div>
-        <p class="legend">램프: 초록 ○ 이해 · 주황 △ 부분 이해 · 빨강 ✕ 보강 필요 · 꺼짐 미진단 / 게이지: 도달 단계</p>
+        <p class="legend">램프 초록 ○ 이해 · 주황 △ 부분 이해 · 빨강 ✕ 보강 필요 · 꺼짐 미진단 &nbsp;|&nbsp; 막대 도달 단계</p>
       </section>`;
   }
 
@@ -754,7 +766,7 @@
         ${asks}
       </section>
       <section class="sec">
-        <div class="sec-head"><h2>기록 관리</h2><p>${store.isAvailable() ? '기록은 이 기기의 브라우저에 저장돼요.' : '이 브라우저는 저장이 막혀 있어 창을 닫으면 기록이 사라져요.'}</p></div>
+        <div class="sec-head"><h2>기록 관리</h2><p>기록은 지금 열린 창에서만 유지되고, 창을 닫거나 새로 접속하면 처음부터 시작해요. 남겨 두려면 내보내기를 하세요.</p></div>
         <div class="btn-row">
           <button type="button" class="btn btn-ghost" data-action="export">기록 내보내기 (JSON)</button>
           <button type="button" class="btn btn-ghost" data-action="reset">기록 초기화</button>
