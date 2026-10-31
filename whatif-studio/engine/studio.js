@@ -27,8 +27,28 @@
   const levels = () => [Number($('bgmSlider').value) / 100, Number($('sfxSlider').value) / 100];
   const fmt = t => `${t.toFixed(1)}s / ${DUR.toFixed(1)}s`;
 
-  function download(name, data, type) {
-    const blob = data instanceof Blob ? data : new Blob([data], { type: type || 'text/plain;charset=utf-8' });
+  // 저장: claude.ai 아티팩트 뷰어에서는 downloads 기능(확인창)으로, 일반 브라우저에서는 링크로.
+  // 뷰어 허용 확장자에 .srt 가 없어 SRT 는 이름을 유지한 채 .zip 에 담는다.
+  const dlCap = window.claude && typeof window.claude.use === 'function'
+    ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+  const VIEWER_EXT = /\.(mp4|webm|txt|json|md|zip|csv|html|png|jpg|pdf)$/i;
+
+  async function download(name, data, type) {
+    let blob = data instanceof Blob ? data : new Blob([data], { type: type || 'text/plain;charset=utf-8' });
+    const cap = await dlCap;
+    if (cap) {
+      if (!VIEWER_EXT.test(name)) {
+        blob = WI.zipStore([{ name, data: new Uint8Array(await blob.arrayBuffer()) }]);
+        name += '.zip';
+      }
+      try {
+        await cap.save({ filename: name, data: blob });
+        setStatus(`✅ 저장: ${name}`, '#4ade80');
+      } catch (e) {
+        if (e && e.code !== 'declined') setStatus(`저장 실패 (${e.code || e.message})`, '#f87171');
+      }
+      return;
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name;
@@ -130,6 +150,18 @@
     $('dlTitle').onclick = () => download('title.txt', meta.title + '\n');
     $('dlDesc').onclick = () => download('description.txt', meta.description + '\n');
     $('dlMeta').onclick = () => download('metadata.json', JSON.stringify(META.json, null, 2) + '\n', 'application/json');
+    // 전부 받기: SRT + 제목 + 설명 + 메타데이터 + 출처를 한 zip 으로
+    $('dlAll').onclick = () => {
+      const enc = new TextEncoder();
+      const list = [
+        ...Object.entries(files).map(([n, b]) => ({ name: n, data: enc.encode(b) })),
+        { name: 'title.txt', data: enc.encode(meta.title + '\n') },
+        { name: 'description.txt', data: enc.encode(meta.description + '\n') },
+        { name: 'metadata.json', data: enc.encode(JSON.stringify(META.json, null, 2) + '\n') },
+        { name: 'sources.md', data: enc.encode(META.sourcesMd || '') },
+      ];
+      download(`${topic.fileStem}_${ratioKey}_upload-kit.zip`, WI.zipStore(list));
+    };
   }
 
   async function loadFonts() {

@@ -40,7 +40,7 @@ export const langList = l => {
   return [v];
 };
 
-const ENGINE_FILES = ['engine/core.js', 'engine/text.js', 'engine/layout.js', 'engine/world.js', 'engine/audio.js', 'engine/composite.js'];
+const ENGINE_FILES = ['engine/core.js', 'engine/zip.js', 'engine/text.js', 'engine/layout.js', 'engine/world.js', 'engine/audio.js', 'engine/composite.js'];
 const SCENE_FILES = () => fs.readdirSync(path.join(ROOT, 'scenes')).filter(f => f.endsWith('.js')).sort().map(f => `scenes/${f}`);
 
 const FONT_FACES = [
@@ -160,7 +160,7 @@ export function build(slug, opts = {}) {
     videos, srt: Object.keys(srtFiles),
     sources: (topic.sources || []).map(s => ({ publisher: s.publisher, title: s.title, url: s.url, usedFor: s.usedFor })),
   };
-  const META = { defaultRatio: ratios[0], langs, byRatio, json: metaJson };
+  const META = { defaultRatio: ratios[0], langs, byRatio, json: metaJson, sourcesMd: sourcesMd(topic) };
 
   // 스튜디오 HTML
   const tpl = fs.readFileSync(path.join(ROOT, 'engine', 'studio.html'), 'utf8');
