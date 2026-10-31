@@ -169,6 +169,21 @@ export function createAudio() {
   };
 
   SOUNDS.coinGiven = SOUNDS.coinCollected;
+  SOUNDS.lairHit = (ev, v) => noise({ dur: 0.08, vol: 0.1 * v, freq: 400, q: 2 });
+  SOUNDS.lairSpawn = (ev, v) => tone({ freq: 90, to: 140, type: 'sawtooth', dur: 0.3, vol: 0.06 * v });
+  SOUNDS.lairDestroyed = (ev, v) => {
+    noise({ dur: 1.2, vol: 0.35 * v, freq: 600, to: 60, type: 'lowpass' });
+    tone({ freq: 110, to: 30, type: 'sawtooth', dur: 1, vol: 0.15 * v });
+    [523, 659, 784, 1046, 1318].forEach((f, i) => tone({ freq: f, type: 'triangle', dur: 0.5, vol: 0.1 * v, delay: 0.5 + i * 0.08 }));
+  };
+  SOUNDS.expeditionStart = () => {
+    // 출정 나팔
+    [392, 392, 523, 659].forEach((f, i) => tone({ freq: f, type: 'square', dur: i === 3 ? 0.5 : 0.14, vol: 0.06, delay: i * 0.16 }));
+  };
+  SOUNDS.victory = () => {
+    [523, 659, 784, 1046, 784, 1046, 1318].forEach((f, i) => tone({ freq: f, type: 'triangle', dur: i === 6 ? 1.4 : 0.22, vol: 0.12, delay: i * 0.18 }));
+    [262, 330, 392].forEach((f) => tone({ freq: f, type: 'sine', dur: 2.2, vol: 0.08, delay: 1.1, attack: 0.1 }));
+  };
   SOUNDS.archerDisarmed = (ev, v) => {
     noise({ dur: 0.1, vol: 0.14 * v, freq: 1800, q: 3 });
     tone({ freq: 600, to: 300, type: 'triangle', dur: 0.25, vol: 0.09 * v, delay: 0.05 });

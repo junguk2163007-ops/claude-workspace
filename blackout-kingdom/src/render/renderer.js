@@ -2,6 +2,7 @@
 
 import { CONFIG } from '../config.js';
 import { canInvest, barricadeInfo, slotPos } from '../core/spots.js';
+import { frontLair, canExpedition } from '../core/lairs.js';
 import { createEffects, easeOut } from './effects.js';
 import { createScenery, NEAR_P, FRONT_P } from './scenery.js';
 
@@ -193,6 +194,38 @@ export function createRenderer(canvas) {
         };
         break;
       }
+      case 'lairHit':
+        fx.sparks(ev.x + rand(-8, 8), ev.y + rand(-8, 8), '#c9a6ff', 4);
+        break;
+      case 'enemyFaded':
+        fx.smoke(ev.x, ev.y, 10);
+        fx.sparkle(ev.x, ev.y, 6, '#c9a6ff');
+        break;
+      case 'lairSpawn':
+        fx.smoke(ev.x, -12, 6);
+        break;
+      case 'lairDestroyed':
+        fx.smoke(ev.x, -20, 40);
+        fx.ring(ev.x, -18, '#a77bff', 70);
+        fx.ring(ev.x, -18, COLORS.goldLight, 45);
+        fx.confetti(ev.x, -30, 30);
+        r.banner = {
+          text: '소굴 파괴!',
+          sub: ev.remaining ? `남은 소굴 ${ev.remaining}개 · 코인 ${ev.coins}개가 쏟아졌다` : '모든 소굴이 무너졌다!',
+          life: 0, max: 4, sides: [],
+        };
+        break;
+      case 'expeditionStart': {
+        const dir = ev.side < 0 ? '왼쪽' : '오른쪽';
+        r.banner = { text: '출정!', sub: `검사 ${ev.swords}명 · 궁수 ${ev.archers}명이 ${dir} 소굴로 향한다`, life: 0, max: 3.5, sides: [] };
+        break;
+      }
+      case 'expeditionEnd':
+        r.toast = { text: '원정대가 마을로 돌아온다', life: 0, max: 3 };
+        break;
+      case 'expeditionFailed':
+        r.toast = { text: '원정 실패… 병사들이 후퇴한다', life: 0, max: 3.5 };
+        break;
       case 'swordSwing':
         fx.slash(ev.x, ev.y, ev.facing);
         fx.sparks(ev.x + ev.facing * 3, ev.y, '#f4f7ff', 3);
@@ -268,6 +301,7 @@ export function createRenderer(canvas) {
     ctx.setTransform(dpr * S, 0, 0, dpr * S, dpr * (W / 2 - r.camX * S + shx), dpr * (r.groundY + shy));
     drawGroundDetails(viewW);
     scenery.drawProps(ctx, r.camX, viewW, r.time);
+    for (const l of world.lairs) if (Math.abs(l.x - r.camX) < viewW / 2 + 60) drawLair(l, fdt);
     drawGenerator();
     for (const s of world.spots) drawSpot(world, s);
     for (const a of world.arrows) if (a.stuck) drawArrow(a);
@@ -442,6 +476,34 @@ export function createRenderer(canvas) {
       ctx.stroke();
       ctx.fillStyle = '#4a321c';
       ctx.fillRect(-4, -1.5, 8, 1.5);
+    } else if (s.kind === 'warBanner') {
+      // 출정 깃발: 높은 장대 + 붉은 삼각기, 원정 중이면 깃발이 걷혀 있음
+      const away = !!world.expeditions[Math.sign(s.x)];
+      ctx.fillStyle = '#3a3644';
+      ctx.fillRect(-5, -3, 10, 3);
+      ctx.fillStyle = '#5b3d22';
+      ctx.fillRect(-0.8, -44, 1.6, 42);
+      ctx.fillStyle = COLORS.gold;
+      ctx.fillRect(-1.5, -46, 3, 2);
+      if (!away) {
+        const dir = Math.sign(s.x);
+        const wave = Math.sin(r.time * 3.5) * 1.5;
+        ctx.save();
+        ctx.scale(dir, 1);
+        ctx.fillStyle = '#8e2a3c';
+        ctx.beginPath();
+        ctx.moveTo(0.8, -44);
+        ctx.lineTo(16, -40 + wave);
+        ctx.lineTo(0.8, -30);
+        ctx.fill();
+        ctx.strokeStyle = '#1a1020';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(3, -41); ctx.lineTo(9, -34);
+        ctx.moveTo(9, -41); ctx.lineTo(3, -34);
+        ctx.stroke();
+        ctx.restore();
+      }
     } else if (s.kind === 'swordPost') {
       // 무기 거치대: 기둥 + 둥근 방패 + 엇갈린 칼
       ctx.fillStyle = '#5b3d22';
@@ -481,6 +543,80 @@ export function createRenderer(canvas) {
       }
     }
     ctx.restore();
+  }
+
+  // 몬스터 소굴: 뾰족한 검은 바위 더미 + 소용돌이치는 보랏빛 구멍 + 안에서 깜빡이는 눈들
+  function drawLair(l, dt) {
+    const t = r.time;
+    ctx.save();
+    ctx.translate(l.x, 0);
+    if (!l.alive) {
+      // 무너진 잔해
+      ctx.fillStyle = '#16121c';
+      for (let i = 0; i < 6; i++) {
+        const x = -18 + i * 7;
+        const h = 3 + hash(l.id * 3 + i) * 6;
+        ctx.beginPath();
+        ctx.moveTo(x - 4, 0); ctx.lineTo(x, -h); ctx.lineTo(x + 4, 0);
+        ctx.fill();
+      }
+      if (Math.random() < dt * 2) fx.dust(l.x + rand(-15, 15), 1);
+      ctx.restore();
+      return;
+    }
+    if (Math.random() < dt * 4) fx.sparkle(l.x + rand(-12, 12), -rand(8, 34), 1, '#a77bff');
+    const pulse = 0.6 + Math.sin(t * 2 + l.id) * 0.25;
+    eyeGlow(0, -16, 42, `rgba(120,60,200,${0.12 * pulse})`);
+    // 바위 더미
+    ctx.fillStyle = l.flash > 0 ? '#ffffff' : '#0c0812';
+    ctx.beginPath();
+    const pts = [[-24, 0], [-19, -14], [-22, -24], [-13, -20], [-10, -38], [-4, -26], [1, -46], [6, -28], [12, -37], [14, -21], [21, -27], [20, -12], [25, 0]];
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (const [x, y] of pts) ctx.lineTo(x, y);
+    ctx.closePath();
+    ctx.fill();
+    enemyRim();
+    // 소용돌이 구멍
+    ctx.fillStyle = '#05030a';
+    ctx.beginPath();
+    ctx.ellipse(0, -11, 8.5, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(167,123,255,${0.5 * pulse})`;
+    ctx.lineWidth = 0.7;
+    for (let i = 0; i < 3; i++) {
+      const a0 = t * (1.5 + i * 0.4) + i * 2;
+      ctx.beginPath();
+      ctx.ellipse(0, -11, 7 - i * 2, 9.5 - i * 2.6, 0, a0, a0 + 2.2);
+      ctx.stroke();
+    }
+    // 안에서 깜빡이는 눈들
+    for (let i = 0; i < 3; i++) {
+      if (Math.sin(t * (0.8 + i * 0.3) + l.id + i * 2) < 0.4) continue;
+      const ex = -3 + hash(l.id + i) * 6;
+      const ey = -16 + hash(l.id * 2 + i) * 10;
+      ctx.fillStyle = i === 1 ? '#ffd0e6' : '#c9f6ff';
+      ctx.fillRect(ex - 1.2, ey, 0.9, 0.9);
+      ctx.fillRect(ex + 0.6, ey, 0.9, 0.9);
+    }
+    // 바닥 촉수
+    ctx.strokeStyle = '#0c0812';
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 4; i++) {
+      const sd = i % 2 ? 1 : -1;
+      const x0 = sd * (14 + i * 3);
+      ctx.beginPath();
+      ctx.moveTo(x0, 0);
+      ctx.quadraticCurveTo(x0 + sd * 6, -3 + Math.sin(t * 3 + i) * 2, x0 + sd * 10, Math.sin(t * 2 + i) * 1);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // 체력바
+    if (l.hp < l.maxHp) {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(l.x - 16, -54, 32, 2.5);
+      ctx.fillStyle = '#b48cff';
+      ctx.fillRect(l.x - 16, -54, 32 * (l.hp / l.maxHp), 2.5);
+    }
   }
 
   // 금 간 자국: 많이 다칠수록 늘어남
@@ -606,6 +742,13 @@ export function createRenderer(canvas) {
     let label;
     if (s.kind === 'archerPost') label = '궁수 고용';
     else if (s.kind === 'swordPost') label = '검사 고용';
+    else if (s.kind === 'warBanner') {
+      const side = Math.sign(s.x);
+      if (!frontLair(world, side)) label = '이쪽 소굴은 모두 무너졌다';
+      else if (world.expeditions[side]) label = '원정 중…';
+      else if (!canExpedition(world, side)) label = '출정 (검사가 필요해요)';
+      else label = '출정 → 소굴 공격';
+    }
     else {
       const info = barricadeInfo(s);
       if (info.next) label = s.level === 0 ? `${info.next.name} 짓기` : `${info.next.name}으로 강화`;
@@ -1352,7 +1495,11 @@ export function createRenderer(canvas) {
     // 습격 단계와 다음 습격까지 남은 시간
     const w = world.waves;
     const next = Math.max(0, Math.ceil(w.timer));
-    const info = `습격 ${w.level}단계 · 다음 습격 ${next}초`;
+    const lairsL = world.lairs.filter((l) => l.alive && l.side < 0).length;
+    const lairsR = world.lairs.filter((l) => l.alive && l.side > 0).length;
+    const info = lairsL + lairsR === 0
+      ? `습격 ${w.level}단계 · 소굴을 모두 무너뜨렸다!`
+      : `습격 ${w.level}단계 · 다음 습격 ${next}초 · 소굴 ◀${lairsL}  ${lairsR}▶`;
     ctx.font = `${8.5 * u}px system-ui, sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';

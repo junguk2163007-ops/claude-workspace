@@ -4,6 +4,7 @@ import { spawnArcher, rearmArcher } from './archers.js';
 import { spawnSwordsman } from './swordsmen.js';
 import { fireArrow } from './arrows.js';
 import { sign } from './util.js';
+import { canExpedition, startExpedition } from './lairs.js';
 
 // "투자 자리": 왕이 코인을 던져 넣으면 무언가가 지어지는 곳.
 export function createSpot(def, id) {
@@ -57,6 +58,7 @@ export function damageWall(world, wall, dmg) {
 }
 
 export function canInvest(world, spot) {
+  if (spot.kind === 'warBanner' && !canExpedition(world, sign(spot.x)) && spot.pending === 0) return false;
   if (spot.kind === 'barricade') {
     const maxed = spot.level >= CONFIG.barricade.levels.length;
     if (maxed && spot.hp >= spot.maxHp && spot.pending === 0) return false;
@@ -111,6 +113,8 @@ function completeSpot(world, spot) {
     spot.hires++;
     spot.cost = Math.min(spot.cost + 1, spot.maxCost);
     spawnSwordsman(world, spot.x);
+  } else if (spot.kind === 'warBanner') {
+    startExpedition(world, sign(spot.x));
   } else if (spot.kind === 'barricade') {
     const levels = CONFIG.barricade.levels;
     const repaired = spot.level >= levels.length;

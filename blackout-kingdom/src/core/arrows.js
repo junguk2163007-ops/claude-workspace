@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { emit, clamp } from './util.js';
 import { damageAnimal } from './animals.js';
 import { damageEnemy } from './enemies.js';
+import { damageLair } from './lairs.js';
 
 // 궁수 → 목표까지 포물선으로 날아가도록 처음 속도를 계산해서 화살을 쏜다.
 export function fireArrow(world, archer, target, sy = -13) {
@@ -54,6 +55,13 @@ export function updateArrows(world, dt) {
       world.arrows.splice(i, 1);
       emit(world, 'arrowHit', { x: a.x, y: a.y, target: 'enemy' });
       damageEnemy(world, hit, 1, a.vx);
+      continue;
+    }
+    for (const l of world.lairs) if (l.alive && hits(a, l)) { hit = l; break; }
+    if (hit) {
+      world.arrows.splice(i, 1);
+      emit(world, 'arrowHit', { x: a.x, y: a.y, target: 'enemy' });
+      damageLair(world, hit, 1);
       continue;
     }
     for (const an of world.animals) if (hits(a, an)) { hit = an; break; }

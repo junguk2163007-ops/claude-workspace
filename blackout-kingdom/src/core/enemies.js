@@ -4,10 +4,12 @@ import { spawnCoins } from './coins.js';
 import { blockingSwordsman, damageSwordsman } from './swordsmen.js';
 import { hitArcher } from './archers.js';
 import { damageWall } from './spots.js';
+import { lairSpawnX } from './lairs.js';
 
 export function spawnEnemy(world, kind, side) {
   const def = CONFIG.enemies.kinds[kind];
-  const x = side * (CONFIG.enemies.spawnDistance + world.rng.range(0, 60));
+  // 그쪽 소굴에서 나온다
+  const x = lairSpawnX(world, side) + world.rng.range(-8, 8);
   world.enemies.push({
     id: nextId(world),
     kind,
@@ -47,6 +49,7 @@ export function damageEnemy(world, e, dmg, fromDir) {
   if (idx >= 0) world.enemies.splice(idx, 1);
   const def = CONFIG.enemies.kinds[e.kind];
   const coins = def.coins + e.carrying;
+  world.stats.enemiesKilled++;
   emit(world, 'enemyKilled', { x: e.x, y: e.y - e.h / 2, kind: e.kind, coins });
   spawnCoins(world, e.x, e.y - e.h / 2, coins);
 }
@@ -128,7 +131,7 @@ function updateThief(world, e, def, dt) {
   const king = world.king;
   let targetX;
   if (e.carrying > 0) {
-    targetX = e.side * (CONFIG.enemies.spawnDistance + 120);
+    targetX = lairSpawnX(world, e.side);
   } else {
     // 가까운 땅의 코인 → 없으면 왕
     let best = null;
@@ -144,7 +147,7 @@ function updateThief(world, e, def, dt) {
   e.x += e.vx * dt;
 
   if (e.carrying > 0) {
-    if (Math.abs(e.x) > CONFIG.enemies.spawnDistance + 100) {
+    if (e.side * e.x >= Math.abs(targetX) - 4) {
       world.enemies.splice(world.enemies.indexOf(e), 1);
       emit(world, 'thiefEscaped', { x: e.x, coins: e.carrying });
     }

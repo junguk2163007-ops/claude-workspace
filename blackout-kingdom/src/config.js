@@ -49,6 +49,7 @@ export const CONFIG = {
     huntRange: 650,     // 평소 사냥하러 돌아다니는 범위
     guardOffset: 18,    // 방벽 안쪽 몇 픽셀에서 지킬지
     guardDefault: 70,   // 방벽이 없으면 중심에서 이만큼
+    threatRange: 750,   // 마을에서 이 거리 안에 들어온 적만 위협으로 여김
     coinSeek: 180,      // 위협이 없을 때 이 거리 안의 코인을 주우러 감
     deliverRadius: 26,  // 왕이 이만큼 가까이 오면 들고 있던 코인을 건네줌
     carryReturn: 6,     // 이만큼 모으면 마을로 돌아와 왕을 기다림
@@ -97,7 +98,31 @@ export const CONFIG = {
     { kind: 'swordPost', x: 30, cost: 4, maxCost: 7 },
     { kind: 'barricade', x: -160 },
     { kind: 'barricade', x: 160 },
+    { kind: 'warBanner', x: -250, cost: 5 },
+    { kind: 'warBanner', x: 250, cost: 5 },
   ],
+
+  // 몬스터 소굴: 양쪽에 2개씩. 공격받으면 수비 괴물을 뿜고, 부수면 코인이 쏟아진다
+  lairs: {
+    list: [
+      { x: -780, hp: 40, coins: 15 },
+      { x: -1180, hp: 70, coins: 25 },
+      { x: 780, hp: 40, coins: 15 },
+      { x: 1180, hp: 70, coins: 25 },
+    ],
+    w: 30,
+    h: 34,
+    defendInterval: 3.2,  // 공격받는 동안 수비 괴물 간격
+    guardRadius: 130,     // 왕이 이만큼 다가오면
+    guardInterval: 7,     // 이 간격으로 괴물이 튀어나옴
+  },
+
+  // 출정: 출정 깃발에 투자하면 검사 전원 + 궁수 절반이 소굴로
+  expedition: {
+    archerShare: 0.5,
+    timeout: 100,
+    archerDistance: 75,   // 소굴에서 이만큼 떨어져 활을 쏨
+  },
 
   // 방벽 강화 단계: 코인을 넣을 때마다 한 단계씩. 다 부서지면 처음부터 다시.
   barricade: {
@@ -114,7 +139,7 @@ export const CONFIG = {
 
   // 손맛 연출 (화면 쪽에서 쓰는 값)
   juice: {
-    hitstop: { enemyKilled: 0.07, animalKilled: 0.035, spotComplete: 0.05 },
-    shake: { swordSwing: 0.7, enemyKilled: 2.5, kingHit: 4, spotComplete: 3, wallBroken: 5, wallHit: 0.8 },
+    hitstop: { lairDestroyed: 0.15, enemyKilled: 0.07, animalKilled: 0.035, spotComplete: 0.05 },
+    shake: { lairHit: 0.6, lairDestroyed: 8, swordSwing: 0.7, enemyKilled: 2.5, kingHit: 4, spotComplete: 3, wallBroken: 5, wallHit: 0.8 },
   },
 };

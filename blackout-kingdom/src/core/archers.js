@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { emit, nextId, sign, clamp } from './util.js';
 import { fireArrow } from './arrows.js';
 import { spawnCoins } from './coins.js';
+import { expeditionLair } from './lairs.js';
 
 export function spawnArcher(world, x) {
   const { rng } = world;
@@ -52,6 +53,7 @@ export function hitArcher(world, a) {
   if (a.carry > 0) spawnCoins(world, a.x, -16, a.carry);
   a.carry = 0;
   a.coinTarget = null;
+  a.expedition = null;
   if (a.armed) {
     a.armed = false;
     a.invuln = 1.2;
@@ -95,6 +97,34 @@ function updateUnarmed(world, a, dt, threat) {
   }
 }
 
+// 원정 중인 궁수: 소굴에서 조금 떨어져 서서 근처 적 → 소굴 순으로 쏜다
+function updateExpeditionArcher(world, a, i, dt) {
+  const cfg = CONFIG.archer;
+  const lair = expeditionLair(world, a.expedition);
+  if (!lair || !lair.alive) return false;
+  const side = a.expedition;
+  const post = lair.x - side * (CONFIG.expedition.archerDistance + (i % 4) * 8);
+  let target = nearest(world.enemies, a.x, cfg.range);
+  if (!target && Math.abs(lair.x - a.x) < cfg.range) target = lair;
+  a.aiming = !!target && Math.abs(post - a.x) < 40;
+  if (a.aiming) {
+    a.vx = 0;
+    a.facing = sign(target.x - a.x) || a.facing;
+    if (a.cooldown <= 0) {
+      fireArrow(world, a, target);
+      a.cooldown = cfg.cooldown * world.rng.range(0.85, 1.15);
+    }
+  } else if (Math.abs(post - a.x) > 2) {
+    const dir = sign(post - a.x);
+    a.vx = dir * cfg.walk * 1.8;
+    a.facing = dir;
+    a.x += a.vx * dt;
+  } else {
+    a.vx = 0;
+  }
+  return true;
+}
+
 // 주우러 갈 코인: 왕 바로 옆 코인은 왕 몫, 다른 궁수가 노리는 코인은 양보
 function pickCoin(world, a, claimed) {
   const cfg = CONFIG.archer;
@@ -131,6 +161,7 @@ function deliver(world, a, dt) {
   if (a.giveTimer > 0) return;
   a.carry--;
   king.coins++;
+  world.stats.coinsEarned++;
   a.giveTimer = 0.09;
   emit(world, 'coinGiven', { x: a.x, y: -22 });
 }
@@ -142,6 +173,7 @@ export function updateArchers(world, dt) {
   // 마을 중심에 가장 가까운 적 (위협 방향 결정용)
   let threat = null;
   for (const e of world.enemies) {
+    if (Math.abs(e.x) > cfg.threatRange) continue;
     if (!threat || Math.abs(e.x) < Math.abs(threat.x)) threat = e;
   }
 
@@ -153,6 +185,7 @@ export function updateArchers(world, dt) {
     a.invuln = Math.max(0, a.invuln - dt);
     if (!a.armed) { updateUnarmed(world, a, dt, threat); return; }
     deliver(world, a, dt);
+    if (a.expedition && updateExpeditionArcher(world, a, i, dt)) return;
     let target = null;
     let moveTo = null;
 

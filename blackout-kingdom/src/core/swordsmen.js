@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { emit, nextId, sign } from './util.js';
 import { damageEnemy } from './enemies.js';
+import { expeditionLair, damageLair } from './lairs.js';
 
 // 검사: 방벽 바깥 맨 앞줄에서 적을 몸으로 막고 칼로 벤다.
 // 체력이 다 떨어지면 죽지 않고 마을 중심으로 후퇴해 회복한 뒤 다시 나간다.
@@ -33,6 +34,7 @@ export function damageSwordsman(world, s, dmg) {
   if (s.hp <= 0) {
     s.hp = 0;
     s.state = 'downed';
+    s.expedition = null;
     s.recover = CONFIG.swordsman.recoverTime;
     emit(world, 'swordsmanDown', { x: s.x });
   }
@@ -65,6 +67,7 @@ export function updateSwordsmen(world, dt) {
   let left = false;
   let right = false;
   for (const e of world.enemies) {
+    if (Math.abs(e.x) > CONFIG.archer.threatRange) continue;
     if (e.x < 0) left = true;
     else right = true;
   }
@@ -113,6 +116,28 @@ export function updateSwordsmen(world, dt) {
         s.swing = 1;
         emit(world, 'swordSwing', { x: s.x + s.facing * 8, y: -10, facing: s.facing });
         damageEnemy(world, target, cfg.damage, s.facing);
+      }
+      continue;
+    }
+
+    // 원정 중: 소굴 앞까지 가서 소굴을 벤다
+    const lair = s.expedition ? expeditionLair(world, s.expedition) : null;
+    if (lair && lair.alive) {
+      const side = s.expedition;
+      const reachLair = Math.abs(lair.x - s.x) < lair.w / 2 + cfg.reach;
+      if (reachLair) {
+        s.vx = 0;
+        s.facing = side;
+        if (s.attackTimer <= 0) {
+          s.attackTimer = cfg.attackInterval;
+          s.swing = 1;
+          emit(world, 'swordSwing', { x: s.x + side * 8, y: -10, facing: side });
+          damageLair(world, lair, cfg.damage);
+        }
+      } else {
+        s.vx = side * cfg.walk * 1.5;
+        s.facing = side;
+        s.x += s.vx * dt;
       }
       continue;
     }

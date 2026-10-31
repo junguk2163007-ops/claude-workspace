@@ -3,6 +3,8 @@
 import { createWorld, stepWorld } from '../src/core/world.js';
 import { spawnSwordsman } from '../src/core/swordsmen.js';
 import { spawnEnemy } from '../src/core/enemies.js';
+import { spawnArcher } from '../src/core/archers.js';
+import { damageLair } from '../src/core/lairs.js';
 
 let failures = 0;
 function check(name, ok, detail = '') {
@@ -15,6 +17,7 @@ const counts = {};
 const spawnedKinds = {};
 const killedKinds = {};
 let justCompleted = false;
+let roamDir = 1;
 const dt = 1 / 60;
 
 // 왕이 사냥터를 왔다 갔다 하면서 코인을 줍고, 가끔 궁수 깃발에 투자하는 시나리오
@@ -28,7 +31,9 @@ for (let i = 0; i < 60 * 300; i++) {
     if (Math.abs(dx) > 4) intent.move = Math.sign(dx);
     else intent.invest = !justCompleted; // 사람처럼 완성되면 키를 한 번 뗌
   } else {
-    intent.move = Math.sin(t / 9) > 0 ? 1 : -1;
+    // 마을 주변(±350)을 오가며 돌아다님
+    if (Math.abs(world.king.x) > 350) roamDir = -Math.sign(world.king.x);
+    intent.move = roamDir;
   }
   const before = new Set(world.enemies.map((e) => e.id));
   stepWorld(world, dt, intent);
@@ -124,6 +129,37 @@ check('날아다니는 괴물이 땅 밑이나 하늘 끝으로 사라지지 않
     w5.events.length = 0;
   }
   check('수비탑이 스스로 화살을 쏨', fired > 0 && w5.enemies.length === 0, `${fired}발`);
+}
+
+// 소굴 원정 시험: 검사 4명 + 궁수 4명, 오른쪽 출정 깃발에 투자
+{
+  const w6 = createWorld(31);
+  w6.animals.length = 0;
+  w6.waves.timer = 9999;
+  for (let i = 0; i < 4; i++) spawnSwordsman(w6, 30);
+  for (let i = 0; i < 3; i++) spawnArcher(w6, -30);
+  const banner = w6.spots.find((s) => s.kind === 'warBanner' && s.x > 0);
+  w6.king.x = banner.x;
+  w6.king.coins = 10;
+  const ev6 = {};
+  for (let i = 0; i < 60 * 120; i++) {
+    stepWorld(w6, dt, { move: 0, invest: i < 60 * 2 });
+    for (const ev of w6.events) ev6[ev.type] = (ev6[ev.type] || 0) + 1;
+    w6.events.length = 0;
+  }
+  const inner = w6.lairs.find((l) => l.x === 780);
+  check('출정 깃발에 투자하면 원정을 떠남', (ev6.expeditionStart || 0) === 1);
+  check('원정대가 가까운 소굴을 부숨', !inner.alive && (ev6.lairDestroyed || 0) === 1, `소굴 체력 ${inner.hp}`);
+  check('원정이 끝나면 돌아옴', !w6.expeditions[1] && w6.swordsmen.every((s) => !s.expedition));
+  check('먼 소굴은 아직 남아 있음', w6.lairs.filter((l) => l.alive).length === 3);
+
+  // 승리: 소굴 4개를 모두 부수면
+  const ev7 = {};
+  for (const l of w6.lairs) if (l.alive) damageLair(w6, l, 999);
+  stepWorld(w6, dt, { move: 0, invest: false });
+  for (const ev of w6.events) ev7[ev.type] = (ev7[ev.type] || 0) + 1;
+  check('소굴을 모두 부수면 승리', !!w6.victory && ev7.victory === 1);
+  check('승리하면 남은 괴물이 사라짐', w6.enemies.length === 0);
 }
 
 const all = [world.king, ...world.archers, ...world.animals, ...world.enemies, ...world.coins, ...world.arrows];

@@ -62,6 +62,7 @@ export function updateCoins(world, dt) {
     if (dist < k.pickupRadius && coin.y > -34) {
       world.coins.splice(i, 1);
       king.coins++;
+      world.stats.coinsEarned++;
       emit(world, 'coinCollected', { x: coin.x, y: coin.y });
       continue;
     }

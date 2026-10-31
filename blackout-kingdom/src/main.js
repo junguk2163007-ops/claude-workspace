@@ -43,6 +43,21 @@ refreshMute();
 
 window.addEventListener('resize', () => renderer.resize());
 
+// 승리 화면
+const victoryEl = document.getElementById('victory');
+document.getElementById('restart').addEventListener('click', () => location.reload());
+function showVictory(v) {
+  const m = Math.floor(v.time / 60);
+  const s = Math.floor(v.time % 60);
+  document.getElementById('victory-stats').innerHTML = [
+    `걸린 시간 <b>${m}분 ${s}초</b>`,
+    `버틴 습격 <b>${v.level}단계</b>`,
+    `모은 코인 <b>${v.coinsEarned}개</b>`,
+    `쓰러뜨린 괴물 <b>${v.enemiesKilled}마리</b>`,
+  ].map((t) => `<li>${t}</li>`).join('');
+  victoryEl.hidden = false;
+}
+
 // 게임 루프
 const STEP = 1 / 60;
 let last = performance.now();
@@ -67,10 +82,11 @@ function frame(now) {
   audio.setListener(world.king.x);
   // 배경음악 분위기: 적이 있으면 긴장, 습격 직전엔 살짝 긴장
   const foes = world.enemies.length;
-  audio.setMusicIntensity(foes > 0 ? Math.min(1, 0.6 + foes * 0.08) : world.waves.timer < CONFIG.waves.warnTime ? 0.35 : 0);
+  audio.setMusicIntensity(world.victory ? 0 : foes > 0 ? Math.min(1, 0.6 + foes * 0.08) : world.waves.timer < CONFIG.waves.warnTime ? 0.35 : 0);
   for (const ev of world.events) {
     renderer.handleEvent(ev, world);
     audio.handle(ev);
+    if (ev.type === 'victory') setTimeout(() => showVictory(ev), 2500);
     const hs = CONFIG.juice.hitstop[ev.type];
     if (hs) freeze = Math.max(freeze, hs);
   }

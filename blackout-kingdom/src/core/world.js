@@ -12,6 +12,7 @@ import { spawnAnimal, updateAnimals } from './animals.js';
 import { updateEnemies } from './enemies.js';
 import { updateCoins } from './coins.js';
 import { createWaves, updateWaves } from './waves.js';
+import { createLairs, updateLairs } from './lairs.js';
 
 export function createWorld(seed = Date.now()) {
   const world = {
@@ -30,9 +31,14 @@ export function createWorld(seed = Date.now()) {
     coins: [],
     thrownCoins: [],
     waves: createWaves(),
+    lairs: [],
+    expeditions: { '-1': null, '1': null },
+    stats: { coinsEarned: 0, enemiesKilled: 0, lairsDestroyed: 0 },
+    victory: null,
     animalSpawnTimer: CONFIG.animals.respawnInterval,
   };
   world.spots = CONFIG.spots.map((def) => createSpot(def, world.nextId++));
+  world.lairs = createLairs(world);
   for (let i = 0; i < CONFIG.animals.initial; i++) spawnAnimal(world);
   for (let i = 0; i < CONFIG.archer.startCount; i++) spawnArcher(world, 20 + i * 10);
   world.events.length = 0; // 시작할 때 생긴 이벤트는 버림
@@ -51,4 +57,5 @@ export function stepWorld(world, dt, intent) {
   updateEnemies(world, dt);
   updateCoins(world, dt);
   updateWaves(world, dt);
+  updateLairs(world, dt);
 }
