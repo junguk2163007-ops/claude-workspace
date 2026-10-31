@@ -1,10 +1,16 @@
 // 소리 담당. 지금은 파일 없이 브라우저가 직접 합성한 간단한 소리를 쓴다.
 // 나중에 진짜 효과음 파일로 바꿀 땐 SOUNDS 표에서 해당 이벤트의 함수만 바꾸면 된다.
 
+import { createMusic } from './music.js';
+
+const VOLUME = 0.85;
+
 export function createAudio() {
   let ctx = null;
   let master = null;
   let noiseBuf = null;
+  let music = null;
+  let musicOn = true;
   let muted = false;
   let listenerX = 0;
   const lastPlayed = {};
@@ -17,13 +23,22 @@ export function createAudio() {
       if (!AC) return;
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = muted ? 0 : 0.45;
-      master.connect(ctx.destination);
+      master.gain.value = muted ? 0 : VOLUME;
+      // 압축기: 소리가 겹쳐도 찢어지지 않게 하면서 전체를 또렷하게
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -18;
+      comp.ratio.value = 4;
+      comp.attack.value = 0.005;
+      comp.release.value = 0.2;
+      master.connect(comp).connect(ctx.destination);
       noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      music = createMusic(ctx, master);
+      if (!musicOn) music.toggle();
+      music.start();
     }
-    if (ctx.state === 'suspended') ctx.resume();
+    if (ctx.state === 'suspended' && !document.hidden) ctx.resume();
   }
 
   function tone({ freq, to, type = 'sine', dur = 0.1, vol = 0.3, delay = 0, attack = 0.004 }) {
@@ -172,9 +187,22 @@ export function createAudio() {
     unlock,
     handle,
     setListener(x) { listenerX = x; },
+    setMusicIntensity(x) { if (music) music.setIntensity(x); },
+    toggleMusic() {
+      musicOn = !musicOn;
+      if (music && music.enabled !== musicOn) music.toggle();
+      return musicOn;
+    },
+    get musicOn() { return musicOn; },
+    // 다른 탭으로 가면 소리를 잠시 멈춤 (배터리 절약)
+    setSuspended(hidden) {
+      if (!ctx) return;
+      if (hidden) ctx.suspend();
+      else ctx.resume();
+    },
     toggleMute() {
       muted = !muted;
-      if (master) master.gain.value = muted ? 0 : 0.45;
+      if (master) master.gain.value = muted ? 0 : VOLUME;
       return muted;
     },
     get muted() { return muted; },

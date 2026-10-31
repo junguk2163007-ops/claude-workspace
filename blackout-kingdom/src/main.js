@@ -27,9 +27,18 @@ for (const type of ['pointerdown', 'keydown', 'touchend']) {
 }
 
 const muteBtn = document.getElementById('mute');
-function refreshMute() { muteBtn.textContent = audio.muted ? '🔇' : '🔊'; }
+const musicBtn = document.getElementById('music');
+function refreshMute() {
+  muteBtn.textContent = audio.muted ? '🔇' : '🔊';
+  musicBtn.classList.toggle('off', !audio.musicOn);
+}
 muteBtn.addEventListener('click', () => { audio.unlock(); audio.toggleMute(); refreshMute(); });
-window.addEventListener('keydown', (e) => { if (e.code === 'KeyM') { audio.toggleMute(); refreshMute(); } });
+musicBtn.addEventListener('click', () => { audio.unlock(); audio.toggleMusic(); refreshMute(); });
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyM') { audio.toggleMute(); refreshMute(); }
+  if (e.code === 'KeyN') { audio.toggleMusic(); refreshMute(); }
+});
+document.addEventListener('visibilitychange', () => audio.setSuspended(document.hidden));
 refreshMute();
 
 window.addEventListener('resize', () => renderer.resize());
@@ -56,6 +65,9 @@ function frame(now) {
   }
 
   audio.setListener(world.king.x);
+  // 배경음악 분위기: 적이 있으면 긴장, 습격 직전엔 살짝 긴장
+  const foes = world.enemies.length;
+  audio.setMusicIntensity(foes > 0 ? Math.min(1, 0.6 + foes * 0.08) : world.waves.timer < CONFIG.waves.warnTime ? 0.35 : 0);
   for (const ev of world.events) {
     renderer.handleEvent(ev, world);
     audio.handle(ev);
