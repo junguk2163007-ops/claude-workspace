@@ -21,8 +21,6 @@ export function createSpot(def, id) {
 }
 
 export function canInvest(world, spot) {
-  if (spot.kind === 'archerPost' && world.archers.length >= CONFIG.archer.max) return false;
-  if (spot.kind === 'swordPost' && world.swordsmen.length >= CONFIG.swordsman.max) return false;
   if (spot.kind === 'barricade' && spot.built) return false;
   return spot.paid + spot.pending < spot.cost;
 }

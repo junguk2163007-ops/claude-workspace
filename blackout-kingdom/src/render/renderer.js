@@ -480,8 +480,8 @@ export function createRenderer(canvas) {
     ctx.font = 'bold 6px system-ui, sans-serif';
 
     let label;
-    if (s.kind === 'archerPost') label = world.archers.length >= CONFIG.archer.max ? '궁수 가득' : '궁수 고용';
-    else if (s.kind === 'swordPost') label = world.swordsmen.length >= CONFIG.swordsman.max ? '검사 가득' : '검사 고용';
+    if (s.kind === 'archerPost') label = '궁수 고용';
+    else if (s.kind === 'swordPost') label = '검사 고용';
     else label = s.built ? `방벽 ${s.hp}/${s.maxHp}` : '방벽 짓기';
     ctx.fillStyle = '#120c18';
     ctx.fillText(label, s.x + 0.5, -59.5);

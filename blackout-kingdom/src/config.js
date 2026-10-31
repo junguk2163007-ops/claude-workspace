@@ -49,12 +49,10 @@ export const CONFIG = {
     huntRange: 650,     // 평소 사냥하러 돌아다니는 범위
     guardOffset: 18,    // 방벽 안쪽 몇 픽셀에서 지킬지
     guardDefault: 70,   // 방벽이 없으면 중심에서 이만큼
-    max: 8,
   },
 
   // 검사: 방벽 바깥 맨 앞줄에서 적을 막는다
   swordsman: {
-    max: 4,
     hp: 6,
     walk: 34,
     reach: 12,          // 칼이 닿는 거리
