@@ -99,6 +99,33 @@ check('날아다니는 괴물이 땅 밑이나 하늘 끝으로 사라지지 않
   check('맨손 궁수가 다시 활을 듦 (새로 뽑지 않음, 가격 그대로)', w4.archers.length === 1 && w4.archers[0].armed && post.cost === cost);
 }
 
+// 수비탑 시험: 방벽을 3단계까지 올리면 스스로 화살을 쏨
+{
+  const w5 = createWorld(21);
+  w5.archers.length = 0;
+  w5.animals.length = 0;
+  const wall = w5.spots.find((s) => s.kind === 'barricade' && s.x > 0);
+  w5.king.x = wall.x;
+  w5.king.coins = 40;
+  let release = false;
+  for (let i = 0; i < 60 * 12; i++) {
+    stepWorld(w5, dt, { move: 0, invest: !release });
+    release = w5.events.some((ev) => ev.type === 'spotComplete');
+    w5.events.length = 0;
+  }
+  check('방벽이 3단계(수비탑)까지 강화됨', wall.level === 3 && wall.maxHp === 28, `단계 ${wall.level}, 체력 ${wall.maxHp}`);
+  w5.king.x = -300;
+  spawnEnemy(w5, 'shade', 1);
+  w5.enemies[0].x = 300;
+  let fired = 0;
+  for (let i = 0; i < 60 * 10; i++) {
+    stepWorld(w5, dt, { move: 0, invest: false });
+    fired += w5.events.filter((ev) => ev.type === 'arrowFired').length;
+    w5.events.length = 0;
+  }
+  check('수비탑이 스스로 화살을 쏨', fired > 0 && w5.enemies.length === 0, `${fired}발`);
+}
+
 const all = [world.king, ...world.archers, ...world.animals, ...world.enemies, ...world.coins, ...world.arrows];
 check('숫자가 깨지지 않음 (NaN 없음)', all.every((e) => Number.isFinite(e.x) && Number.isFinite(e.y)));
 check('화살을 쐈다', (counts.arrowFired || 0) > 20, `${counts.arrowFired}발`);

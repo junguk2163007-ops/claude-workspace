@@ -4,7 +4,7 @@
 import { CONFIG } from '../config.js';
 import { createRng } from './util.js';
 import { createKing, updateKing } from './king.js';
-import { createSpot, updateThrownCoins } from './spots.js';
+import { createSpot, updateThrownCoins, updateTowers } from './spots.js';
 import { spawnArcher, updateArchers } from './archers.js';
 import { updateSwordsmen } from './swordsmen.js';
 import { updateArrows } from './arrows.js';
@@ -45,6 +45,7 @@ export function stepWorld(world, dt, intent) {
   updateThrownCoins(world, dt);
   updateArchers(world, dt);
   updateSwordsmen(world, dt);
+  updateTowers(world, dt);
   updateArrows(world, dt);
   updateAnimals(world, dt);
   updateEnemies(world, dt);

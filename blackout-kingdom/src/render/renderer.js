@@ -1,7 +1,7 @@
 // 화면 그리기 담당. 규칙(world)을 "읽기만" 하고 절대 바꾸지 않는다.
 
 import { CONFIG } from '../config.js';
-import { canInvest } from '../core/spots.js';
+import { canInvest, barricadeInfo, slotPos } from '../core/spots.js';
 import { createEffects, easeOut } from './effects.js';
 
 const VIEW_H = 270;   // 화면 높이에 들어가는 월드 픽셀 수
@@ -133,7 +133,12 @@ export function createRenderer(canvas) {
         fx.confetti(ev.x, -36);
         fx.ring(ev.x, -20, COLORS.goldLight, 40);
         fx.dust(ev.x, 10);
-        fx.text(ev.x, -60, { archerPost: '궁수 합류!', swordPost: '검사 합류!', barricade: '방벽 완성!' }[ev.kind], COLORS.goldLight, 9);
+        if (ev.kind === 'barricade') {
+          const name = CONFIG.barricade.levels[ev.level - 1].name;
+          fx.text(ev.x, -60 - ev.level * 6, ev.repaired ? `${name} 수리 완료!` : ev.level === 1 ? `${name} 완성!` : `${name}으로 강화!`, COLORS.goldLight, 9);
+        } else {
+          fx.text(ev.x, -60, { archerPost: '궁수 합류!', swordPost: '검사 합류!' }[ev.kind], COLORS.goldLight, 9);
+        }
         break;
       case 'arrowHit':
         fx.sparks(ev.x, ev.y, ev.target === 'enemy' ? '#d9b8ff' : '#fff6d0');
@@ -450,32 +455,11 @@ export function createRenderer(canvas) {
       ctx.fillStyle = '#4a321c';
       ctx.fillRect(-4, -1.5, 8, 1.5);
     } else if (s.kind === 'barricade') {
-      if (s.built) {
-        const dmg = 1 - s.hp / s.maxHp;
-        for (let i = 0; i < 4; i++) {
-          const x = -7 + i * 4.5;
-          const h = 22 - (i % 2) * 3;
-          ctx.fillStyle = i % 2 ? '#6e4828' : '#7d5430';
-          ctx.fillRect(x - 1.8, -h, 3.6, h);
-          ctx.beginPath();
-          ctx.moveTo(x - 1.8, -h);
-          ctx.lineTo(x, -h - 3.5);
-          ctx.lineTo(x + 1.8, -h);
-          ctx.fill();
-          if (dmg > 0.3 + i * 0.15) {
-            ctx.strokeStyle = '#2a1a0c';
-            ctx.lineWidth = 0.6;
-            ctx.beginPath();
-            ctx.moveTo(x - 1, -h * 0.7);
-            ctx.lineTo(x + 0.8, -h * 0.5);
-            ctx.lineTo(x - 0.5, -h * 0.3);
-            ctx.stroke();
-          }
-        }
-        ctx.fillStyle = '#4e3218';
-        ctx.fillRect(-10, -13, 20, 2.5);
-        ctx.fillRect(-10, -6, 20, 2.5);
-      } else {
+      const dmg = s.built ? 1 - s.hp / s.maxHp : 0;
+      if (s.level === 1) drawPalisade(dmg);
+      else if (s.level === 2) drawStoneWall(dmg);
+      else if (s.level === 3) drawTower(dmg, s);
+      else {
         ctx.strokeStyle = 'rgba(220,200,150,0.22)';
         ctx.setLineDash([1.5, 1.5]);
         ctx.lineWidth = 0.6;
@@ -486,6 +470,111 @@ export function createRenderer(canvas) {
       }
     }
     ctx.restore();
+  }
+
+  // 금 간 자국: 많이 다칠수록 늘어남
+  function cracks(dmg, w, h) {
+    if (dmg < 0.25) return;
+    ctx.strokeStyle = 'rgba(20,12,8,0.85)';
+    ctx.lineWidth = 0.6;
+    const n = Math.floor(dmg * 5);
+    for (let i = 0; i < n; i++) {
+      const x = -w / 2 + ((i * 7.3) % w);
+      const y = -h * (0.3 + ((i * 0.37) % 0.5));
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 1.5, y + 2.5);
+      ctx.lineTo(x - 0.5, y + 4.5);
+      ctx.stroke();
+    }
+  }
+
+  // 1단계: 나무 울타리
+  function drawPalisade(dmg) {
+    for (let i = 0; i < 4; i++) {
+      const x = -7 + i * 4.5;
+      const h = 22 - (i % 2) * 3;
+      ctx.fillStyle = i % 2 ? '#6e4828' : '#7d5430';
+      ctx.fillRect(x - 1.8, -h, 3.6, h);
+      ctx.beginPath();
+      ctx.moveTo(x - 1.8, -h);
+      ctx.lineTo(x, -h - 3.5);
+      ctx.lineTo(x + 1.8, -h);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#4e3218';
+    ctx.fillRect(-10, -13, 20, 2.5);
+    ctx.fillRect(-10, -6, 20, 2.5);
+    cracks(dmg, 18, 20);
+  }
+
+  // 2단계: 돌 성벽 (벽돌 + 톱니 모양 꼭대기)
+  function drawStoneWall(dmg) {
+    const W = 22, H = 26;
+    ctx.fillStyle = '#6f6a78';
+    ctx.fillRect(-W / 2, -H, W, H);
+    for (let i = 0; i < 4; i++) ctx.fillRect(-W / 2 + i * 6, -H - 3.5, 4, 3.5);
+    ctx.fillStyle = '#58535f';
+    for (let row = 0; row < 6; row++) {
+      const off = row % 2 ? 0 : 3;
+      for (let x = -W / 2 + off; x < W / 2; x += 6) ctx.fillRect(x, -H + row * 4.3, 0.6, 4.3);
+      ctx.fillRect(-W / 2, -H + row * 4.3, W, 0.5);
+    }
+    ctx.fillStyle = '#8a8594';
+    ctx.fillRect(-W / 2, -H, W, 1);
+    cracks(dmg, W, H);
+  }
+
+  // 3단계: 수비탑 (탑 위에 궁수가 서서 활을 쏨)
+  function drawTower(dmg, s) {
+    const W = 16, H = 38;
+    ctx.fillStyle = '#6f6a78';
+    ctx.fillRect(-W / 2, -H, W, H);
+    ctx.fillStyle = '#58535f';
+    for (let row = 0; row < 9; row++) {
+      const off = row % 2 ? 0 : 2.5;
+      for (let x = -W / 2 + off; x < W / 2; x += 5) ctx.fillRect(x, -H + row * 4.2, 0.6, 4.2);
+      ctx.fillRect(-W / 2, -H + row * 4.2, W, 0.5);
+    }
+    // 문
+    ctx.fillStyle = '#2a1d14';
+    ctx.fillRect(-2.5, -8, 5, 8);
+    ctx.beginPath();
+    ctx.arc(0, -8, 2.5, Math.PI, 0);
+    ctx.fill();
+    // 꼭대기 발판과 톱니
+    ctx.fillStyle = '#7d7888';
+    ctx.fillRect(-11, -H - 2, 22, 3);
+    for (let i = 0; i < 5; i++) ctx.fillRect(-11 + i * 5, -H - 6, 3, 4);
+    // 탑 위 궁수
+    ctx.fillStyle = '#3f7a45';
+    ctx.fillRect(-2, -H - 9.5, 4, 5);
+    ctx.fillStyle = '#e9c39b';
+    ctx.fillRect(-0.2, -H - 8.5, 1.8, 1.8);
+    const pull = clamp(1 - s.towerCd / 0.5, 0, 1);
+    ctx.strokeStyle = '#a87b3f';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.arc(2.5, -H - 6.5, 3.5, -1.2, 1.2);
+    ctx.stroke();
+    ctx.strokeStyle = '#e8e2d0';
+    ctx.lineWidth = 0.3;
+    ctx.beginPath();
+    ctx.moveTo(2.5 + Math.cos(-1.2) * 3.5, -H - 6.5 + Math.sin(-1.2) * 3.5);
+    ctx.lineTo(2.5 + Math.cos(-1.2) * 3.5 - pull * 2.5, -H - 6.5);
+    ctx.lineTo(2.5 + Math.cos(1.2) * 3.5, -H - 6.5 + Math.sin(1.2) * 3.5);
+    ctx.stroke();
+    // 깃발
+    ctx.fillStyle = '#5b3d22';
+    ctx.fillRect(-9, -H - 16, 1, 12);
+    ctx.fillStyle = COLORS.gold;
+    const wave = Math.sin(r.time * 3) * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(-8, -H - 16);
+    ctx.lineTo(-3, -H - 14.5 + wave);
+    ctx.lineTo(-8, -H - 12.5);
+    ctx.fill();
+    cracks(dmg, W, H);
   }
 
   function drawSpotSlots(world, s, dt) {
@@ -506,17 +595,23 @@ export function createRenderer(canvas) {
     let label;
     if (s.kind === 'archerPost') label = '궁수 고용';
     else if (s.kind === 'swordPost') label = '검사 고용';
-    else label = s.built ? `방벽 ${s.hp}/${s.maxHp}` : '방벽 짓기';
+    else {
+      const info = barricadeInfo(s);
+      if (info.next) label = s.level === 0 ? `${info.next.name} 짓기` : `${info.next.name}으로 강화`;
+      else label = s.hp < s.maxHp ? `${info.cur.name} 수리 (${Math.ceil(s.hp)}/${s.maxHp})` : `${info.cur.name} ${s.hp}/${s.maxHp}`;
+    }
+    const ly = slotPos(s, 0).y - 12;
     ctx.fillStyle = '#120c18';
-    ctx.fillText(label, s.x + 0.5, -59.5);
+    ctx.fillText(label, s.x + 0.5, ly + 0.5);
     ctx.fillStyle = open ? '#f3e6c4' : '#9a8f80';
-    ctx.fillText(label, s.x, -60);
+    ctx.fillText(label, s.x, ly);
 
     if (open) {
       const lift = (1 - easeOut(a)) * 6;
       for (let i = 0; i < s.cost; i++) {
-        const x = s.x + (i - (s.cost - 1) / 2) * 8;
-        const y = -48 + lift;
+        const sp = slotPos(s, i);
+        const x = sp.x;
+        const y = sp.y + lift;
         if (i < s.paid) {
           const pop = i === s.paid - 1 ? pulse * 0.6 : 0;
           drawCoinShape(x, y, 3 * (1 + pop), 3 * (1 + pop), true);

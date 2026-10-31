@@ -3,6 +3,7 @@ import { emit, nextId, sign } from './util.js';
 import { spawnCoins } from './coins.js';
 import { blockingSwordsman, damageSwordsman } from './swordsmen.js';
 import { hitArcher } from './archers.js';
+import { damageWall } from './spots.js';
 
 export function spawnEnemy(world, kind, side) {
   const def = CONFIG.enemies.kinds[kind];
@@ -100,13 +101,7 @@ function updateGround(world, e, def, dt) {
     e.attackTimer -= dt;
     if (e.attackTimer <= 0) {
       e.attackTimer = def.attackInterval;
-      wall.hp -= def.attack;
-      emit(world, 'wallHit', { x: wall.x, hp: wall.hp });
-      if (wall.hp <= 0) {
-        wall.built = false;
-        wall.hp = 0;
-        emit(world, 'wallBroken', { x: wall.x });
-      }
+      damageWall(world, wall, def.attack);
     }
   } else if (Math.abs(targetX - e.x) > 2) {
     e.vx = dir * def.speed;

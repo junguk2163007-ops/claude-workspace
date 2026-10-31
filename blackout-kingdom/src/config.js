@@ -95,9 +95,21 @@ export const CONFIG = {
   spots: [
     { kind: 'archerPost', x: -30, cost: 3, maxCost: 6 },
     { kind: 'swordPost', x: 30, cost: 4, maxCost: 7 },
-    { kind: 'barricade', x: -160, cost: 4, hp: 8 },
-    { kind: 'barricade', x: 160, cost: 4, hp: 8 },
+    { kind: 'barricade', x: -160 },
+    { kind: 'barricade', x: 160 },
   ],
+
+  // 방벽 강화 단계: 코인을 넣을 때마다 한 단계씩. 다 부서지면 처음부터 다시.
+  barricade: {
+    levels: [
+      { name: '나무 울타리', cost: 4, hp: 8 },
+      { name: '돌 성벽', cost: 6, hp: 18 },
+      { name: '수비탑', cost: 9, hp: 28, tower: true },
+    ],
+    repairCost: 3,      // 수비탑이 다쳤을 때 수리 비용
+    towerRange: 210,
+    towerInterval: 1.5,
+  },
   spotReach: 14,        // 자리 중심에서 이 거리 안이면 투자 가능
 
   // 손맛 연출 (화면 쪽에서 쓰는 값)

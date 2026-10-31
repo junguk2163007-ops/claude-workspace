@@ -4,11 +4,10 @@ import { damageAnimal } from './animals.js';
 import { damageEnemy } from './enemies.js';
 
 // 궁수 → 목표까지 포물선으로 날아가도록 처음 속도를 계산해서 화살을 쏜다.
-export function fireArrow(world, archer, target) {
+export function fireArrow(world, archer, target, sy = -13) {
   const cfg = CONFIG.archer;
   const g = cfg.arrowGravity;
   const sx = archer.x + archer.facing * 5;
-  const sy = -13;
   const dist = Math.abs(target.x - sx);
   const T = clamp(dist / cfg.arrowSpeed, 0.35, 1.1);
   // 움직이는 목표는 조금 앞을 노린다 + 멀수록 조금씩 빗나감

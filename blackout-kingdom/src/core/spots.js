@@ -2,9 +2,12 @@ import { CONFIG } from '../config.js';
 import { emit } from './util.js';
 import { spawnArcher, rearmArcher } from './archers.js';
 import { spawnSwordsman } from './swordsmen.js';
+import { fireArrow } from './arrows.js';
+import { sign } from './util.js';
 
 // "투자 자리": 왕이 코인을 던져 넣으면 무언가가 지어지는 곳.
 export function createSpot(def, id) {
+  if (def.kind === 'barricade') def = { ...def, cost: CONFIG.barricade.levels[0].cost };
   return {
     id,
     kind: def.kind,
@@ -17,11 +20,47 @@ export function createSpot(def, id) {
     pending: 0,  // 날아가는 중인 코인
     built: false,
     hires: 0,
+    level: 0,      // 방벽 강화 단계 (0 = 없음)
+    towerCd: 0,
   };
 }
 
+// 방벽 다음 투자 비용: 다음 단계 → 최고 단계면 수리 비용 (가득 차 있으면 투자 불가)
+function barricadeCost(spot) {
+  const B = CONFIG.barricade;
+  if (spot.level < B.levels.length) return B.levels[spot.level].cost;
+  return B.repairCost;
+}
+
+function refreshCost(spot) {
+  if (spot.kind === 'barricade' && spot.paid === 0 && spot.pending === 0) spot.cost = barricadeCost(spot);
+}
+
+export function barricadeInfo(spot) {
+  const B = CONFIG.barricade;
+  const cur = spot.level > 0 ? B.levels[spot.level - 1] : null;
+  const next = B.levels[spot.level] || null;
+  return { cur, next, maxed: !next };
+}
+
+// 적이 방벽을 때림
+export function damageWall(world, wall, dmg) {
+  wall.hp -= dmg;
+  emit(world, 'wallHit', { x: wall.x, hp: wall.hp });
+  if (wall.hp <= 0) {
+    wall.built = false;
+    wall.hp = 0;
+    wall.level = 0;
+    emit(world, 'wallBroken', { x: wall.x });
+  }
+  refreshCost(wall);
+}
+
 export function canInvest(world, spot) {
-  if (spot.kind === 'barricade' && spot.built) return false;
+  if (spot.kind === 'barricade') {
+    const maxed = spot.level >= CONFIG.barricade.levels.length;
+    if (maxed && spot.hp >= spot.maxHp && spot.pending === 0) return false;
+  }
   return spot.paid + spot.pending < spot.cost;
 }
 
@@ -36,7 +75,8 @@ export function findSpotAt(world, x) {
 
 // 슬롯 위치 (코인이 날아가 꽂히는 자리)
 export function slotPos(spot, i) {
-  return { x: spot.x + (i - (spot.cost - 1) / 2) * 8, y: -48 };
+  const tall = spot.kind === 'barricade' && spot.level >= 2;
+  return { x: spot.x + (i - (spot.cost - 1) / 2) * 8, y: tall ? (spot.level >= 3 ? -72 : -52) : -48 };
 }
 
 export function throwCoin(world, spot) {
@@ -72,10 +112,35 @@ function completeSpot(world, spot) {
     spot.cost = Math.min(spot.cost + 1, spot.maxCost);
     spawnSwordsman(world, spot.x);
   } else if (spot.kind === 'barricade') {
+    const levels = CONFIG.barricade.levels;
+    const repaired = spot.level >= levels.length;
+    if (!repaired) spot.level++;
     spot.built = true;
+    spot.maxHp = levels[spot.level - 1].hp;
     spot.hp = spot.maxHp;
+    refreshCost(spot);
+    emit(world, 'spotComplete', { x: spot.x, kind: spot.kind, level: spot.level, repaired });
+    return;
   }
   emit(world, 'spotComplete', { x: spot.x, kind: spot.kind });
+}
+
+// 수비탑: 탑 꼭대기에서 가까운 적에게 스스로 화살을 쏜다
+export function updateTowers(world, dt) {
+  const B = CONFIG.barricade;
+  for (const s of world.spots) {
+    if (s.kind !== 'barricade' || !s.built || !B.levels[s.level - 1].tower) continue;
+    s.towerCd -= dt;
+    if (s.towerCd > 0) continue;
+    let target = null;
+    for (const e of world.enemies) {
+      const d = Math.abs(e.x - s.x);
+      if (d < B.towerRange && (!target || d < Math.abs(target.x - s.x))) target = e;
+    }
+    if (!target) continue;
+    fireArrow(world, { x: s.x, facing: sign(target.x - s.x) || 1 }, target, -38);
+    s.towerCd = B.towerInterval;
+  }
 }
 
 export function updateThrownCoins(world, dt) {
