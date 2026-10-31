@@ -171,6 +171,15 @@ scripts/backup.mjs   백업
 - SQLite 단일 파일이라 앱 인스턴스는 1대만 운영해야 합니다.
 - Docker 이미지의 Chromium은 PDF 생성 때 메모리를 수백 MB 씁니다.
 
+## claude.ai Artifact 버전 (`artifact/`)
+
+서버 없이 claude.ai 안에서 바로 쓰는 버전입니다. 공고 파싱·분석·문서 조합·메일 로직은 `lib/` 코드를 그대로 묶어 쓰고, PDF만 브라우저에서 만듭니다.
+
+- 빌드: `node artifact/build.mjs` → `artifact/dist/` (index.html, app.js, fonts/). Artifact 도구로 `dist/index.html` 을 게시하고 `app.js`·`fonts/*` 를 함께 올립니다.
+- 저장: Artifact `db` 기능의 `data/users/<내 id>/` (본인만 읽기). 프로필, 사진(3:4 JPEG), 자격 목록, 문구, 설정, 지원 이력(보낸 서류 내용 스냅샷 포함).
+- PDF: `artifact/src/pdfdoc.ts` 가 한 번 배치한 결과를 캔버스 미리보기와 pdf-lib PDF에 똑같이 그립니다. 폰트는 한글·영문·기호만 남긴 Noto Sans KR(`artifact/fonts`, 각 2.5MB)이고, PDF에는 쓰인 글자만 남긴 폰트를 넣습니다(`ttfsub.ts`; pdf-lib 의 subset 옵션은 Noto Sans KR에서 글자가 빠져서 쓰지 않음). PDF 한 개 약 150KB.
+- 서버 버전과 다른 점: 비밀번호 대신 claude.ai 로그인으로 보호, 파일 저장은 저장 확인 창을 거침, 인쇄 대화상자는 쓸 수 없음, 보낸 PDF 파일 대신 당시 문서 내용을 저장해 다시 그림.
+
 ## 다음 단계 제안 (Phase 2, 미구현)
 
 1. **LLM 보조 파싱**: `ANTHROPIC_API_KEY` 가 있을 때만, 규칙 파서가 비워 둔 필드를 구조화 JSON(스키마 고정, 원문에 없는 값은 null)으로 보완합니다. 원문 인용 위치를 함께 받아 검증하고, 자소서 본문은 계속 블록만 씁니다.

@@ -11,3 +11,4 @@ seed/
 data/
 tests/.tmp/
 backups/
+artifact/dist/
