@@ -1,6 +1,6 @@
 // 서비스워커 — 앱 전체를 캐시해 오프라인에서도 동작
 // 파일을 고치면 VERSION을 올린다 (예: v1.0.1). 버전이 바뀌면 새 캐시를 받고 옛 캐시는 지운다.
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.0.1';
 const CACHE = `sq-elec-${VERSION}`;
 const ASSETS = [
   './',
@@ -38,6 +38,8 @@ self.addEventListener('message', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  // 같은 사이트의 다른 앱(/elec-diag/ 등 하위 폴더)은 가로채지 않는다
+  if (new URL(req.url).pathname.includes('/elec-diag/')) return;
   if (req.mode === 'navigate') {
     e.respondWith(
       caches.open(CACHE).then((c) =>
