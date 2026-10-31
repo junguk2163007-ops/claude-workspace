@@ -3,6 +3,7 @@
 import { CONFIG } from '../config.js';
 import { canInvest, barricadeInfo, slotPos } from '../core/spots.js';
 import { createEffects, easeOut } from './effects.js';
+import { createScenery, NEAR_P, FRONT_P } from './scenery.js';
 
 const VIEW_H = 270;   // 화면 높이에 들어가는 월드 픽셀 수
 const VIEW_MIN_W = 420;
@@ -32,6 +33,7 @@ const hash = (n) => {
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   const fx = createEffects();
+  const scenery = createScenery();
   const r = {
     W: 0, H: 0, dpr: 1, S: 1, groundY: 0, ui: 1, safeL: 0, safeT: 0,
     camX: 0, shake: 0, flash: 0, time: 0,
@@ -258,9 +260,14 @@ export function createRenderer(canvas) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawBackground(world);
 
+    // 1.5) 먼 풍경 층 (느리게 지나감)
+    ctx.setTransform(dpr * S, 0, 0, dpr * S, dpr * (W / 2 - r.camX * NEAR_P * S + shx * 0.5), dpr * (r.groundY + shy * 0.5));
+    scenery.drawNear(ctx, r.camX, viewW, r.time);
+
     // 2) 월드 (월드 좌표)
     ctx.setTransform(dpr * S, 0, 0, dpr * S, dpr * (W / 2 - r.camX * S + shx), dpr * (r.groundY + shy));
     drawGroundDetails(viewW);
+    scenery.drawProps(ctx, r.camX, viewW, r.time);
     drawGenerator();
     for (const s of world.spots) drawSpot(world, s);
     for (const a of world.arrows) if (a.stuck) drawArrow(a);
@@ -275,6 +282,10 @@ export function createRenderer(canvas) {
     for (const c of world.thrownCoins) drawCoin(c.x, c.y + 3, c.t * 30, 0, false);
     for (const s of world.spots) drawSpotSlots(world, s, dt);
     fx.draw(ctx);
+
+    // 2.5) 맨 앞 풀숲 (빠르게 스침)
+    ctx.setTransform(dpr * S, 0, 0, dpr * S, dpr * (W / 2 - r.camX * FRONT_P * S + shx), dpr * (r.groundY + shy));
+    scenery.drawFront(ctx, r.camX, viewW, r.time);
 
     // 3) 화면 위 UI
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
