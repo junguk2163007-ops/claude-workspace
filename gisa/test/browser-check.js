@@ -607,6 +607,102 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-5. 계산기 (왼쪽) ──
+  {
+    const lcdText = (page) => page.evaluate(() => GISA.calcUi.calc.text());
+    const clickKeys = async (page, list) => {
+      for (const k of list.split(' ')) await page.click('#calc [data-key="' + k + '"]');
+    };
+    const sampleStub = () => {
+      const fake = async (input, opts) => {
+        opts.onText({ text: 'x', delta: 'x' });
+        return { text: 'x', truncated: false, modelTierApplied: 'default' };
+      };
+      window.claude = { use: async (n) => (n === 'sample' ? fake : null) };
+    };
+    // (가) AI 없이 PC: 왼쪽에 붙음
+    {
+      const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
+      check(await page.isVisible('#calc'), '계산기: PC에서 왼쪽에 표시');
+      check(await page.evaluate(() => document.querySelector('#calc').getBoundingClientRect().left === 0 && document.querySelector('#view').getBoundingClientRect().left >= 340), '계산기: 본문과 겹치지 않음');
+      check(await noOverflow(page), '계산기: 가로 넘침 없음');
+      check(!(await page.isVisible('.calc-toggle')), '계산기: 붙어 있을 땐 여는 버튼 없음');
+      await clickKeys(page, '1 + 2 =');
+      check((await lcdText(page)) === '1+2 => 3', '계산기: 클릭으로 1+2=3 → ' + (await lcdText(page)));
+      await clickKeys(page, 'AC SQRT 8 RIGHT =');
+      check((await page.$$('#calc .lcd .rad')).length >= 1, '계산기: 근호가 그려짐');
+      check((await page.textContent('#calc .l2')).replace(/\s/g, '') === '2√2', '계산기: √8 = 2√2');
+      await clickKeys(page, 'AC 1 / 3 =');
+      check((await page.$$('#calc .l2 .fr')).length === 1, '계산기: 1÷3 결과가 분수 모양');
+      await clickKeys(page, 'S<>D');
+      check((await page.textContent('#calc .l2')) === '0.3333333333', '계산기: S⇔D로 소수 변환');
+      await clickKeys(page, 'AC SHIFT');
+      check(await page.evaluate(() => document.querySelector('#calc .ind.shift').classList.contains('on')), '계산기: SHIFT 표시등');
+      await clickKeys(page, 'x10^x');
+      check((await page.textContent('#calc .l1')).includes('π'), '계산기: SHIFT ×10ˣ = π');
+      // 키보드: 계산기에 포커스가 있을 때만 입력
+      await page.click('#calc .calc-head');
+      await page.keyboard.press('Escape');
+      await page.keyboard.type('7*8');
+      await page.keyboard.press('Enter');
+      check((await page.textContent('#calc .l2')) === '56', '계산기: 키보드 입력 7×8=56');
+      // 문제 단축키와 충돌하지 않음
+      await page.evaluate(() => GISA.ui._load('t:ohm-current#3'));
+      await page.click('#calc .calc-head');
+      await page.keyboard.press('2');
+      check(!(await page.isVisible('.verdict')), '계산기: 계산기 입력 중 숫자키가 문제 답으로 안 들어감');
+      // 기억: 새로고침해도 메모리·설정 유지
+      await clickKeys(page, 'AC 5 SHIFT RCL (-) =');
+      await page.reload();
+      await page.waitForSelector('#calc .key');
+      await clickKeys(page, 'AC');
+      await page.evaluate(() => GISA.calcUi.pressKeys(['ALPHA', '(-)', '=']));
+      check((await page.textContent('#calc .l2')) === '5', '계산기: 새로고침 후에도 변수 A 유지');
+      await page.screenshot({ path: path.join(SHOTS, '16-calc-left.png') });
+      check(errors.length === 0, '계산기 콘솔 오류: ' + errors.join(' | '));
+      await ctx.close();
+    }
+    // (나) AI 패널과 함께: 넓으면 양쪽, 중간 폭이면 눌러서 열기, 폰이면 숨김
+    {
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
+      await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+      await ctx.addInitScript(sampleStub);
+      const page = await ctx.newPage();
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto(FILE);
+      await page.waitForSelector('#side .side-head');
+      const box = (sel) => page.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { l: r.left, r: r.right }; }, sel);
+      check((await page.isVisible('#calc')) && (await page.isVisible('#side')), '계산기: 1440에서 계산기·AI 양쪽 표시');
+      const v = await box('#view');
+      check(v.l >= 340 - 1 && v.r <= 1440 - 380 + 1, '계산기: 본문이 양쪽 패널 사이에 있음 (' + v.l + '~' + v.r + ')');
+      check(await noOverflow(page), '계산기: 3단 가로 넘침 없음');
+      await page.screenshot({ path: path.join(SHOTS, '17-three-columns.png') });
+      await page.setViewportSize({ width: 1100, height: 860 });
+      await page.waitForFunction(() => document.body.classList.contains('calc-float'));
+      check(!(await page.isVisible('#calc')) && (await page.isVisible('.calc-toggle')), '계산기: 1100에선 숨기고 여는 버튼만');
+      await page.click('.calc-toggle');
+      check(await page.isVisible('#calc'), '계산기: 버튼으로 떠 있는 패널 열기');
+      await page.screenshot({ path: path.join(SHOTS, '18-calc-float.png') });
+      await clickKeys(page, '9 * 9 =');
+      check((await page.textContent('#calc .l2')) === '81', '계산기: 떠 있는 상태에서도 계산');
+      await page.click('#calc .calc-close');
+      check(!(await page.isVisible('#calc')), '계산기: 닫기');
+      await page.setViewportSize({ width: 800, height: 860 });
+      await page.waitForFunction(() => document.body.classList.contains('calc-off'));
+      check(!(await page.isVisible('#calc')) && !(await page.isVisible('.calc-toggle')), '계산기: 800 이하에선 없음');
+      check(errors.length === 0, '계산기+AI 콘솔 오류: ' + errors.join(' | '));
+      await ctx.close();
+    }
+    // (다) 아이폰: 계산기 영역이 레이아웃에 영향을 주지 않음
+    {
+      const { ctx, page, errors } = await newPage(browser, Object.assign({ colorScheme: 'light' }, iphone));
+      check(!(await page.isVisible('#calc')) && (await noOverflow(page)), '계산기: 폰에서는 숨김·가로 넘침 없음');
+      check(errors.length === 0, '계산기 폰 콘솔 오류: ' + errors.join(' | '));
+      await ctx.close();
+    }
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });

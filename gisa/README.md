@@ -3,6 +3,7 @@
 - 실행: `dist/index.html` 더블클릭 (인터넷 없어도 동작, 글꼴만 기본 글꼴로 바뀜)
 - 빌드: `node build.js` → `dist/index.html`, `dist/artifact.html`
 - 테스트: `node test/run-tests.js` (템플릿당 3000문제, `N=300`으로 줄일 수 있음)
+- 계산기 테스트: `node test/calc-tests.js` (설명서 예제를 키 입력 순서대로 재현)
 - 화면 점검: `node test/browser-check.js [스크린샷 폴더]` (Playwright 필요)
 
 ## 구조
@@ -27,3 +28,9 @@
 - 올리기 전에 서버 기록을 읽어 와서 `progress.merge`로 합친다. 통계는 더 많이 푼 쪽, 레슨·풀이 기록·복습은 합집합, 초기화(`resetAt`) 이전 기록은 버린다.
 - 두 기기가 동기화 사이에 각자 푼 경우 더 적게 푼 쪽의 통계 일부가 빠질 수 있다(풀이 기록·복습·레슨은 합쳐져서 남는다).
 - 파일로 열면(`window.claude` 없음) 동기화는 꺼지고 localStorage만 쓴다.
+
+## 계산기 (왼쪽, 카시오 fx-350ES PLUS 방식)
+- `engine/qnum.js` 정확한 값(분수·√·π, BigInt) / `calc-fmt.js` 액정 표시 규칙 / `calc-eval.js` 식 해석(카시오 우선순위) / `calc-stat.js` STAT 회귀 / `calc.js` 본체(키 → 화면)
+- `app/calcui.js` 키패드·액정 그리기. 키 입력은 `G.calcUi.press('SHIFT')`처럼 키 이름으로 한다.
+- 모드는 COMP·STAT·TABLE만 있다(이 기종에는 복소수·CALC·SOLVE가 없음). 메모리·설정은 localStorage에 저장(기록 동기화와는 별개).
+- 폭 ≥1280px(AI 패널 있을 땐) 또는 ≥1000px(AI 패널 없을 땐)에 왼쪽에 붙고, 그보다 좁으면 "계산기" 버튼으로 여는 떠 있는 패널, 940px 미만(폰)에서는 숨김.

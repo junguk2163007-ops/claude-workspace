@@ -1350,6 +1350,7 @@
     if (view.tab !== 'practice' || !view.q || e.metaKey || e.ctrlKey || e.altKey) return;
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (e.target && e.target.closest && e.target.closest('#calc')) return; // 계산기에 입력 중일 땐 문제 단축키 끔
     if (!view.answered && /^[1-4]$/.test(e.key)) {
       answer(Number(e.key) - 1);
       e.preventDefault();

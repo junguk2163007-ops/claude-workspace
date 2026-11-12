@@ -634,9 +634,6 @@ select {
     border-left: 1px solid var(--line);
     z-index: 11;
   }
-  body.has-side .toast {
-    left: calc((100% - 380px) / 2);
-  }
 }
 
 /* ── 동기화 상태 ── */
@@ -1260,9 +1257,475 @@ button.lesson-row .bar {
   }
 }
 
+/* ── PC: 왼쪽 계산기 (카시오 fx-350ES PLUS) ── */
+#calc {
+  display: none;
+}
+body.calc-dock {
+  padding-left: 340px;
+}
+body.calc-dock #calc,
+body.calc-open #calc {
+  display: flex;
+}
+#calc {
+  flex-direction: column;
+  gap: 10px;
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  bottom: 0;
+  width: 340px;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  z-index: 11;
+  overflow-y: auto;
+  outline: none;
+}
+body.calc-open #calc {
+  box-shadow: 6px 0 24px rgba(0, 0, 0, 0.28);
+  z-index: 13;
+}
+#calc:focus-visible,
+#calc:focus {
+  box-shadow: inset 0 0 0 2px var(--accent-soft);
+}
+.calc-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.calc-head strong {
+  font-size: 17px;
+}
+.calc-model {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  flex: 1;
+}
+.calc-close {
+  display: none;
+}
+body.calc-open .calc-close {
+  display: inline-block;
+}
+.calc-hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.calc-toggle {
+  position: fixed;
+  left: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 12;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 14px var(--font-body);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+body.calc-open .calc-toggle {
+  display: none;
+}
+body.calc-dock .toast {
+  left: calc(50% + 170px);
+}
+body.calc-dock.has-side .toast {
+  left: calc(50% + 170px - 190px);
+}
+body.has-side:not(.calc-dock) .toast {
+  left: calc((100% - 380px) / 2);
+}
+/* 액정 */
+.lcd-panel {
+  padding: 8px;
+  border-radius: 12px;
+  background: #1f2329;
+}
+.lcd {
+  --ink-a: 0.85;
+  height: 118px;
+  border-radius: 6px;
+  background: #c9d3bd;
+  border: 2px solid #11151a;
+  color: #1b2417;
+  font-family: var(--font-mono);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+.lcd-panel.off .lcd {
+  background: #6f7864;
+}
+.lcd-ind {
+  display: flex;
+  gap: 5px;
+  padding: 2px 6px 0;
+  font-size: 9px;
+  line-height: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.lcd-ind .ind {
+  opacity: 0.16;
+}
+.lcd-ind .ind.on {
+  opacity: var(--ink-a);
+  font-weight: 700;
+}
+.lcd-ind .ind.shift.on {
+  background: #1b2417;
+  color: #c9d3bd;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+.lcd-body {
+  flex: 1;
+  min-height: 0;
+  padding: 2px 8px 4px;
+  display: flex;
+  flex-direction: column;
+  opacity: var(--ink-a);
+  position: relative;
+  font-size: 20px;
+}
+.lcd-body.text {
+  font-size: 13px;
+  line-height: 18px;
+  white-space: pre;
+}
+.lcd-body .arrow {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  font-size: 10px;
+}
+.lcd-body.err .tl:first-child {
+  font-weight: 700;
+}
+.l0 {
+  font-size: 13px;
+  line-height: 16px;
+}
+.l1 {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+.l1i {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.l2 {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.lcd .t {
+  white-space: pre;
+}
+.lcd .cur {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: currentColor;
+  margin: 0 1px;
+  animation: lcd-blink 1s steps(1) infinite;
+}
+.lcd .l1i.ow .cur {
+  width: 0.6em;
+  height: 3px;
+  align-self: flex-end;
+}
+@keyframes lcd-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.lcd .bx {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.9em;
+  border: 1.5px dashed currentColor;
+  margin: 0 1px;
+}
+.lcd .fr {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  margin: 0 2px;
+  font-size: 0.82em;
+  line-height: 1.1;
+}
+.lcd .fr .fn {
+  border-bottom: 1.5px solid currentColor;
+  padding: 0 2px 1px;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0.7em;
+  justify-content: center;
+}
+.lcd .fr .fd {
+  padding: 1px 2px 0;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0.7em;
+  justify-content: center;
+}
+.lcd .mx {
+  display: inline-flex;
+  align-items: center;
+}
+.lcd .mw {
+  display: inline-flex;
+  align-items: center;
+}
+.lcd .rad {
+  display: inline-flex;
+  align-items: stretch;
+}
+.lcd .ri {
+  font-size: 0.6em;
+  align-self: flex-start;
+  margin-right: -2px;
+}
+.lcd .rs {
+  line-height: 1;
+}
+.lcd .rb {
+  border-top: 1.5px solid currentColor;
+  padding: 0 1px;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 2px;
+}
+.lcd .sp {
+  font-size: 0.62em;
+  align-self: flex-start;
+  display: inline-flex;
+  margin: 0 1px;
+}
+.lcd .sb {
+  font-size: 0.62em;
+  align-self: flex-end;
+  display: inline-flex;
+}
+.lcd .ab {
+  display: inline-flex;
+  align-items: center;
+  border-left: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  padding: 0 2px;
+  margin: 0 1px;
+}
+.lcd .grid {
+  font-size: 13px;
+  line-height: 18px;
+}
+.lcd .gr {
+  display: flex;
+}
+.lcd .gn {
+  width: 22px;
+  text-align: right;
+  padding-right: 4px;
+  opacity: 0.7;
+}
+.lcd .gc {
+  flex: 1;
+  text-align: right;
+  padding: 0 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+.lcd .gh .gc {
+  font-weight: 700;
+}
+.lcd .gc.sel {
+  background: #1b2417;
+  color: #c9d3bd;
+}
+.lcd .gv {
+  margin-top: auto;
+  border-top: 1px solid currentColor;
+  text-align: right;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* 키패드 */
+.keys {
+  padding: 10px 8px 12px;
+  border-radius: 12px;
+  background: #2a2f37;
+  display: grid;
+  gap: 10px;
+}
+.kgrid {
+  display: grid;
+  gap: 4px 6px;
+}
+.kgrid.top {
+  grid-template-columns: repeat(6, 1fr);
+}
+.kgrid.num {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px 7px;
+}
+.kc {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.kl {
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  font-size: 9px;
+  line-height: 12px;
+  height: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ks {
+  color: #f0c24b;
+}
+.ka {
+  color: #ff7d8a;
+}
+.key {
+  font: 600 12px var(--font-body);
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  color: #eef1f4;
+  background: #4b525c;
+  box-shadow: 0 2px 0 #14171b;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.key:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #14171b;
+}
+.kgrid.num .key {
+  height: 33px;
+  font-size: 15px;
+}
+.key.num {
+  background: #eceff2;
+  color: #1d232b;
+  box-shadow: 0 2px 0 #8a9099;
+}
+.key.del {
+  background: #c8372d;
+  color: #fff;
+  box-shadow: 0 2px 0 #6c1b15;
+}
+.key.shift {
+  background: #d9a92b;
+  color: #231900;
+  box-shadow: 0 2px 0 #7b5d0d;
+}
+.key.alpha {
+  background: #d9566a;
+  color: #fff;
+  box-shadow: 0 2px 0 #7a2433;
+}
+#calc.sh-on .kc .ks {
+  background: #f0c24b;
+  color: #231900;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+#calc.al-on .kc .ka {
+  background: #ff7d8a;
+  color: #2a0a10;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+#calc.sh-on .key.shift,
+#calc.al-on .key.alpha {
+  outline: 2px solid #fff;
+}
+.kc.shift .kl,
+.kc.alpha .kl {
+  visibility: hidden;
+}
+/* 방향 패드: 두 칸 폭, 두 줄 높이 */
+.pad {
+  grid-column: span 2;
+  grid-row: span 2;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  align-items: center;
+  justify-items: center;
+  background: #3a4048;
+  border-radius: 999px;
+  padding: 2px 6px;
+  min-height: 62px;
+}
+.pb {
+  border: 0;
+  background: transparent;
+  color: #dfe4ea;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 6px;
+  line-height: 1;
+}
+.pb:active {
+  color: #f0c24b;
+}
+.pb.u {
+  grid-column: 2;
+  grid-row: 1;
+}
+.pb.l {
+  grid-column: 1;
+  grid-row: 2;
+}
+.pc {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 7px;
+  color: #98a6b4;
+  letter-spacing: 0.04em;
+}
+.pb.r {
+  grid-column: 3;
+  grid-row: 2;
+}
+.pb.d {
+  grid-column: 2;
+  grid-row: 3;
+}
+
 </style>
 <header class="appbar" id="bar"></header>
 <main><div class="wrap" id="view"></div></main>
+<aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
 <script>
@@ -1432,6 +1895,3348 @@ button.lesson-row .bar {
   }
 
   G.fmt = { qs, sci, sup, round, num, q, isNice, ratio, linear, coefStr, SQRT3: Math.sqrt(3), SQRT2: Math.sqrt(2) };
+})(globalThis.GISA);
+
+/* ── engine/qnum.js ── */
+// 계산기용 정확한 수 연산.
+// 값 = q + Σ c·√r + p·π  (q, c, p는 분수, r은 제곱 인수가 없는 자연수)
+// 분수·√·π 결과를 "손으로 쓴 것처럼" 정확히 다루고, 정확히 표현할 수 없는 경우에는 null을 돌려줘서
+// 호출한 쪽이 소수(근삿값) 계산으로 넘어가게 한다. (카시오 자연수 표기 계산기의 결과 표시 방식과 같은 목적)
+(function (G) {
+  'use strict';
+
+  // ───────── 분수(BigInt) ─────────
+  const ZERO = 0n;
+  const ONE = 1n;
+  const abs = (a) => (a < ZERO ? -a : a);
+  function gcd(a, b) {
+    a = abs(a);
+    b = abs(b);
+    while (b) {
+      const t = a % b;
+      a = b;
+      b = t;
+    }
+    return a;
+  }
+  function Q(n, d) {
+    if (d === undefined) d = ONE;
+    if (d === ZERO) throw new RangeError('division by zero');
+    if (d < ZERO) {
+      n = -n;
+      d = -d;
+    }
+    const g = gcd(n, d);
+    return g > ONE ? { n: n / g, d: d / g } : { n, d };
+  }
+  const qAdd = (a, b) => Q(a.n * b.d + b.n * a.d, a.d * b.d);
+  const qSub = (a, b) => Q(a.n * b.d - b.n * a.d, a.d * b.d);
+  const qMul = (a, b) => Q(a.n * b.n, a.d * b.d);
+  const qDiv = (a, b) => Q(a.n * b.d, a.d * b.n);
+  const qNeg = (a) => ({ n: -a.n, d: a.d });
+  const qIsZero = (a) => a.n === ZERO;
+  const qIsInt = (a) => a.d === ONE;
+  const qEq = (a, b) => a.n === b.n && a.d === b.d;
+  const qSign = (a) => (a.n > ZERO ? 1 : a.n < ZERO ? -1 : 0);
+  const Q0 = { n: ZERO, d: ONE };
+  const Q1 = { n: ONE, d: ONE };
+
+  function bigToNumber(n) {
+    return Number(n);
+  }
+  function qToNumber(a) {
+    // 아주 큰 분자/분모도 나눗셈이 가능하도록 자릿수를 맞춰서 변환
+    const nn = bigToNumber(a.n);
+    const dd = bigToNumber(a.d);
+    if (isFinite(nn) && isFinite(dd)) return nn / dd;
+    const sn = a.n.toString().length;
+    const sd = a.d.toString().length;
+    const shift = Math.max(sn, sd) - 300;
+    const pow = 10n ** BigInt(Math.max(shift, 0));
+    return bigToNumber(a.n / pow) / bigToNumber(a.d / pow);
+  }
+
+  // 자연수 N = s²·r (r은 제곱 인수 없음). 너무 큰 수는 null(근삿값으로 넘어감)
+  const SQF_LIMIT = 1000000000000n; // 1e12
+  function sqfDecomp(N) {
+    if (N <= ZERO || N > SQF_LIMIT) return null;
+    let n = Number(N);
+    let outside = 1;
+    let inside = 1;
+    for (let p = 2; p * p <= n; p++) {
+      let cnt = 0;
+      while (n % p === 0) {
+        n /= p;
+        cnt++;
+      }
+      if (cnt) {
+        outside *= Math.pow(p, Math.floor(cnt / 2));
+        if (cnt % 2) inside *= p;
+      }
+    }
+    if (n > 1) inside *= n;
+    return { s: BigInt(outside), r: BigInt(inside) };
+  }
+
+  // ───────── 정확한 값 ─────────
+  // { q: Q, r: { "<제곱 인수 없는 자연수>": Q }, p: Q }
+  function mk(q, r, p) {
+    const rr = {};
+    if (r) {
+      Object.keys(r).forEach((k) => {
+        if (!qIsZero(r[k])) rr[k] = r[k];
+      });
+    }
+    return { q: q || Q0, r: rr, p: p || Q0 };
+  }
+  const exInt = (n) => mk(Q(BigInt(n)));
+  const exQ = (q) => mk(q);
+  const exPi = () => mk(Q0, null, Q1);
+  const hasR = (a) => Object.keys(a.r).length > 0;
+  const hasPi = (a) => !qIsZero(a.p);
+  const exIsRat = (a) => !hasR(a) && !hasPi(a);
+  const exIsZero = (a) => qIsZero(a.q) && !hasR(a) && !hasPi(a);
+  const exIsPurePi = (a) => qIsZero(a.q) && !hasR(a) && hasPi(a);
+
+  function exAdd(a, b) {
+    const r = {};
+    Object.keys(a.r).forEach((k) => (r[k] = a.r[k]));
+    Object.keys(b.r).forEach((k) => (r[k] = r[k] ? qAdd(r[k], b.r[k]) : b.r[k]));
+    return mk(qAdd(a.q, b.q), r, qAdd(a.p, b.p));
+  }
+  function exNeg(a) {
+    const r = {};
+    Object.keys(a.r).forEach((k) => (r[k] = qNeg(a.r[k])));
+    return mk(qNeg(a.q), r, qNeg(a.p));
+  }
+  const exSub = (a, b) => exAdd(a, exNeg(b));
+
+  function exMul(a, b) {
+    if (hasPi(a) && (hasPi(b) || hasR(b))) return null;
+    if (hasPi(b) && hasR(a)) return null;
+    let q = qMul(a.q, b.q);
+    const r = {};
+    const addR = (k, c) => (r[k] = r[k] ? qAdd(r[k], c) : c);
+    // 분수 × √ 항
+    Object.keys(b.r).forEach((k) => {
+      if (!qIsZero(a.q)) addR(k, qMul(a.q, b.r[k]));
+    });
+    Object.keys(a.r).forEach((k) => {
+      if (!qIsZero(b.q)) addR(k, qMul(a.r[k], b.q));
+    });
+    // √ × √
+    const ka = Object.keys(a.r);
+    const kb = Object.keys(b.r);
+    for (let i = 0; i < ka.length; i++) {
+      for (let j = 0; j < kb.length; j++) {
+        const ri = BigInt(ka[i]);
+        const rj = BigInt(kb[j]);
+        const g = gcd(ri, rj);
+        const rest = (ri / g) * (rj / g); // 서로소인 두 제곱 인수 없는 수의 곱 → 제곱 인수 없음
+        const c = qMul(qMul(a.r[ka[i]], b.r[kb[j]]), Q(g));
+        if (rest === ONE) q = qAdd(q, c);
+        else addR(rest.toString(), c);
+      }
+    }
+    // π 항
+    let p = Q0;
+    if (hasPi(a)) p = qAdd(p, qMul(a.p, b.q));
+    if (hasPi(b)) p = qAdd(p, qMul(b.p, a.q));
+    return mk(q, r, p);
+  }
+
+  function exScale(a, c) {
+    const r = {};
+    Object.keys(a.r).forEach((k) => (r[k] = qMul(a.r[k], c)));
+    return mk(qMul(a.q, c), r, qMul(a.p, c));
+  }
+
+  function exDiv(a, b) {
+    if (exIsZero(b)) throw new RangeError('division by zero');
+    if (exIsRat(b)) return exScale(a, qDiv(Q1, b.q));
+    if (exIsPurePi(b)) {
+      // (pπ)/(p'π) = p/p'. 그 밖에는 1/π가 되어 표현할 수 없음
+      if (exIsPurePi(a)) return exQ(qDiv(a.p, b.p));
+      if (exIsZero(a)) return a;
+      return null;
+    }
+    if (hasPi(b)) return null;
+    // b가 √ 항을 가질 때: 켤레(conjugate)를 곱해 분모를 유리화
+    let num = a;
+    let den = b;
+    for (let guard = 0; guard < 6 && hasR(den); guard++) {
+      const keys = Object.keys(den.r).sort((x, y) => (BigInt(x) < BigInt(y) ? 1 : -1));
+      const k = keys[0];
+      const conjR = {};
+      Object.keys(den.r).forEach((kk) => (conjR[kk] = kk === k ? qNeg(den.r[kk]) : den.r[kk]));
+      const conj = mk(den.q, conjR, Q0);
+      num = exMul(num, conj);
+      den = exMul(den, conj);
+      if (!num || !den) return null;
+    }
+    if (hasR(den) || !exIsRat(den) || qIsZero(den.q)) return null;
+    return exScale(num, qDiv(Q1, den.q));
+  }
+
+  function exToNumber(a) {
+    let x = qToNumber(a.q);
+    Object.keys(a.r).forEach((k) => {
+      x += qToNumber(a.r[k]) * Math.sqrt(Number(k));
+    });
+    if (hasPi(a)) x += qToNumber(a.p) * Math.PI;
+    return x;
+  }
+  const exSign = (a) => {
+    if (exIsZero(a)) return 0;
+    const x = exToNumber(a);
+    return x > 0 ? 1 : x < 0 ? -1 : 0;
+  };
+  function exEq(a, b) {
+    if (!qEq(a.q, b.q) || !qEq(a.p, b.p)) return false;
+    const ka = Object.keys(a.r);
+    if (ka.length !== Object.keys(b.r).length) return false;
+    return ka.every((k) => b.r[k] && qEq(a.r[k], b.r[k]));
+  }
+
+  function exPowInt(a, k) {
+    if (k === 0) return exInt(1);
+    if (Math.abs(k) > 64) return null;
+    let n = Math.abs(k);
+    let base = a;
+    let acc = exInt(1);
+    while (n > 0) {
+      if (n & 1) {
+        acc = exMul(acc, base);
+        if (!acc) return null;
+      }
+      n >>= 1;
+      if (n > 0) {
+        base = exMul(base, base);
+        if (!base) return null;
+      }
+    }
+    return k < 0 ? exDiv(exInt(1), acc) : acc;
+  }
+
+  // 분수의 제곱근: √(n/d) = √(n·d) / d
+  function exSqrt(a) {
+    if (!exIsRat(a)) return null;
+    if (qSign(a.q) < 0) return null;
+    if (qIsZero(a.q)) return a;
+    const dec = sqfDecomp(a.q.n * a.q.d);
+    if (!dec) return null;
+    const coef = Q(dec.s, a.q.d);
+    if (dec.r === ONE) return exQ(coef);
+    const r = {};
+    r[dec.r.toString()] = coef;
+    return mk(Q0, r, Q0);
+  }
+
+  // 정수 n제곱근 (정확히 떨어질 때만)
+  function bigRoot(n, k) {
+    if (n < ZERO) return null;
+    if (n < 2n) return n;
+    let lo = ZERO;
+    let hi = n;
+    const K = BigInt(k);
+    while (lo < hi) {
+      const mid = (lo + hi + ONE) / 2n;
+      if (mid ** K <= n) lo = mid;
+      else hi = mid - ONE;
+    }
+    return lo ** K === n ? lo : null;
+  }
+  // 분수의 n제곱근(정확히 떨어질 때만, 음수는 홀수 n만)
+  function qRoot(a, k) {
+    let neg = false;
+    let q = a;
+    if (qSign(a) < 0) {
+      if (k % 2 === 0) return null;
+      neg = true;
+      q = qNeg(a);
+    }
+    const rn = bigRoot(q.n, k);
+    const rd = bigRoot(q.d, k);
+    if (rn === null || rd === null) return null;
+    const r = Q(rn, rd);
+    return neg ? qNeg(r) : r;
+  }
+
+  // ───────── 삼각함수의 정확한 값 (15° 배수) ─────────
+  const SIN_TABLE = (function () {
+    // 0°~90°, 15° 간격
+    const half = exQ(Q(1n, 2n));
+    const s6m2 = mk(Q0, { 6: Q(1n, 4n), 2: Q(-1n, 4n) }, Q0); // (√6−√2)/4
+    const s6p2 = mk(Q0, { 6: Q(1n, 4n), 2: Q(1n, 4n) }, Q0); // (√6+√2)/4
+    return {
+      0: exInt(0),
+      15: s6m2,
+      30: half,
+      45: mk(Q0, { 2: Q(1n, 2n) }, Q0),
+      60: mk(Q0, { 3: Q(1n, 2n) }, Q0),
+      75: s6p2,
+      90: exInt(1),
+    };
+  })();
+
+  // 각도(도, 정수) → sin 값. 15의 배수가 아니면 null
+  function sinDegExact(d) {
+    let x = ((d % 360) + 360) % 360;
+    if (x % 15 !== 0) return null;
+    let sign = 1;
+    if (x > 180) {
+      sign = -1;
+      x -= 180;
+    }
+    if (x > 90) x = 180 - x;
+    const v = SIN_TABLE[x];
+    return sign < 0 ? exNeg(v) : v;
+  }
+  const cosDegExact = (d) => sinDegExact(90 - d);
+
+  function tanDegExact(d) {
+    const s = sinDegExact(d);
+    const c = cosDegExact(d);
+    if (s === null || c === null) return undefined; // 정확한 값 없음
+    if (exIsZero(c)) return null; // 정의되지 않음(Math ERROR)
+    return exDiv(s, c);
+  }
+
+  // 정확한 값에서 각도(도) 찾기: sin/cos/tan 값 → 정수 각도 (표에 있는 값만)
+  function inverseDeg(fn, x) {
+    const range = fn === 'sin' ? [-90, 90] : fn === 'cos' ? [0, 180] : [-75, 75];
+    for (let d = range[0]; d <= range[1]; d += 15) {
+      let v;
+      if (fn === 'sin') v = sinDegExact(d);
+      else if (fn === 'cos') v = cosDegExact(d);
+      else {
+        v = tanDegExact(d);
+        if (!v) continue;
+      }
+      if (v && exEq(v, x)) return d;
+    }
+    return null;
+  }
+
+  G.qn = {
+    Q, Q0, Q1, qAdd, qSub, qMul, qDiv, qNeg, qIsZero, qIsInt, qEq, qSign, qToNumber, gcd,
+    mk, exInt, exQ, exPi, hasR, hasPi, exIsRat, exIsZero, exIsPurePi,
+    exAdd, exSub, exNeg, exMul, exDiv, exScale, exToNumber, exSign, exEq, exPowInt, exSqrt,
+    sqfDecomp, bigRoot, qRoot, sinDegExact, cosDegExact, tanDegExact, inverseDeg,
+  };
+})(globalThis.GISA);
+
+/* ── engine/calc-fmt.js ── */
+// 계산기 결과 표시 규칙 (카시오 fx-350ES PLUS 설명서 기준)
+//  - 소수 표시: Norm 1/2, Fix n, Sci n, ENG. 표시는 10자리, 내부는 15자리
+//  - 분수·√·π 표시(자연수 표기): 설명서의 표시 가능 범위를 넘으면 소수로 표시
+// 표시 노드: {t:'tx',s} {t:'frac',n,d} {t:'sqrt',b,idx?} {t:'sup',b} {t:'sub',b} {t:'abs',b} {t:'mix',w,n,d} {t:'cur'} {t:'box'}
+(function (G) {
+  'use strict';
+  const N = G.qn;
+
+  const tx = (s) => ({ t: 'tx', s });
+  const sup = (b) => ({ t: 'sup', b });
+
+  // 숫자 → 15자리 십진수 문자열과 지수: value = d[0].d[1..] × 10^e
+  function digitsOf(x) {
+    const neg = x < 0;
+    const s = Math.abs(x).toExponential(14); // d.dddddddddddddde±x
+    const m = /^(\d)\.(\d+)e([+-]\d+)$/.exec(s);
+    return { neg, d: m[1] + m[2], e: parseInt(m[3], 10) };
+  }
+
+  // 유효 자리수 n으로 반올림(사사오입이 아니라 "0.5 이상 올림")
+  function roundSig(d, e, n) {
+    if (n >= d.length) return { d: d.padEnd(n, '0'), e };
+    const up = d.charCodeAt(n) >= 53; // '5'
+    let kept = d.slice(0, n);
+    if (up) {
+      const arr = kept.split('').map(Number);
+      let i = n - 1;
+      while (i >= 0) {
+        if (arr[i] === 9) {
+          arr[i] = 0;
+          i--;
+        } else {
+          arr[i]++;
+          break;
+        }
+      }
+      if (i < 0) {
+        arr.unshift(1);
+        arr.pop();
+        e += 1;
+      }
+      kept = arr.join('');
+    }
+    return { d: kept, e };
+  }
+
+  const trimZeros = (s) => (s.indexOf('.') === -1 ? s : s.replace(/0+$/, '').replace(/\.$/, ''));
+
+  // d(유효숫자 문자열)·e(지수)를 지수 없이 펼친 문자열
+  function plain(d, e) {
+    if (e >= 0) {
+      const intLen = e + 1;
+      const digits = d.length >= intLen ? d : d.padEnd(intLen, '0');
+      const ip = digits.slice(0, intLen);
+      const fp = digits.slice(intLen);
+      return fp ? ip + '.' + fp : ip;
+    }
+    return '0.' + '0'.repeat(-e - 1) + d;
+  }
+
+  // 소수 표시 → {s: 가수 문자열(부호 포함), exp: 지수|null}
+  function decimalParts(x, setup, engK) {
+    if (x === 0 || Object.is(x, -0)) {
+      if (setup.fmt === 'fix') return { s: setup.n ? '0.' + '0'.repeat(setup.n) : '0', exp: null };
+      if (setup.fmt === 'sci') return { s: setup.n === 0 ? '0' : '0.' + '0'.repeat(setup.n - 1), exp: 0 };
+      return { s: '0', exp: null };
+    }
+    const g = digitsOf(x);
+    const sign = g.neg ? '-' : '';
+    // ENG: 지수를 3의 배수로 맞춘 표기
+    if (engK !== null && engK !== undefined) {
+      const r = roundSig(g.d, g.e, 10);
+      const base = Math.floor(r.e / 3) * 3;
+      const exp = base + 3 * engK;
+      const shift = r.e - exp; // 가수에서 정수 부분 자릿수 - 1
+      let m;
+      if (shift >= 0) {
+        const digits = r.d.padEnd(shift + 1, '0');
+        m = digits.slice(0, shift + 1) + (digits.length > shift + 1 ? '.' + digits.slice(shift + 1) : '');
+      } else {
+        m = '0.' + '0'.repeat(-shift - 1) + r.d;
+      }
+      return { s: sign + trimZeros(m), exp };
+    }
+    if (setup.fmt === 'sci') {
+      const nsig = setup.n === 0 ? 10 : setup.n;
+      const r = roundSig(g.d, g.e, nsig);
+      const m = r.d[0] + (nsig > 1 ? '.' + r.d.slice(1) : '');
+      return { s: sign + m, exp: r.e };
+    }
+    if (setup.fmt === 'fix') {
+      const nsig = g.e + 1 + setup.n; // 소수 n째 자리까지 필요한 유효 자리수
+      if (g.e >= 10) {
+        const r = roundSig(g.d, g.e, 10);
+        return { s: sign + trimZeros(r.d[0] + '.' + r.d.slice(1)), exp: r.e };
+      }
+      if (nsig < 0) return { s: setup.n ? '0.' + '0'.repeat(setup.n) : '0', exp: null };
+      let r;
+      if (nsig === 0) {
+        // 첫 유효숫자 바로 앞 자리에서 반올림
+        r = g.d.charCodeAt(0) >= 53 ? { d: '1', e: g.e + 1 } : { d: '0', e: g.e };
+        if (r.d === '0') return { s: setup.n ? '0.' + '0'.repeat(setup.n) : '0', exp: null };
+      } else {
+        r = roundSig(g.d, g.e, nsig);
+      }
+      // r을 소수 n자리로 펼침
+      const intDigits = r.e + 1;
+      let body = r.d.padEnd(Math.max(r.d.length, intDigits + setup.n), '0');
+      let s;
+      if (r.e >= 0) {
+        s = body.slice(0, intDigits) + (setup.n ? '.' + body.slice(intDigits, intDigits + setup.n) : '');
+      } else {
+        const zeros = '0'.repeat(-r.e - 1);
+        s = '0.' + (zeros + body).slice(0, setup.n);
+      }
+      if (r.e >= 10) {
+        const rr = roundSig(g.d, g.e, 10);
+        return { s: sign + trimZeros(rr.d[0] + '.' + rr.d.slice(1)), exp: rr.e };
+      }
+      return { s: sign + s, exp: null };
+    }
+    // Norm 1 / Norm 2
+    const r = roundSig(g.d, g.e, 10);
+    const low = setup.n === 2 ? -9 : -2; // 이보다 작으면 지수 표시
+    if (r.e < low || r.e >= 10) {
+      return { s: sign + trimZeros(r.d[0] + '.' + r.d.slice(1)), exp: r.e };
+    }
+    return { s: sign + trimZeros(plain(r.d, r.e)), exp: null };
+  }
+
+  function dot(s, setup) {
+    return setup.dot === 'Comma' ? s.replace('.', ',') : s;
+  }
+
+  function decimalNodes(x, setup, engK) {
+    const p = decimalParts(x, setup, engK);
+    const nodes = [tx(dot(p.s, setup))];
+    if (p.exp !== null) nodes.push(tx('×10'), sup([tx(String(p.exp).replace('-', '−'))]));
+    return nodes;
+  }
+
+  // ───────── 정확한 값(분수·√·π) 표시 ─────────
+  const bigLen = (b) => (b < 0n ? -b : b).toString().length;
+  const neg = (s) => s.replace(/^-/, '−');
+
+  // 분수 표시 가능 범위(자릿수 합 10 이내)
+  function fracFits(q, mixed, linear) {
+    const n = q.n < 0n ? -q.n : q.n;
+    if (mixed && n >= q.d) {
+      const w = n / q.d;
+      const r = n % q.d;
+      if (r === 0n) return bigLen(w) <= 10;
+      return bigLen(w) + bigLen(r) + bigLen(q.d) + 2 <= 10;
+    }
+    return bigLen(n) + bigLen(q.d) + (linear ? 1 : 0) <= 10;
+  }
+
+  function rationalNodes(q, setup, linear) {
+    const isNeg = q.n < 0n;
+    const n = isNeg ? -q.n : q.n;
+    const sign = isNeg ? [tx('−')] : [];
+    if (q.d === 1n) return bigLen(n) <= 10 ? sign.concat([tx(n.toString())]) : null;
+    const mixed = setup.frac === 'ab/c' && n > q.d;
+    if (!fracFits(q, mixed, linear)) return null;
+    if (linear) {
+      if (mixed) return sign.concat([tx(`${n / q.d}⌟${n % q.d}⌟${q.d}`)]);
+      return sign.concat([tx(`${n}⌟${q.d}`)]);
+    }
+    if (mixed) {
+      return sign.concat([{ t: 'mix', w: [tx((n / q.d).toString())], n: [tx((n % q.d).toString())], d: [tx(q.d.toString())] }]);
+    }
+    return sign.concat([{ t: 'frac', n: [tx(n.toString())], d: [tx(q.d.toString())] }]);
+  }
+
+  function lcm(a, b) {
+    return (a / N.gcd(a, b)) * b;
+  }
+
+  // 항들을 한 줄 문자열 노드로: [{c: BigInt(부호 포함 정수 계수), r: BigInt|null(√ 수), pi: bool}]
+  function termsNodes(terms) {
+    const out = [];
+    terms.forEach((t, i) => {
+      const mag = t.c < 0n ? -t.c : t.c;
+      const sign = t.c < 0n ? '−' : i > 0 ? '+' : '';
+      if (sign) out.push(tx(sign));
+      if (t.r !== null) {
+        if (mag !== 1n) out.push(tx(mag.toString()));
+        out.push({ t: 'sqrt', b: [tx(t.r.toString())] });
+      } else if (t.pi) {
+        if (mag !== 1n) out.push(tx(mag.toString()));
+        out.push(tx('π'));
+      } else {
+        out.push(tx(mag.toString()));
+      }
+    });
+    return out;
+  }
+
+  // 정확한 값 → 노드(표시 가능 범위를 넘으면 null)
+  function exactNodes(ex, setup, linear) {
+    const hasR = N.hasR(ex);
+    const hasPi = N.hasPi(ex);
+    if (!hasR && !hasPi) return rationalNodes(ex.q, setup, linear);
+    if (linear) return null; // √·π 표시는 자연수 표기(MathO)에서만
+    // 항 모으기
+    const items = []; // {q: Q, r: BigInt|null, pi: bool}
+    if (!N.qIsZero(ex.q)) items.push({ q: ex.q, r: null, pi: false });
+    Object.keys(ex.r)
+      .sort((a, b) => (BigInt(a) < BigInt(b) ? 1 : -1))
+      .forEach((k) => items.push({ q: ex.r[k], r: BigInt(k), pi: false }));
+    if (hasPi) items.push({ q: ex.p, r: null, pi: true });
+    if (hasPi) {
+      if (items.length !== 1) return null; // π는 다른 항과 섞어 표시하지 않음
+      const it = items[0];
+      if (Math.abs(N.qToNumber(it.q) * Math.PI) >= 1e6) return null;
+      const n = it.q.n < 0n ? -it.q.n : it.q.n;
+      if (n >= 1000n || it.q.d >= 1000n) return null;
+      const num = [];
+      if (n !== 1n) num.push(tx(n.toString()));
+      num.push(tx('π'));
+      const sign = it.q.n < 0n ? [tx('−')] : [];
+      if (it.q.d === 1n) return sign.concat(num);
+      return sign.concat([{ t: 'frac', n: num, d: [tx(it.q.d.toString())] }]);
+    }
+    if (items.length > 2) return null;
+    // 공통 분모
+    let D = 1n;
+    items.forEach((it) => (D = lcm(D, it.q.d)));
+    const terms = items.map((it) => ({ c: (it.q.n * D) / it.q.d, r: it.r, pi: false }));
+    // 표시 가능 범위: 계수 < 100, √ 안 < 1000, 분모 < 100
+    const lim = terms.every((t) => (t.c < 0n ? -t.c : t.c) < 100n && (t.r === null || t.r < 1000n)) && D < 100n;
+    if (!lim) return null;
+    const body = termsNodes(terms);
+    if (D === 1n) return body;
+    // 부호는 분자 맨 앞(−)을 분수 앞으로 뺀다
+    let lead = [];
+    if (terms[0].c < 0n && terms.every((t) => t.c < 0n)) {
+      const flipped = terms.map((t) => ({ ...t, c: -t.c }));
+      return [tx('−'), { t: 'frac', n: termsNodes(flipped), d: [tx(D.toString())] }];
+    }
+    void lead;
+    return [{ t: 'frac', n: body, d: [tx(D.toString())] }];
+  }
+
+  // 노드를 평문으로 (테스트·접근성용)
+  function flat(nodes) {
+    return nodes
+      .map((n) => {
+        switch (n.t) {
+          case 'tx':
+            return n.s;
+          case 'frac': {
+            const a = flat(n.n);
+            const b = flat(n.d);
+            const w = (s) => (/[+−\-×÷]/.test(s.replace(/^[−-]/, '')) ? '(' + s + ')' : s);
+            return w(a) + '/' + w(b);
+          }
+          case 'mix':
+            return flat(n.w) + ' ' + flat(n.n) + '/' + flat(n.d);
+          case 'sqrt': {
+            const b = flat(n.b);
+            const r = /^[0-9.]+$/.test(b) ? b : '(' + b + ')';
+            return (n.idx ? flat(n.idx) : '') + '√' + r;
+          }
+          case 'sup':
+            return '^' + (/^[0-9−]+$/.test(flat(n.b)) ? flat(n.b) : '(' + flat(n.b) + ')');
+          case 'sub':
+            return '_' + flat(n.b);
+          case 'abs':
+            return '|' + flat(n.b) + '|';
+          case 'cur':
+            return '‸';
+          case 'box':
+            return '□';
+          default:
+            return '';
+        }
+      })
+      .join('');
+  }
+
+  G.cfmt = { digitsOf, roundSig, decimalParts, decimalNodes, exactNodes, rationalNodes, flat, tx, sup, fracFits };
+})(globalThis.GISA);
+
+/* ── engine/calc-eval.js ── */
+// 계산기 수식 계산: 입력 토큰 → 값.
+// 값 V = { ex: 정확한 값|null, f: 근삿값(15자리), dec: 소수로 입력한 값이 섞였는지 }
+// 우선순위는 카시오 설명서 "계산 우선 순위"와 같다:
+//  1 괄호 2 함수( ) 3 후위(x² x³ x⁻¹ x! ° % 등)·거듭제곱·n제곱근 4 분수 5 (−) 6 추정값 7 생략된 곱
+//  8 nPr nCr 9 × ÷ 10 + −  (같은 순위는 왼쪽부터)
+(function (G) {
+  'use strict';
+  const N = G.qn;
+  const { Q, Q0, Q1 } = N;
+
+  class CalcError extends Error {
+    constructor(kind, pos) {
+      super(kind + ' ERROR');
+      this.kind = kind;
+      this.pos = pos;
+    }
+  }
+  const mathErr = (pos) => new CalcError('Math', pos);
+  const syntaxErr = (pos) => new CalcError('Syntax', pos);
+  const argErr = (pos) => new CalcError('Argument', pos);
+
+  // ───────── 값 ─────────
+  const r15 = (x) => (x === 0 || !isFinite(x) ? x : Number(x.toPrecision(15)));
+  const mkV = (ex, f, dec) => ({ ex, f, dec: !!dec });
+  function fin(v) {
+    if (!isFinite(v.f) || Math.abs(v.f) >= 1e100) throw mathErr();
+    if (v.f !== 0 && Math.abs(v.f) < 1e-99) return mkV(N.exInt(0), 0, v.dec);
+    return v;
+  }
+  const vEx = (ex, dec) => fin(mkV(ex, r15(N.exToNumber(ex)), dec));
+  const vF = (f, dec) => fin(mkV(null, r15(f), dec));
+  const vInt = (n) => vEx(N.exInt(n));
+  const vQ = (q, dec) => vEx(N.exQ(q), dec);
+  const isZero = (v) => (v.ex ? N.exIsZero(v.ex) : v.f === 0);
+  const vInteger = (v) => {
+    // 정수이면 BigInt, 아니면 null
+    if (v.ex) return N.exIsRat(v.ex) && N.qIsInt(v.ex.q) ? v.ex.q.n : null;
+    return Number.isInteger(v.f) && Math.abs(v.f) < 1e15 ? BigInt(v.f) : null;
+  };
+
+  function vAdd(a, b) {
+    if (a.ex && b.ex) return vEx(N.exAdd(a.ex, b.ex), a.dec || b.dec);
+    return vF(a.f + b.f, a.dec || b.dec);
+  }
+  function vSub(a, b) {
+    if (a.ex && b.ex) return vEx(N.exSub(a.ex, b.ex), a.dec || b.dec);
+    return vF(a.f - b.f, a.dec || b.dec);
+  }
+  function vMul(a, b) {
+    if (a.ex && b.ex) {
+      const e = N.exMul(a.ex, b.ex);
+      if (e) return vEx(e, a.dec || b.dec);
+    }
+    return vF(a.f * b.f, a.dec || b.dec);
+  }
+  function vDiv(a, b) {
+    if (isZero(b)) throw mathErr();
+    if (a.ex && b.ex) {
+      const e = N.exDiv(a.ex, b.ex);
+      if (e) return vEx(e, a.dec || b.dec);
+    }
+    return vF(a.f / b.f, a.dec || b.dec);
+  }
+  const vNeg = (a) => (a.ex ? vEx(N.exNeg(a.ex), a.dec) : vF(-a.f, a.dec));
+  const vAbs = (a) => (a.f < 0 ? vNeg(a) : a);
+  const v100 = vInt(100);
+
+  // ───────── 각도 ─────────
+  const toRad = (x, u) => (u === 'Deg' ? (x * Math.PI) / 180 : u === 'Gra' ? (x * Math.PI) / 200 : x);
+  const fromRad = (r, u) => (u === 'Deg' ? (r * 180) / Math.PI : u === 'Gra' ? (r * 200) / Math.PI : r);
+  const ANGLE_MAX = { Deg: 9e9, Rad: 157079632.7, Gra: 1e10 };
+
+  // 정확히 정수 도(°)로 표현되는 각도면 BigInt 도, 아니면 null
+  function exactDeg(v, unit) {
+    if (!v.ex) return null;
+    let d;
+    if (unit === 'Deg') {
+      if (!N.exIsRat(v.ex)) return null;
+      d = v.ex.q;
+    } else if (unit === 'Gra') {
+      if (!N.exIsRat(v.ex)) return null;
+      d = N.qMul(v.ex.q, Q(9n, 10n));
+    } else if (N.exIsZero(v.ex)) d = Q0;
+    else if (N.exIsPurePi(v.ex)) d = N.qMul(v.ex.p, Q(180n));
+    else return null;
+    return d.d === 1n ? d.n : null;
+  }
+  function fromDegExact(d, unit, dec) {
+    // d: 정수 도
+    if (unit === 'Deg') return vEx(N.exInt(d), dec);
+    if (unit === 'Gra') return vEx(N.exQ(Q(BigInt(d) * 10n, 9n)), dec);
+    if (d === 0) return vInt(0);
+    return vEx(N.mk(Q0, null, Q(BigInt(d), 180n)), dec);
+  }
+
+  function checkAngle(v, unit) {
+    if (Math.abs(v.f) >= ANGLE_MAX[unit]) throw mathErr();
+  }
+  const snap0 = (x) => (Math.abs(x) < 1e-15 ? 0 : x);
+
+  function vTrig(name, v, unit) {
+    checkAngle(v, unit);
+    const d = exactDeg(v, unit);
+    if (d !== null) {
+      const dd = Number(((d % 360n) + 360n) % 360n);
+      let e;
+      if (name === 'sin') e = N.sinDegExact(dd);
+      else if (name === 'cos') e = N.cosDegExact(dd);
+      else {
+        e = N.tanDegExact(dd);
+        if (e === null) throw mathErr();
+      }
+      if (e) return vEx(e, v.dec);
+    }
+    const r = toRad(v.f, unit);
+    let x;
+    if (name === 'sin') x = Math.sin(r);
+    else if (name === 'cos') x = Math.cos(r);
+    else {
+      const c = Math.cos(r);
+      if (Math.abs(c) < 1e-15) throw mathErr();
+      x = Math.tan(r);
+    }
+    return vF(snap0(x), v.dec);
+  }
+
+  function vInvTrig(name, v, unit) {
+    if (v.ex) {
+      const d = N.inverseDeg(name, v.ex);
+      if (d !== null) return fromDegExact(d, unit, v.dec);
+    }
+    let r;
+    if (name === 'sin') {
+      if (Math.abs(v.f) > 1) throw mathErr();
+      r = Math.asin(v.f);
+    } else if (name === 'cos') {
+      if (Math.abs(v.f) > 1) throw mathErr();
+      r = Math.acos(v.f);
+    } else r = Math.atan(v.f);
+    return vF(fromRad(r, unit), v.dec);
+  }
+
+  function vHyp(name, v) {
+    const x = v.f;
+    let r;
+    switch (name) {
+      case 'sinh':
+        if (Math.abs(x) > 230.2585092) throw mathErr();
+        r = Math.sinh(x);
+        break;
+      case 'cosh':
+        if (Math.abs(x) > 230.2585092) throw mathErr();
+        r = Math.cosh(x);
+        break;
+      case 'tanh':
+        r = Math.tanh(x);
+        break;
+      case 'asinh':
+        r = Math.asinh(x);
+        break;
+      case 'acosh':
+        if (x < 1) throw mathErr();
+        r = Math.acosh(x);
+        break;
+      default:
+        if (Math.abs(x) >= 1) throw mathErr();
+        r = Math.atanh(x);
+    }
+    if (isZero(v) && (name === 'sinh' || name === 'tanh' || name === 'asinh' || name === 'atanh')) return vInt(0);
+    if (name === 'cosh' && isZero(v)) return vInt(1);
+    if (name === 'acosh' && v.ex && N.exEq(v.ex, N.exInt(1))) return vInt(0);
+    return vF(r, v.dec);
+  }
+
+  // ───────── 지수·로그·거듭제곱 ─────────
+  const isPow10 = (n) => /^10*$/.test(n.toString());
+  function log10Exact(q) {
+    if (q.n <= 0n) return null;
+    if (q.d === 1n && isPow10(q.n)) return q.n.toString().length - 1;
+    if (q.n === 1n && isPow10(q.d)) return -(q.d.toString().length - 1);
+    return null;
+  }
+  function vLog(v) {
+    if (v.f <= 0 || (v.ex && N.exSign(v.ex) <= 0)) throw mathErr();
+    if (v.ex && N.exIsRat(v.ex)) {
+      const k = log10Exact(v.ex.q);
+      if (k !== null) return vInt(k);
+    }
+    return vF(Math.log10(v.f), v.dec);
+  }
+  function vLn(v) {
+    if (v.f <= 0) throw mathErr();
+    if (v.ex && N.exEq(v.ex, N.exInt(1))) return vInt(0);
+    return vF(Math.log(v.f), v.dec);
+  }
+  function vLogAB(a, b) {
+    if (a.f <= 0 || a.f === 1 || b.f <= 0) throw mathErr();
+    const dec = a.dec || b.dec;
+    if (a.ex && b.ex && N.exIsRat(a.ex) && N.exIsRat(b.ex)) {
+      const k = Math.round(Math.log(b.f) / Math.log(a.f));
+      if (Math.abs(k) <= 64) {
+        const p = N.exPowInt(a.ex, k);
+        if (p && N.exEq(p, b.ex)) return vInt(k);
+      }
+    }
+    return vF(Math.log(b.f) / Math.log(a.f), dec);
+  }
+  function vExp10(v) {
+    if (v.f > 99.99999999) throw mathErr();
+    const k = vInteger(v);
+    if (k !== null && v.ex && k >= -99n && k <= 99n) {
+      const kk = Number(k);
+      const q = kk >= 0 ? Q(10n ** BigInt(kk)) : Q(1n, 10n ** BigInt(-kk));
+      return vQ(q, v.dec);
+    }
+    return vF(Math.pow(10, v.f), v.dec);
+  }
+  function vExpE(v) {
+    if (v.f > 230.2585092) throw mathErr();
+    if (isZero(v)) return vInt(1);
+    return vF(Math.exp(v.f), v.dec);
+  }
+  function vSqrt(v) {
+    if (v.f < 0 || (v.ex && N.exSign(v.ex) < 0)) throw mathErr();
+    if (v.ex) {
+      const e = N.exSqrt(v.ex);
+      if (e) return vEx(e, v.dec);
+    }
+    return vF(Math.sqrt(v.f), v.dec);
+  }
+  function vCbrt(v) {
+    if (v.ex && N.exIsRat(v.ex)) {
+      const r = N.qRoot(v.ex.q, 3);
+      if (r) return vQ(r, v.dec);
+    }
+    return vF(Math.cbrt(v.f), v.dec);
+  }
+  // x의 y제곱
+  function vPow(a, b) {
+    const dec = a.dec || b.dec;
+    if (isZero(a)) {
+      if (b.f > 0) return vInt(0);
+      throw mathErr();
+    }
+    // 정수 지수
+    const k = vInteger(b);
+    if (k !== null && b.ex && a.ex) {
+      const kk = Number(k);
+      if (Math.abs(kk) <= 64) {
+        const e = N.exPowInt(a.ex, kk);
+        if (e) return vEx(e, dec);
+      }
+    }
+    // 분수 지수 p/q (밑이 분수이고 정확히 떨어질 때)
+    if (b.ex && N.exIsRat(b.ex) && !N.qIsInt(b.ex.q) && a.ex && N.exIsRat(a.ex)) {
+      const q = b.ex.q;
+      if (q.d <= 12n) {
+        const root = N.qRoot(a.ex.q, Number(q.d));
+        if (root) {
+          const e = N.exPowInt(N.exQ(root), Number(q.n));
+          if (e) return vEx(e, dec);
+        }
+      }
+    }
+    if (a.f > 0) return vF(Math.pow(a.f, b.f), dec);
+    // 음수 밑: 정수 지수 또는 홀수 분모의 분수 지수만
+    if (k !== null) return vF(Math.pow(a.f, b.f), dec);
+    if (b.ex && N.exIsRat(b.ex) && b.ex.q.d % 2n === 1n) {
+      const odd = b.ex.q.n % 2n !== 0n;
+      const mag = Math.pow(-a.f, b.f);
+      return vF(odd ? -mag : mag, dec);
+    }
+    throw mathErr();
+  }
+  // 지수가 idx인 n제곱근
+  function vRoot(idx, body) {
+    if (isZero(idx)) throw mathErr();
+    const dec = idx.dec || body.dec;
+    const k = vInteger(idx);
+    if (k !== null && body.ex && N.exIsRat(body.ex) && k > 0n && k <= 64n) {
+      const r = N.qRoot(body.ex.q, Number(k));
+      if (r) return vQ(r, dec);
+    }
+    if (body.f < 0) {
+      if (k !== null && k % 2n !== 0n) return vF(-Math.pow(-body.f, 1 / idx.f), dec);
+      throw mathErr();
+    }
+    return vF(Math.pow(body.f, 1 / idx.f), dec);
+  }
+  const BIG_LIMIT = 10n ** 100n;
+  function vFact(v) {
+    const n = vInteger(v);
+    if (n === null || n < 0n || n > 69n) throw mathErr();
+    let r = 1n;
+    for (let i = 2n; i <= n; i++) r *= i;
+    return vQ(Q(r));
+  }
+  function nPrCr(kind, a, b) {
+    const n = vInteger(a);
+    const r = vInteger(b);
+    if (n === null || r === null) throw argErr();
+    if (n < 0n || r < 0n || n >= 10n ** 10n || r > n) throw argErr();
+    const k = kind === 'nCr' && r > n - r ? n - r : r;
+    let res = 1n;
+    for (let i = 0n; i < k; i++) {
+      res *= n - i;
+      if (kind === 'nCr') res /= i + 1n; // 연속된 정수의 곱은 (i+1)!로 항상 나누어떨어짐
+      if (res >= BIG_LIMIT) throw mathErr();
+    }
+    if (kind === 'nPr') {
+      // nPr은 r개 모두 곱함(위 루프는 r까지 곱했음)
+      let p = 1n;
+      for (let i = 0n; i < r; i++) {
+        p *= n - i;
+        if (p >= BIG_LIMIT) throw mathErr();
+      }
+      return vQ(Q(p));
+    }
+    return vQ(Q(res));
+  }
+
+  // 각도 단위 후위 연산자(°, r, g): 현재 각도 단위로 변환
+  function vUnit(v, from, to) {
+    if (from === to) return v;
+    if (from === 'Deg' && to === 'Rad') return vMul(v, vDiv(vEx(N.exPi()), vInt(180)));
+    if (from === 'Deg' && to === 'Gra') return vMul(v, vQ(Q(10n, 9n)));
+    if (from === 'Rad' && to === 'Deg') return vMul(v, vDiv(vInt(180), vEx(N.exPi())));
+    if (from === 'Rad' && to === 'Gra') return vMul(v, vDiv(vInt(200), vEx(N.exPi())));
+    if (from === 'Gra' && to === 'Deg') return vMul(v, vQ(Q(9n, 10n)));
+    return vMul(v, vDiv(vEx(N.exPi()), vInt(200))); // Gra → Rad
+  }
+
+  // 직교 ↔ 극좌표
+  function polar(x, y, unit) {
+    // r = √(x²+y²), θ ∈ (−180°, 180°]
+    const dec = x.dec || y.dec;
+    let r;
+    const x2y2 = vAdd(vMul(x, x), vMul(y, y));
+    r = vSqrt(x2y2);
+    let theta;
+    if (isZero(x) && isZero(y)) throw mathErr();
+    if (x.ex && y.ex) {
+      let d = null;
+      if (isZero(x)) d = N.exSign(y.ex) > 0 ? 90 : -90;
+      else if (isZero(y)) d = N.exSign(x.ex) > 0 ? 0 : 180;
+      else {
+        const t = N.exDiv(y.ex, x.ex);
+        const base = t ? N.inverseDeg('tan', t) : null;
+        if (base !== null) {
+          d = base;
+          if (N.exSign(x.ex) < 0) d = base + (N.exSign(y.ex) >= 0 ? 180 : -180);
+        }
+      }
+      if (d !== null) theta = fromDegExact(d, unit, dec);
+    }
+    if (!theta) theta = vF(fromRad(Math.atan2(y.f, x.f), unit), dec);
+    return { r, theta };
+  }
+  function rect(r, theta, unit) {
+    const c = vTrig('cos', theta, unit);
+    const s = vTrig('sin', theta, unit);
+    return { x: vMul(r, c), y: vMul(r, s) };
+  }
+
+  // 지정한 표시 형식(Norm/Fix/Sci)으로 반올림한 값 (Rnd 함수)
+  function vRnd(v, setup) {
+    if (v.f === 0) return v;
+    const g = G.cfmt.digitsOf(v.f);
+    let nsig;
+    if (setup.fmt === 'fix') nsig = g.e + 1 + setup.n;
+    else if (setup.fmt === 'sci') nsig = setup.n === 0 ? 10 : setup.n;
+    else nsig = 10;
+    if (nsig <= 0) return vInt(0);
+    const r = G.cfmt.roundSig(g.d, g.e, nsig);
+    // 반올림된 십진수를 정확한 분수로
+    const digits = BigInt(r.d);
+    const scale = r.e - (r.d.length - 1); // 값 = digits × 10^scale
+    const q = scale >= 0 ? Q(digits * 10n ** BigInt(scale)) : Q(digits, 10n ** BigInt(-scale));
+    return vQ(g.neg ? N.qNeg(q) : q, true);
+  }
+
+  // ───────── 파서 ─────────
+  const isTok = (it, k, v) => !!it && !!it.t && it.t.k === k && (v === undefined || it.t.v === v);
+  const POST_UNITS = { deg: 'Deg', rad: 'Rad', gra: 'Gra' };
+
+  // 토큰 → 트리(구조 토큰 S…M…E를 묶음). 항목: {t, i, e} 또는 {s, slots, i0, markers, iE, i, e}
+  function toTree(tokens) {
+    const root = [];
+    const frames = [];
+    let cur = root;
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (t.k === 'S') {
+        const node = { s: t.s, slots: [[]], i0: i, markers: [], iE: -1, i, e: -1 };
+        cur.push(node);
+        frames.push({ node, parent: cur });
+        cur = node.slots[0];
+      } else if (t.k === 'M') {
+        const f = frames[frames.length - 1];
+        f.node.markers.push(i);
+        f.node.slots.push([]);
+        cur = f.node.slots[f.node.slots.length - 1];
+      } else if (t.k === 'E') {
+        const f = frames.pop();
+        f.node.iE = i;
+        f.node.e = i + 1;
+        cur = f.parent;
+      } else cur.push({ t, i, e: i + 1 });
+    }
+    return root;
+  }
+
+  class Parser {
+    constructor(items, ctx, depth) {
+      this.items = items;
+      this.i = 0;
+      this.ctx = ctx;
+      this.depth = depth || 0;
+      this.last = items.length ? items[0].i : 0;
+    }
+    peek() {
+      return this.items[this.i];
+    }
+    next() {
+      const it = this.items[this.i++];
+      if (it) this.last = it.e;
+      return it;
+    }
+    // 연산 중 오류에 위치를 붙여서 던진다
+    wrap(fn) {
+      try {
+        return fn();
+      } catch (e) {
+        if (e instanceof CalcError && e.pos === undefined) e.pos = this.last;
+        throw e;
+      }
+    }
+    sub(items, item) {
+      if (!items.length) throw syntaxErr(item.e);
+      if (this.depth > 24) throw new CalcError('Stack', item.e);
+      const p = new Parser(items, this.ctx, this.depth + 1);
+      const v = p.parseAdd();
+      if (p.i < items.length) throw syntaxErr(items[p.i].i);
+      this.last = item.e;
+      return v;
+    }
+
+    parseAdd() {
+      let v = this.parseMul();
+      for (;;) {
+        const it = this.peek();
+        if (isTok(it, 'op', '+') || isTok(it, 'op', '-')) {
+          this.next();
+          const r = this.parseMul();
+          v = this.wrap(() => (it.t.v === '+' ? vAdd(v, r) : vSub(v, r)));
+        } else return v;
+      }
+    }
+    parseMul() {
+      let v = this.parseNpr();
+      for (;;) {
+        const it = this.peek();
+        if (isTok(it, 'op', '*') || isTok(it, 'op', '/')) {
+          this.next();
+          const r = this.parseNpr();
+          v = this.wrap(() => (it.t.v === '*' ? vMul(v, r) : vDiv(v, r)));
+        } else return v;
+      }
+    }
+    parseNpr() {
+      let v = this.parseImplicit();
+      for (;;) {
+        const it = this.peek();
+        if (isTok(it, 'op', 'nPr') || isTok(it, 'op', 'nCr')) {
+          this.next();
+          const r = this.parseImplicit();
+          v = this.wrap(() => nPrCr(it.t.v, v, r));
+        } else return v;
+      }
+    }
+    startsFactor(it) {
+      if (!it) return false;
+      if (it.s) return it.s !== 'pow' && it.s !== 'x10';
+      const k = it.t.k;
+      return k === 'd' || k === 'lp' || k === 'fn' || k === 'c' || k === 'var' || k === 'ans' || k === 'ran' || k === 'val' || k === 'stat';
+    }
+    parseImplicit() {
+      let v = this.parseUnary();
+      while (this.startsFactor(this.peek())) {
+        const it = this.peek();
+        if (isTok(it, 'stat') && STAT_POST[it.t.v]) break;
+        const r = this.parseUnary();
+        v = this.wrap(() => vMul(v, r));
+      }
+      return v;
+    }
+    parseUnary() {
+      const it = this.peek();
+      if (isTok(it, 'neg')) {
+        this.next();
+        const v = this.parseUnary();
+        return this.wrap(() => vNeg(v));
+      }
+      return this.parsePostfix();
+    }
+    parsePostfix() {
+      let v = this.parsePrimary();
+      const setup = this.ctx.setup;
+      for (;;) {
+        const it = this.peek();
+        if (!it) return v;
+        if (it.s === 'pow') {
+          const e = this.sub(it.slots[0], it);
+          this.i++;
+          const base = v;
+          v = this.wrap(() => vPow(base, e));
+        } else if (it.s === 'x10') {
+          const e = this.sub(it.slots[0], it);
+          this.i++;
+          const base = v;
+          v = this.wrap(() => vMul(base, vExp10(e)));
+        } else if (isTok(it, 'post')) {
+          this.next();
+          const base = v;
+          switch (it.t.v) {
+            case 'x2':
+              v = this.wrap(() => vMul(base, base));
+              break;
+            case 'x3':
+              v = this.wrap(() => vMul(vMul(base, base), base));
+              break;
+            case 'xinv':
+              v = this.wrap(() => vDiv(vInt(1), base));
+              break;
+            case 'fact':
+              v = this.wrap(() => vFact(base));
+              break;
+            case 'pct':
+              v = this.wrap(() => vDiv(base, v100));
+              break;
+            default:
+              v = this.wrap(() => vUnit(base, POST_UNITS[it.t.v], setup.angle));
+          }
+        } else if (isTok(it, 'powl')) {
+          // 리니어 표기의 ^( … )
+          this.next();
+          const e = this.parseAdd();
+          if (isTok(this.peek(), 'rp')) this.next();
+          const base = v;
+          v = this.wrap(() => vPow(base, e));
+        } else if (isTok(it, 'nrootl')) {
+          // 리니어 표기: 지수 ˣ√( … )
+          this.next();
+          const body = this.parseAdd();
+          if (isTok(this.peek(), 'rp')) this.next();
+          const idx = v;
+          v = this.wrap(() => vRoot(idx, body));
+        } else if (isTok(it, 'stat') && STAT_POST[it.t.v]) {
+          this.next();
+          const base = v;
+          v = this.wrap(() => this.ctx.estimate(it.t.v, base));
+        } else return v;
+      }
+    }
+
+    // 숫자(소수·60진수·리니어 분수)
+    literal() {
+      let s = '';
+      let dots = 0;
+      let startI = this.peek().i;
+      while (isTok(this.peek(), 'd')) {
+        const c = this.next().t.v;
+        if (c === '.') dots++;
+        s += c;
+      }
+      if (dots > 1 || s === '.' || !/\d/.test(s)) throw syntaxErr(this.last);
+      return { s, pos: startI };
+    }
+    litValue(s) {
+      const dec = s.indexOf('.') !== -1;
+      if (!dec) return vQ(Q(BigInt(s)), false);
+      const [ip, fp] = s.split('.');
+      const digits = BigInt((ip || '0') + fp);
+      return vQ(Q(digits, 10n ** BigInt(fp.length)), true);
+    }
+    parseNumber() {
+      let v = this.litValue(this.literal().s);
+      // 도·분·초
+      if (isTok(this.peek(), 'dms')) {
+        this.next();
+        let total = v;
+        let div = 60;
+        let part = 0;
+        // 분
+        while (part < 2 && isTok(this.peek(), 'd')) {
+          const m = this.litValue(this.literal().s);
+          if (!isTok(this.peek(), 'dms')) throw syntaxErr(this.last);
+          this.next();
+          total = this.wrap(() => vAdd(total, vDiv(m, vInt(div))));
+          div *= 60;
+          part++;
+        }
+        return Object.assign({}, total, { dms: true });
+      }
+      // 리니어 분수: 분자⌟분모, 정수⌟분자⌟분모
+      if (isTok(this.peek(), 'fsep')) {
+        this.next();
+        const b = this.litValue(this.literal().s);
+        if (isTok(this.peek(), 'fsep')) {
+          this.next();
+          const c = this.litValue(this.literal().s);
+          const whole = v;
+          return this.wrap(() => vAdd(whole, vDiv(b, c)));
+        }
+        const a = v;
+        return this.wrap(() => vDiv(a, b));
+      }
+      return v;
+    }
+
+    args() {
+      const out = [];
+      if (isTok(this.peek(), 'rp')) throw syntaxErr(this.peek().i);
+      out.push(this.parseAdd());
+      while (isTok(this.peek(), 'comma')) {
+        this.next();
+        out.push(this.parseAdd());
+      }
+      if (isTok(this.peek(), 'rp')) this.next();
+      return out;
+    }
+
+    fnCall(name) {
+      const startLast = this.last;
+      const a = this.args();
+      const setup = this.ctx.setup;
+      const one = () => {
+        if (a.length !== 1) throw argErr(this.last);
+        return a[0];
+      };
+      return this.wrap(() => {
+        switch (name) {
+          case 'sin':
+          case 'cos':
+          case 'tan':
+            return vTrig(name, one(), setup.angle);
+          case 'asin':
+            return vInvTrig('sin', one(), setup.angle);
+          case 'acos':
+            return vInvTrig('cos', one(), setup.angle);
+          case 'atan':
+            return vInvTrig('tan', one(), setup.angle);
+          case 'sinh':
+          case 'cosh':
+          case 'tanh':
+          case 'asinh':
+          case 'acosh':
+          case 'atanh':
+            return vHyp(name, one());
+          case 'log':
+            if (a.length === 2) return vLogAB(a[0], a[1]);
+            return vLog(one());
+          case 'ln':
+            return vLn(one());
+          case 'Abs':
+            return vAbs(one());
+          case 'sqrt':
+            return vSqrt(one());
+          case 'cbrt':
+            return vCbrt(one());
+          case 'pow10':
+            return vExp10(one());
+          case 'powe':
+            return vExpE(one());
+          case 'Rnd':
+            return vRnd(one(), setup);
+          case 'Pol': {
+            if (a.length !== 2) throw argErr(this.last);
+            const { r, theta } = polar(a[0], a[1], setup.angle);
+            this.ctx.pair = { kind: 'Pol', labels: ['r', 'θ'], vals: [r, theta] };
+            this.ctx.setVar('X', r);
+            this.ctx.setVar('Y', theta);
+            return r;
+          }
+          case 'Rec': {
+            if (a.length !== 2) throw argErr(this.last);
+            const { x, y } = rect(a[0], a[1], setup.angle);
+            this.ctx.pair = { kind: 'Rec', labels: ['X', 'Y'], vals: [x, y] };
+            this.ctx.setVar('X', x);
+            this.ctx.setVar('Y', y);
+            return x;
+          }
+          case 'RanInt': {
+            if (a.length !== 2) throw argErr(this.last);
+            const lo = vInteger(a[0]);
+            const hi = vInteger(a[1]);
+            if (lo === null || hi === null || lo >= hi || hi - lo >= 10n ** 10n) throw argErr(this.last);
+            const span = Number(hi - lo) + 1;
+            return vInt(lo + BigInt(Math.floor(this.ctx.rand() * span)));
+          }
+          default:
+            throw syntaxErr(startLast);
+        }
+      });
+    }
+
+    parsePrimary() {
+      const it = this.peek();
+      if (!it) throw syntaxErr(this.last);
+      if (it.s) return this.structure(this.next());
+      const k = it.t.k;
+      if (k === 'd') return this.parseNumber();
+      this.next();
+      switch (k) {
+        case 'lp': {
+          this.depthCheck(it);
+          const p = new Parser(this.items, this.ctx, this.depth + 1);
+          p.i = this.i;
+          const v = p.parseAdd();
+          this.i = p.i;
+          this.last = p.last;
+          if (isTok(this.peek(), 'rp')) this.next();
+          return v;
+        }
+        case 'fn':
+          this.depthCheck(it);
+          return this.fnCall(it.t.v);
+        case 'c':
+          return it.t.v === 'pi' ? vEx(N.exPi()) : vF(Math.E);
+        case 'var':
+          return this.ctx.getVar(it.t.v);
+        case 'ans':
+          return this.ctx.getVar('Ans');
+        case 'ran':
+          return vQ(Q(BigInt(Math.floor(this.ctx.rand() * 1000)), 1000n));
+        case 'val':
+          return it.t.v;
+        case 'stat':
+          if (STAT_POST[it.t.v]) throw syntaxErr(it.i);
+          return this.wrap(() => this.ctx.statValue(it.t.v));
+        default:
+          throw syntaxErr(it.i);
+      }
+    }
+    depthCheck(it) {
+      if (this.depth > 24) throw new CalcError('Stack', it.e);
+    }
+
+    structure(node) {
+      const slot = (n) => this.sub(node.slots[n], node);
+      let v;
+      switch (node.s) {
+        case 'frac': {
+          const n = slot(0);
+          const d = slot(1);
+          return this.wrap(() => vDiv(n, d));
+        }
+        case 'mix': {
+          const w = slot(0);
+          const n = slot(1);
+          const d = slot(2);
+          return this.wrap(() => vAdd(w, vDiv(n, d)));
+        }
+        case 'sqrt':
+          v = slot(0);
+          return this.wrap(() => vSqrt(v));
+        case 'cbrt':
+          v = slot(0);
+          return this.wrap(() => vCbrt(v));
+        case 'nroot': {
+          const idx = slot(0);
+          const body = slot(1);
+          return this.wrap(() => vRoot(idx, body));
+        }
+        case 'abs':
+          v = slot(0);
+          return this.wrap(() => vAbs(v));
+        case 'e10':
+          v = slot(0);
+          return this.wrap(() => vExp10(v));
+        case 'ee':
+          v = slot(0);
+          return this.wrap(() => vExpE(v));
+        case 'logb': {
+          const b = slot(0);
+          const a = slot(1);
+          return this.wrap(() => vLogAB(b, a));
+        }
+        default:
+          throw syntaxErr(node.i);
+      }
+    }
+  }
+
+  // STAT 모드의 추정값 명령(바로 앞의 값을 인수로 받음)
+  const STAT_POST = { xhat: 1, yhat: 1, xhat1: 1, xhat2: 1 };
+
+  // 한 식 계산. items: 트리 항목 배열
+  function evalItems(items, ctx) {
+    if (!items.length) throw syntaxErr(0);
+    const p = new Parser(items, ctx, 0);
+    const v = p.parseAdd();
+    if (p.i < items.length) throw syntaxErr(items[p.i].i);
+    return v;
+  }
+
+  // 토큰 전체를 ':' 기준 문장들로 나눔 (최상위 항목만)
+  function splitStatements(items) {
+    const out = [[]];
+    items.forEach((it) => {
+      if (isTok(it, 'colon')) out.push([]);
+      else out[out.length - 1].push(it);
+    });
+    return out;
+  }
+
+  G.ceval = {
+    CalcError, mathErr, syntaxErr, argErr,
+    r15, mkV, vEx, vF, vInt, vQ, isZero, vInteger, vAdd, vSub, vMul, vDiv, vNeg, vAbs, vPow, vSqrt, vFact, vUnit,
+    toTree, evalItems, splitStatements, polar, rect, fromDegExact, vRnd, vTrig, vInvTrig, isTok, STAT_POST,
+  };
+})(globalThis.GISA);
+
+/* ── engine/calc-stat.js ── */
+// STAT 모드 통계 계산: 1변수(1-VAR)와 회귀 7종.
+// rows: [{x, y, f}] (x, y, f는 숫자, f는 도수). 계산은 근삿값(double)로 한다.
+(function (G) {
+  'use strict';
+
+  const TYPES = [
+    { id: '1-VAR', label: '1-VAR', two: false },
+    { id: 'A+BX', label: 'A+BX', two: true },
+    { id: '_+CX2', label: '_+CX²', two: true },
+    { id: 'lnX', label: 'ln X', two: true },
+    { id: 'e^X', label: 'e^X', two: true },
+    { id: 'A.B^X', label: 'A·B^X', two: true },
+    { id: 'A.X^B', label: 'A·X^B', two: true },
+    { id: '1/X', label: '1/X', two: true },
+  ];
+
+  // 변환: 회귀를 선형 회귀 y' = a + b·x'로 바꾸는 방법
+  const TRANSFORM = {
+    'A+BX': { fx: (x) => x, fy: (y) => y },
+    lnX: { fx: Math.log, fy: (y) => y },
+    'e^X': { fx: (x) => x, fy: Math.log },
+    'A.B^X': { fx: (x) => x, fy: Math.log },
+    'A.X^B': { fx: Math.log, fy: Math.log },
+    '1/X': { fx: (x) => 1 / x, fy: (y) => y },
+  };
+
+  function solve3(m, v) {
+    // 3×3 연립방정식(가우스 소거법)
+    const a = m.map((row, i) => row.concat([v[i]]));
+    for (let i = 0; i < 3; i++) {
+      let p = i;
+      for (let r = i + 1; r < 3; r++) if (Math.abs(a[r][i]) > Math.abs(a[p][i])) p = r;
+      if (Math.abs(a[p][i]) < 1e-300) return null;
+      [a[i], a[p]] = [a[p], a[i]];
+      for (let r = i + 1; r < 3; r++) {
+        const f = a[r][i] / a[i][i];
+        for (let c = i; c < 4; c++) a[r][c] -= f * a[i][c];
+      }
+    }
+    const x = [0, 0, 0];
+    for (let i = 2; i >= 0; i--) {
+      let s = a[i][3];
+      for (let c = i + 1; c < 3; c++) s -= a[i][c] * x[c];
+      x[i] = s / a[i][i];
+    }
+    return x;
+  }
+
+  // 통계 결과를 계산. 데이터가 부족하면 null을 돌려준다(호출 쪽에서 Math ERROR).
+  function compute(type, rows) {
+    const T = TYPES.find((t) => t.id === type);
+    const data = rows.filter((r) => r.x !== null && (!T.two || r.y !== null));
+    let n = 0;
+    let sx = 0;
+    let sx2 = 0;
+    let sx3 = 0;
+    let sx4 = 0;
+    let sy = 0;
+    let sy2 = 0;
+    let sxy = 0;
+    let sx2y = 0;
+    data.forEach((r) => {
+      const f = r.f === null || r.f === undefined ? 1 : r.f;
+      n += f;
+      sx += f * r.x;
+      sx2 += f * r.x * r.x;
+      sx3 += f * r.x ** 3;
+      sx4 += f * r.x ** 4;
+      if (T.two) {
+        sy += f * r.y;
+        sy2 += f * r.y * r.y;
+        sxy += f * r.x * r.y;
+        sx2y += f * r.x * r.x * r.y;
+      }
+    });
+    if (n === 0) return null;
+    const xs = data.map((r) => r.x);
+    const out = { n, sumx: sx, sumx2: sx2, sumx3: sx3, sumx4: sx4, sumy: sy, sumy2: sy2, sumxy: sxy, sumx2y: sx2y };
+    out.xbar = sx / n;
+    out.sxp = Math.sqrt(Math.max(sx2 / n - out.xbar * out.xbar, 0));
+    out.sxs = n > 1 ? Math.sqrt(Math.max((sx2 - n * out.xbar * out.xbar) / (n - 1), 0)) : NaN;
+    out.minX = Math.min.apply(null, xs);
+    out.maxX = Math.max.apply(null, xs);
+    if (T.two) {
+      const ys = data.map((r) => r.y);
+      out.ybar = sy / n;
+      out.syp = Math.sqrt(Math.max(sy2 / n - out.ybar * out.ybar, 0));
+      out.sys = n > 1 ? Math.sqrt(Math.max((sy2 - n * out.ybar * out.ybar) / (n - 1), 0)) : NaN;
+      out.minY = Math.min.apply(null, ys);
+      out.maxY = Math.max.apply(null, ys);
+      out.reg = regress(type, data);
+    }
+    return out;
+  }
+
+  function regress(type, data) {
+    if (type === '_+CX2') {
+      let n = 0;
+      let s1 = 0;
+      let s2 = 0;
+      let s3 = 0;
+      let s4 = 0;
+      let t0 = 0;
+      let t1 = 0;
+      let t2 = 0;
+      data.forEach((r) => {
+        const f = r.f === null || r.f === undefined ? 1 : r.f;
+        n += f;
+        s1 += f * r.x;
+        s2 += f * r.x ** 2;
+        s3 += f * r.x ** 3;
+        s4 += f * r.x ** 4;
+        t0 += f * r.y;
+        t1 += f * r.x * r.y;
+        t2 += f * r.x * r.x * r.y;
+      });
+      const sol = solve3([[n, s1, s2], [s1, s2, s3], [s2, s3, s4]], [t0, t1, t2]);
+      if (!sol) return null;
+      return { A: sol[0], B: sol[1], C: sol[2] };
+    }
+    const tr = TRANSFORM[type];
+    let n = 0;
+    let sx = 0;
+    let sy = 0;
+    let sxx = 0;
+    let syy = 0;
+    let sxy = 0;
+    for (const r of data) {
+      const f = r.f === null || r.f === undefined ? 1 : r.f;
+      const X = tr.fx(r.x);
+      const Y = tr.fy(r.y);
+      if (!isFinite(X) || !isFinite(Y)) return null; // ln(음수) 등
+      n += f;
+      sx += f * X;
+      sy += f * Y;
+      sxx += f * X * X;
+      syy += f * Y * Y;
+      sxy += f * X * Y;
+    }
+    const den = n * sxx - sx * sx;
+    if (den === 0) return null;
+    const b = (n * sxy - sx * sy) / den;
+    const a = (sy - b * sx) / n;
+    const rden = Math.sqrt(den * (n * syy - sy * sy));
+    const r = rden === 0 ? NaN : (n * sxy - sx * sy) / rden;
+    let A = a;
+    let B = b;
+    if (type === 'e^X' || type === 'A.B^X' || type === 'A.X^B') A = Math.exp(a);
+    if (type === 'A.B^X') B = Math.exp(b);
+    return { A, B, r };
+  }
+
+  // ŷ: x에서 y 추정, x̂: y에서 x 추정. 불가능하면 NaN
+  function estimate(type, reg, which, v) {
+    const { A, B, C } = reg;
+    if (which === 'yhat') {
+      switch (type) {
+        case 'A+BX':
+          return A + B * v;
+        case '_+CX2':
+          return A + B * v + C * v * v;
+        case 'lnX':
+          return A + B * Math.log(v);
+        case 'e^X':
+          return A * Math.exp(B * v);
+        case 'A.B^X':
+          return A * Math.pow(B, v);
+        case 'A.X^B':
+          return A * Math.pow(v, B);
+        default:
+          return A + B / v;
+      }
+    }
+    switch (type) {
+      case 'A+BX':
+        return (v - A) / B;
+      case 'lnX':
+        return Math.exp((v - A) / B);
+      case 'e^X':
+        return Math.log(v / A) / B;
+      case 'A.B^X':
+        return Math.log(v / A) / Math.log(B);
+      case 'A.X^B':
+        return Math.pow(v / A, 1 / B);
+      case '1/X':
+        return B / (v - A);
+      default: {
+        // 2차 회귀: C·x² + B·x + (A − y) = 0
+        const D = B * B - 4 * C * (A - v);
+        if (D < 0) return NaN;
+        const s = Math.sqrt(D);
+        return which === 'xhat1' ? (-B + s) / (2 * C) : (-B - s) / (2 * C);
+      }
+    }
+  }
+
+  G.cstat = { TYPES, compute, estimate };
+})(globalThis.GISA);
+
+/* ── engine/calc.js ── */
+// 카시오 fx-350ES PLUS (2nd edition) 계산기 본체.
+//  press(키 이름)으로 조작하고 view()로 화면을 읽는다.
+//  키 이름: SHIFT ALPHA MODE ON UP DOWN LEFT RIGHT Abs x3 x-1 LOGAB FRAC SQRT x2 x^ log ln (-) DMS hyp sin cos tan
+//           RCL ENG ( ) S<>D M+ 7 8 9 DEL AC 4 5 6 * / 1 2 3 + - 0 . x10^x Ans =
+(function (G) {
+  'use strict';
+  const N = G.qn;
+  const E = G.ceval;
+  const F = G.cfmt;
+  const { tx } = F;
+  const sup = F.sup;
+  const CalcError = E.CalcError;
+
+  const VARS = { '(-)': 'A', DMS: 'B', hyp: 'C', sin: 'D', cos: 'E', tan: 'F', ')': 'X', 'S<>D': 'Y', 'M+': 'M' };
+  const STRUCT_SLOTS = { frac: 2, mix: 3, sqrt: 1, cbrt: 1, nroot: 2, pow: 1, e10: 1, ee: 1, x10: 1, logb: 2, abs: 1 };
+  const BIN_KEYS = { '+': '+', '-': '-', '*': '*', '/': '/' };
+  const ZERO = () => E.vInt(0);
+
+  const FN_NAME = {
+    sin: ['sin'], cos: ['cos'], tan: ['tan'],
+    asin: ['sin', '−1'], acos: ['cos', '−1'], atan: ['tan', '−1'],
+    sinh: ['sinh'], cosh: ['cosh'], tanh: ['tanh'],
+    asinh: ['sinh', '−1'], acosh: ['cosh', '−1'], atanh: ['tanh', '−1'],
+    log: ['log'], ln: ['ln'], Abs: ['Abs'], Pol: ['Pol'], Rec: ['Rec'], RanInt: ['RanInt#'], Rnd: ['Rnd'],
+    sqrt: ['√'], cbrt: ['³√'], pow10: ['10^'], powe: ['e^'],
+  };
+  const STAT_NAME = {
+    n: 'n', xbar: 'x̄', sxp: 'σx', sxs: 'sx', ybar: 'ȳ', syp: 'σy', sys: 'sy',
+    sumx: 'Σx', sumx2: 'Σx²', sumy: 'Σy', sumy2: 'Σy²', sumxy: 'Σxy', sumx3: 'Σx³', sumx2y: 'Σx²y', sumx4: 'Σx⁴',
+    regA: 'A', regB: 'B', regC: 'C', regr: 'r', minX: 'minX', maxX: 'maxX', minY: 'minY', maxY: 'maxY',
+    xhat: 'x̂', yhat: 'ŷ', xhat1: 'x̂₁', xhat2: 'x̂₂',
+  };
+
+  const deepV = (v) => ({ ex: v.ex, f: v.f, dec: v.dec });
+
+  class Calc {
+    constructor(opts) {
+      this.rand = (opts && opts.rand) || Math.random;
+      this.resetAll();
+    }
+
+    // ───────── 초기화 ─────────
+    resetSetup() {
+      this.setup = { io: 'MathO', angle: 'Deg', fmt: 'norm', n: 1, frac: 'd/c', stat: false, dot: 'Dot' };
+      this.mode = 'COMP';
+      this.clearScreen(true);
+    }
+    resetMemory() {
+      this.mem = { Ans: ZERO(), A: ZERO(), B: ZERO(), C: ZERO(), D: ZERO(), E: ZERO(), F: ZERO(), X: ZERO(), Y: ZERO(), M: ZERO() };
+    }
+    resetAll() {
+      this.off = false;
+      this.contrast = 0;
+      this.resetMemory();
+      this.stat = { type: '1-VAR', rows: [{ x: null, y: null, f: null }], sel: { r: 0, c: 0 }, top: 0 };
+      this.table = { fx: [], start: E.vInt(1), end: E.vInt(5), step: E.vInt(1), rows: [], sel: 0, stage: 'fx' };
+      this.hist = [];
+      this.resetSetup();
+    }
+    clearScreen(clearHist) {
+      this.tokens = [];
+      this.cur = 0;
+      this.overwrite = false;
+      this.wrapNext = false;
+      this.shift = false;
+      this.alpha = false;
+      this.pending = null;
+      this.screen = 'input';
+      this.res = null;
+      this.histPos = -1;
+      this.multi = null;
+      this.menu = null;
+      this.err = null;
+      this.prompt = null;
+      this.eng = null;
+      this.toggle = false;
+      this.mixedToggle = false;
+      this.forceDec = false;
+      this.dmsView = false;
+      this.factView = false;
+      if (clearHist) this.hist = [];
+    }
+    get io() {
+      return this.mode === 'STAT' ? 'LineIO' : this.setup.io;
+    }
+
+    // ───────── 키 입력 ─────────
+    press(id) {
+      if (this.off) {
+        if (id === 'ON') {
+          this.off = false;
+          this.clearScreen(true);
+        }
+        return;
+      }
+      if (id === 'SHIFT') {
+        this.shift = !this.shift;
+        this.alpha = false;
+        return;
+      }
+      if (id === 'ALPHA') {
+        this.alpha = !this.alpha;
+        this.shift = false;
+        return;
+      }
+      const sh = this.shift;
+      const al = this.alpha;
+      this.shift = false;
+      this.alpha = false;
+      if (id === 'ON') {
+        this.clearScreen(true);
+        return;
+      }
+      if (sh && id === 'AC') {
+        this.off = true;
+        return;
+      }
+      switch (this.screen) {
+        case 'error':
+          return this.errorKey(id);
+        case 'menu':
+          return this.menuKey(id);
+        case 'confirm':
+          return this.confirmKey(id);
+        case 'prompt':
+          return this.promptKey(id);
+        case 'contrast':
+          return this.contrastKey(id);
+        case 'statedit':
+          return this.statEditKey(id, sh, al);
+        case 'table':
+          return this.tableKey(id, sh, al);
+        default:
+      }
+      if (this.pending) return this.varKey(id, sh, al);
+      if (this.mode === 'TABLE' && this.table.stage !== 'fx') return this.tableDialogKey(id, sh, al);
+      return this.inputKey(id, sh, al);
+    }
+
+    // 키 문자열 여러 개를 연속 입력 (테스트·도움말용): "sin 3 0 ) =" / 숫자는 한 글자씩
+    keys(str) {
+      str.trim().split(/\s+/).forEach((w) => {
+        if (/^[0-9.]+$/.test(w) && w.length > 1) w.split('').forEach((c) => this.press(c));
+        else this.press(w);
+      });
+      return this;
+    }
+
+    // ───────── 입력 화면의 키 ─────────
+    inputKey(id, sh, al) {
+      const line = this.io === 'LineIO';
+      // 모드·설정·초기화 메뉴
+      if (id === 'MODE') return sh ? this.openSetup() : this.openMenu('mode');
+      if (sh && id === '9') return this.openMenu('clr');
+      if (sh && id === '1') {
+        if (this.mode === 'STAT') return this.openStatMenu();
+        return;
+      }
+      // 이동·삭제
+      if (id === 'LEFT' || id === 'RIGHT') return this.horizontal(id);
+      if (id === 'UP' || id === 'DOWN') return this.vertical(id);
+      if (id === 'AC') return this.ac();
+      if (id === 'DEL') return sh ? this.toggleIns() : this.del();
+      if (id === '=') return this.equals(sh);
+      // 결과 화면 전용 키
+      if (this.screen === 'result') {
+        if (id === 'S<>D') {
+          if (sh) this.mixedToggle = !this.mixedToggle;
+          else {
+            this.toggle = !this.toggle;
+            this.eng = null;
+            this.dmsView = false;
+          }
+          return;
+        }
+        if (id === 'ENG') {
+          const base = this.eng === null ? 0 : this.eng;
+          this.eng = sh ? (this.eng === null ? 1 : base + 1) : this.eng === null ? 0 : base - 1;
+          this.toggle = false;
+          this.dmsView = false;
+          return;
+        }
+        if (id === 'DMS' && !sh) {
+          this.dmsView = !this.dmsView;
+          this.eng = null;
+          return;
+        }
+        if (id === 'DMS' && sh) return this.factorize();
+        if (id === 'M+') return this.memAdd(sh ? -1 : 1);
+        if (id === 'RCL' && sh) {
+          this.pending = 'STO';
+          return;
+        }
+      }
+      if (id === 'RCL') {
+        this.pending = sh ? 'STO' : 'RCL';
+        return;
+      }
+      if (id === 'M+' && !al) return this.memAdd(sh ? -1 : 1);
+
+      const act = this.action(id, sh, al, line);
+      if (!act) return;
+      this.perform(act);
+    }
+
+    // 키 → 동작
+    action(id, sh, al, line) {
+      if (al) {
+        if (VARS[id]) return { tok: { k: 'var', v: VARS[id] } };
+        if (id === 'x3') return { tok: { k: 'colon' } };
+        if (id === '.') return { tok: { k: 'fn', v: 'RanInt' } };
+        if (id === 'x10^x') return { tok: { k: 'c', v: 'e' } };
+        return null;
+      }
+      if (sh) {
+        switch (id) {
+          case 'x-1':
+            return { tok: { k: 'post', v: 'fact' }, post: true };
+          case 'DMS':
+            return null;
+          case 'FRAC':
+            return line ? { tok: { k: 'fsep' } } : { struct: 'mix', wrap: true };
+          case 'SQRT':
+            return line ? { tok: { k: 'fn', v: 'cbrt' } } : { struct: 'cbrt', wrap: true };
+          case 'x^':
+            return line ? { tok: { k: 'nrootl' }, post: true } : { struct: 'nroot', wrap: true };
+          case 'log':
+            return line ? { tok: { k: 'fn', v: 'pow10' } } : { struct: 'e10', wrap: true };
+          case 'ln':
+            return line ? { tok: { k: 'fn', v: 'powe' } } : { struct: 'ee', wrap: true };
+          case 'sin':
+            return { tok: { k: 'fn', v: 'asin' } };
+          case 'cos':
+            return { tok: { k: 'fn', v: 'acos' } };
+          case 'tan':
+            return { tok: { k: 'fn', v: 'atan' } };
+          case '0':
+            return { tok: { k: 'fn', v: 'Rnd' } };
+          case '.':
+            return { tok: { k: 'ran' } };
+          case 'x10^x':
+            return { tok: { k: 'c', v: 'pi' } };
+          case 'Ans':
+            return { menu: 'drg' };
+          case '*':
+            return { tok: { k: 'op', v: 'nPr' }, bin: true };
+          case '/':
+            return { tok: { k: 'op', v: 'nCr' }, bin: true };
+          case '+':
+            return { tok: { k: 'fn', v: 'Pol' } };
+          case '-':
+            return { tok: { k: 'fn', v: 'Rec' } };
+          case '(':
+            return { tok: { k: 'post', v: 'pct' }, post: true };
+          case ')':
+            return { tok: { k: 'comma' } };
+          default:
+            return null;
+        }
+      }
+      if (/^[0-9]$/.test(id) || id === '.') return { tok: { k: 'd', v: id }, digit: true };
+      if (BIN_KEYS[id]) return { tok: { k: 'op', v: BIN_KEYS[id] }, bin: true };
+      switch (id) {
+        case '(-)':
+          return { tok: { k: 'neg' } };
+        case '(':
+          return { tok: { k: 'lp' } };
+        case ')':
+          return { tok: { k: 'rp' } };
+        case 'sin':
+        case 'cos':
+        case 'tan':
+        case 'log':
+        case 'ln':
+          return { tok: { k: 'fn', v: id } };
+        case 'x2':
+          return { tok: { k: 'post', v: 'x2' }, post: true, once: true };
+        case 'x3':
+          return { tok: { k: 'post', v: 'x3' }, post: true, once: true };
+        case 'x-1':
+          return { tok: { k: 'post', v: 'xinv' }, post: true, once: true };
+        case 'x^':
+          return line ? { tok: { k: 'powl' }, post: true } : { struct: 'pow', post: true, once: true };
+        case 'x10^x':
+          return line ? { tok: { k: 'x10l' }, post: true } : { struct: 'x10', post: true };
+        case 'SQRT':
+          return line ? { tok: { k: 'fn', v: 'sqrt' } } : { struct: 'sqrt', wrap: true };
+        case 'FRAC':
+          return line ? { tok: { k: 'fsep' } } : { struct: 'frac', wrap: true, numerator: true };
+        case 'LOGAB':
+          return line ? null : { struct: 'logb', wrap: true };
+        case 'Abs':
+          return line ? { tok: { k: 'fn', v: 'Abs' } } : { struct: 'abs', wrap: true };
+        case 'hyp':
+          return { menu: 'hyp' };
+        case 'DMS':
+          return { tok: { k: 'dms' } };
+        case 'Ans':
+          return { tok: { k: 'ans' } };
+        default:
+          return null;
+      }
+    }
+
+    perform(act) {
+      if (act.menu) return this.openMenu(act.menu);
+      // 결과 화면에서의 시작 규칙
+      if (this.screen === 'result') {
+        if (act.bin || act.post) {
+          this.tokens = [{ k: 'ans' }];
+          this.cur = 1;
+        } else {
+          this.tokens = [];
+          this.cur = 0;
+        }
+        this.leaveResult();
+      } else if (!this.tokens.length && (act.bin || act.post) && this.mode !== 'TABLE') {
+        this.tokens = [{ k: 'ans' }];
+        this.cur = 1;
+      }
+      // x² x³ x⁻¹ ^ 를 연달아 누르면 뒤의 것은 무시(설명서)
+      if (act.once) {
+        const prev = this.tokens[this.cur - 1];
+        if (prev && ((prev.k === 'post' && /^(x2|x3|xinv)$/.test(prev.v)) || (prev.k === 'E' && (prev.s === 'pow')))) return;
+      }
+      if (act.struct) return this.insertStruct(act);
+      this.insert(act.tok);
+    }
+
+    leaveResult() {
+      this.screen = 'input';
+      this.res = null;
+      this.histPos = -1;
+      this.multi = null;
+      this.eng = null;
+      this.toggle = false;
+      this.mixedToggle = false;
+      this.forceDec = false;
+      this.dmsView = false;
+      this.factView = false;
+    }
+
+    // ───────── 편집기 ─────────
+    insert(tok) {
+      if (this.overwrite && this.io === 'LineIO') {
+        const t = this.tokens[this.cur];
+        if (t && !/^[SME]$/.test(t.k)) {
+          this.tokens[this.cur] = tok;
+          this.cur++;
+          return;
+        }
+      }
+      this.tokens.splice(this.cur, 0, tok);
+      this.cur++;
+    }
+
+    insertStruct(act) {
+      const s = act.struct;
+      const n = STRUCT_SLOTS[s];
+      const open = [{ k: 'S', s }];
+      for (let i = 1; i < n; i++) open.push({ k: 'M', s, i });
+      open.push({ k: 'E', s });
+      // 분수 키: 바로 앞의 숫자를 분자로 삼는다
+      if (s === 'frac' && act.numerator && !this.wrapNext) {
+        let j = this.cur;
+        while (j > 0 && this.tokens[j - 1].k === 'd') j--;
+        if (j < this.cur) {
+          const numTokens = this.tokens.slice(j, this.cur);
+          this.tokens.splice(j, this.cur - j, open[0], ...numTokens, open[1], open[2]);
+          this.cur = j + 1 + numTokens.length + 1; // 분모 시작
+          return;
+        }
+      }
+      // INS 상태: 커서 오른쪽의 값 하나를 이 함수의 인수로 감쌈
+      if (this.wrapNext && act.wrap) {
+        this.wrapNext = false;
+        const end = this.operandEnd(this.cur);
+        if (end > this.cur) {
+          const operand = this.tokens.slice(this.cur, end);
+          const slotIdx = s === 'nroot' || s === 'logb' ? 1 : 0; // n제곱근은 피개수, log는 진수
+          const parts = [open[0]];
+          for (let i = 0; i < n; i++) {
+            if (i > 0) parts.push(open[i]);
+            if (i === slotIdx) parts.push(...operand);
+          }
+          parts.push(open[open.length - 1]);
+          this.tokens.splice(this.cur, end - this.cur, ...parts);
+          if (s === 'frac' || s === 'nroot' || s === 'logb' || s === 'mix') {
+            // 비어 있는 칸에 커서
+            const emptySlot = s === 'frac' ? 1 : 0;
+            let idx = this.cur + 1;
+            let slot = 0;
+            for (let i = this.cur + 1; slot < emptySlot; i++) {
+              if (this.tokens[i].k === 'M' && this.tokens[i].s === s) {
+                slot++;
+                idx = i + 1;
+              }
+            }
+            this.cur = idx;
+          } else this.cur += parts.length;
+          return;
+        }
+      }
+      this.tokens.splice(this.cur, 0, ...open);
+      this.cur++; // 첫 칸 안으로
+    }
+
+    // 커서 오른쪽의 "값 하나"가 끝나는 위치
+    operandEnd(i) {
+      const t = this.tokens[i];
+      if (!t) return i;
+      let depth = 0;
+      if (t.k === 'S') {
+        for (let j = i; j < this.tokens.length; j++) {
+          if (this.tokens[j].k === 'S') depth++;
+          else if (this.tokens[j].k === 'E') {
+            depth--;
+            if (depth === 0) return j + 1;
+          }
+        }
+        return this.tokens.length;
+      }
+      if (t.k === 'lp' || t.k === 'fn') {
+        for (let j = i; j < this.tokens.length; j++) {
+          const k = this.tokens[j].k;
+          if (k === 'lp' || k === 'fn') depth++;
+          else if (k === 'rp') {
+            depth--;
+            if (depth === 0) return j + 1;
+          }
+        }
+        return this.tokens.length;
+      }
+      if (t.k === 'd') {
+        let j = i;
+        while (j < this.tokens.length && this.tokens[j].k === 'd') j++;
+        return j;
+      }
+      return i + 1;
+    }
+
+    del() {
+      if (this.screen === 'result') {
+        // 결과 화면의 DEL: 식을 불러와서 편집 상태로
+        this.recallExpr(true);
+        return;
+      }
+      if (this.cur === 0) return;
+      const t = this.tokens[this.cur - 1];
+      if (t.k === 'E') {
+        this.cur--; // 구조 안으로 들어감
+        return;
+      }
+      if (t.k === 'M' || t.k === 'S') {
+        const open = this.structOpenAt(this.cur - 1);
+        if (this.structEmpty(open)) {
+          const close = this.structCloseAt(open);
+          this.tokens.splice(open, close - open + 1);
+          this.cur = open;
+        } else {
+          this.cur--;
+        }
+        return;
+      }
+      this.tokens.splice(this.cur - 1, 1);
+      this.cur--;
+    }
+    structOpenAt(i) {
+      // i 위치의 S 또는 M이 속한 구조의 S 위치
+      let depth = 0;
+      for (let j = i; j >= 0; j--) {
+        const k = this.tokens[j].k;
+        if (k === 'E') depth++;
+        else if (k === 'S') {
+          if (depth === 0) return j;
+          depth--;
+        }
+      }
+      return 0;
+    }
+    structCloseAt(open) {
+      let depth = 0;
+      for (let j = open; j < this.tokens.length; j++) {
+        if (this.tokens[j].k === 'S') depth++;
+        else if (this.tokens[j].k === 'E') {
+          depth--;
+          if (depth === 0) return j;
+        }
+      }
+      return this.tokens.length - 1;
+    }
+    structEmpty(open) {
+      const close = this.structCloseAt(open);
+      for (let j = open + 1; j < close; j++) if (this.tokens[j].k !== 'M') return false;
+      return true;
+    }
+    toggleIns() {
+      if (this.io === 'LineIO') this.overwrite = !this.overwrite;
+      else this.wrapNext = true;
+    }
+
+    ac() {
+      if (this.mode === 'TABLE' && this.screen === 'input' && this.table.stage === 'fx' && !this.tokens.length) return;
+      this.tokens = [];
+      this.cur = 0;
+      this.leaveResult();
+      this.wrapNext = false;
+      this.overwrite = false;
+      if (this.mode === 'TABLE') this.table.stage = 'fx';
+    }
+
+    horizontal(id) {
+      if (this.screen === 'result') {
+        this.recallExpr(id === 'LEFT');
+        return;
+      }
+      const len = this.tokens.length;
+      if (id === 'LEFT') this.cur = this.cur > 0 ? this.cur - 1 : len;
+      else this.cur = this.cur < len ? this.cur + 1 : 0;
+      this.wrapNext = this.wrapNext && true;
+    }
+
+    // 결과 화면에서 식을 다시 불러와 편집(재생)
+    recallExpr(toEnd) {
+      const entry = this.shownEntry();
+      if (!entry) return;
+      this.tokens = entry.tokens.map((t) => ({ ...t }));
+      this.cur = toEnd ? this.tokens.length : 0;
+      this.leaveResult();
+    }
+
+    vertical(id) {
+      if (this.screen === 'result') {
+        return this.scrollHistory(id === 'UP' ? -1 : 1);
+      }
+      if (this.moveInStruct(id)) return;
+      if (this.io === 'LineIO' && this.tokens.length) {
+        this.cur = id === 'UP' ? 0 : this.tokens.length;
+        return;
+      }
+      if (!this.tokens.length && this.mode === 'COMP') this.scrollHistory(-1, true);
+    }
+    moveInStruct(id) {
+      // 커서를 둘러싼 가장 안쪽 구조 찾기
+      const stack = [];
+      for (let i = 0; i < this.cur; i++) {
+        const t = this.tokens[i];
+        if (t.k === 'S') stack.push({ i, slot: 0, ms: [] });
+        else if (t.k === 'M') {
+          const f = stack[stack.length - 1];
+          f.slot++;
+          f.ms.push(i);
+        } else if (t.k === 'E') stack.pop();
+      }
+      if (!stack.length) return false;
+      const f = stack[stack.length - 1];
+      const s = this.tokens[f.i].s;
+      const n = STRUCT_SLOTS[s];
+      const closeIdx = this.structCloseAt(f.i);
+      const markers = [];
+      for (let j = f.i + 1; j < closeIdx; j++) {
+        if (this.tokens[j].k === 'M') {
+          // 같은 구조의 표시만(중첩 구조의 표시는 건너뜀)
+          if (this.structOpenAt(j) === f.i) markers.push(j);
+        }
+      }
+      if (n > 1 && (s === 'frac' || s === 'mix' || s === 'logb' || s === 'nroot')) {
+        if (id === 'DOWN' && f.slot < n - 1) {
+          this.cur = markers[f.slot] + 1;
+          return true;
+        }
+        if (id === 'UP' && f.slot > 0) {
+          this.cur = markers[f.slot - 1];
+          return true;
+        }
+        return false;
+      }
+      if (id === 'DOWN' && (s === 'pow' || s === 'e10' || s === 'ee' || s === 'x10')) {
+        this.cur = closeIdx + 1;
+        return true;
+      }
+      return false;
+    }
+
+    // ───────── 계산 ─────────
+    ctx() {
+      const self = this;
+      return {
+        setup: this.setup,
+        pair: null,
+        rand: () => self.rand(),
+        getVar: (name) => self.mem[name],
+        setVar: (name, v) => {
+          self.mem[name] = v;
+        },
+        statValue: (name) => self.statValue(name),
+        estimate: (name, v) => self.statEstimate(name, v),
+      };
+    }
+
+    equals(sh) {
+      // 멀티스테이트먼트 진행: 결과 화면에서 = → 다음 문장
+      if (this.screen === 'result') {
+        if (this.multi && this.multi.next < this.multi.stmts.length) return this.runStatement(this.multi.next, sh);
+        return;
+      }
+      if (this.mode === 'TABLE' && this.table.stage === 'fx') return this.tableFxDone();
+      if (!this.tokens.length) return;
+      let tree;
+      try {
+        tree = E.toTree(this.tokens);
+      } catch (e) {
+        return this.fail(new CalcError('Syntax', this.tokens.length));
+      }
+      this.multi = { stmts: E.splitStatements(tree), next: 0, tree };
+      this.runStatement(0, sh);
+    }
+
+    runStatement(i, forceDec) {
+      let items = this.multi.stmts[i];
+      const stoNames = [];
+      while (items.length && E.isTok(items[items.length - 1], 'sto')) {
+        stoNames.unshift(items[items.length - 1].t.v);
+        items = items.slice(0, -1);
+      }
+      const cx = this.ctx();
+      let v;
+      try {
+        v = E.evalItems(items, cx);
+        stoNames.forEach((nm) => {
+          this.mem[nm] = deepV(v);
+        });
+      } catch (e) {
+        if (e instanceof CalcError) return this.fail(e);
+        throw e;
+      }
+      this.mem.Ans = v;
+      const tokensOfStmt = this.stmtTokens(i);
+      const first = items[0];
+      const pair = cx.pair && first && first.t && first.t.k === 'fn' && (first.t.v === 'Pol' || first.t.v === 'Rec') ? cx.pair : null;
+      if (pair) this.mem.Ans = pair.vals[0];
+      this.res = {
+        v,
+        pair,
+        fracInput: tokensOfStmt.some((t) => (t.k === 'S' && (t.s === 'frac' || t.s === 'mix')) || t.k === 'fsep'),
+        dms: tokensOfStmt.some((t) => t.k === 'dms'),
+        forceDec: !!forceDec,
+        stmt: i,
+      };
+      this.multi.next = i + 1;
+      this.screen = 'result';
+      this.histPos = -1;
+      this.toggle = false;
+      this.eng = null;
+      this.mixedToggle = false;
+      this.dmsView = this.res.dms && this.dmsEligible(tokensOfStmt);
+      this.factView = false;
+      if (this.mode === 'COMP' && this.multi.next >= this.multi.stmts.length) this.pushHistory();
+    }
+    // 60진수 입력이 들어간 식은 +, −, ×, ÷만 있으면 결과도 60진수로 표시
+    dmsEligible(toks) {
+      return toks.every((t) => t.k === 'd' || t.k === 'dms' || (t.k === 'op' && /[+\-*/]/.test(t.v)));
+    }
+    stmtTokens(i) {
+      // i번째 문장에 해당하는 토큰들(콜론 기준)
+      const out = [];
+      let idx = 0;
+      let depth = 0;
+      this.tokens.forEach((t) => {
+        if (t.k === 'S') depth++;
+        if (t.k === 'E') depth--;
+        if (t.k === 'colon' && depth === 0) idx++;
+        else if (idx === i) out.push(t);
+      });
+      return out;
+    }
+    pushHistory() {
+      this.hist.push({ tokens: this.tokens.map((t) => ({ ...t })), res: this.res });
+      let bytes = 0;
+      for (let i = this.hist.length - 1; i >= 0; i--) {
+        bytes += this.hist[i].tokens.length;
+        if (bytes > 200) {
+          this.hist.splice(0, i);
+          break;
+        }
+      }
+    }
+    scrollHistory(dir, fromInput) {
+      if (!this.hist.length) return;
+      let pos = this.histPos;
+      if (pos === -1) {
+        if (dir > 0) return;
+        pos = this.hist.length - (this.screen === 'result' ? 2 : 1);
+        if (pos < 0) return;
+      } else {
+        pos += dir;
+        if (pos < 0) return;
+        if (pos >= this.hist.length) {
+          // 최신 결과로 돌아감
+          this.histPos = -1;
+          return;
+        }
+      }
+      if (fromInput) {
+        this.screen = 'result';
+        this.res = this.hist[pos].res;
+      }
+      this.histPos = pos;
+    }
+    shownEntry() {
+      if (this.histPos >= 0 && this.hist[this.histPos]) return this.hist[this.histPos];
+      if (this.screen === 'result' && this.res) return { tokens: this.tokens, res: this.res };
+      return null;
+    }
+    fail(err) {
+      this.screen = 'error';
+      this.err = { kind: err.kind, pos: err.pos === undefined ? this.tokens.length : err.pos };
+      this.multi = null;
+    }
+    errorKey(id) {
+      if (id === 'AC') {
+        this.tokens = [];
+        this.cur = 0;
+        this.err = null;
+        this.screen = 'input';
+        this.multi = null;
+        if (this.mode === 'TABLE') this.table.stage = 'fx';
+        return;
+      }
+      if (id === 'LEFT' || id === 'RIGHT') {
+        this.screen = 'input';
+        this.cur = Math.max(0, Math.min(this.tokens.length, this.err.pos));
+        this.err = null;
+        this.multi = null;
+      }
+    }
+
+    // 결과를 변수/메모리에 저장하거나 가감
+    currentValue() {
+      if (this.screen === 'result' && this.res) return this.res.v;
+      if (!this.tokens.length) return this.mem.Ans;
+      this.equals(false);
+      return this.screen === 'result' && this.res ? this.res.v : null;
+    }
+    memAdd(sign) {
+      const v = this.currentValue();
+      if (!v) return;
+      try {
+        this.mem.M = sign > 0 ? E.vAdd(this.mem.M, v) : E.vSub(this.mem.M, v);
+      } catch (e) {
+        if (e instanceof CalcError) return this.fail(e);
+        throw e;
+      }
+      if (this.screen !== 'result') {
+        this.res = { v, pair: null, fracInput: false, dms: false, forceDec: false, stmt: 0 };
+        this.screen = 'result';
+      }
+      this.mem.Ans = v;
+    }
+    varKey(id, sh, al) {
+      const name = VARS[id];
+      const kind = this.pending;
+      this.pending = null;
+      if (!name) return;
+      if (kind === 'STO') {
+        // 설명서: "3+5 SHIFT STO A" → 식 뒤에 →A 가 붙고 = 를 눌러야 저장된다
+        if (this.screen === 'result') {
+          this.tokens = [{ k: 'ans' }];
+          this.cur = 1;
+          this.leaveResult();
+        } else if (!this.tokens.length) {
+          this.tokens = [{ k: 'ans' }];
+          this.cur = 1;
+        }
+        this.insert({ k: 'sto', v: name });
+        return;
+      }
+      // RCL: 변수의 값을 식에 넣는다
+      if (this.screen === 'result') {
+        this.tokens = [];
+        this.cur = 0;
+        this.leaveResult();
+      }
+      const v = this.mem[name];
+      this.insert({ k: 'val', v: deepV(v), label: this.plainDecimal(v.f) });
+    }
+
+    factorize() {
+      const r = this.res;
+      if (!r || r.pair) return this.fail(new CalcError('Math'));
+      const n = E.vInteger(r.v);
+      if (n === null || n <= 0n || n.toString().length > 10) return this.fail(new CalcError('Math'));
+      this.factView = !this.factView;
+    }
+
+    // ───────── 메뉴 ─────────
+    openMenu(id) {
+      this.menu = { id, page: 0 };
+      this.screen = 'menu';
+    }
+    openSetup() {
+      this.menu = { id: 'setup', page: 0 };
+      this.screen = 'menu';
+    }
+    openStatMenu() {
+      this.menu = { id: this.stat.type === '1-VAR' ? 'stat1' : 'stat2', page: 0 };
+      this.screen = 'menu';
+    }
+    closeMenu() {
+      this.menu = null;
+      this.screen = this.mode === 'STAT' && this.statEditing ? 'statedit' : 'input';
+      if (this.mode === 'STAT' && this.statEditing) this.screen = 'statedit';
+    }
+
+    menuKey(id) {
+      const m = this.menu;
+      if (id === 'AC') return this.closeMenu();
+      if (id === 'UP' || id === 'DOWN') {
+        if (m.id === 'setup') m.page = id === 'DOWN' ? 1 : 0;
+        return;
+      }
+      if (!/^[0-9]$/.test(id)) return;
+      const d = Number(id);
+      switch (m.id) {
+        case 'mode':
+          return this.chooseMode(d);
+        case 'setup':
+          return this.setupChoose(d);
+        case 'setup-mthio':
+          if (d === 1 || d === 2) this.setSetup({ io: d === 1 ? 'MathO' : 'LineO' });
+          return;
+        case 'setup-norm':
+          if (d === 1 || d === 2) this.setSetup({ fmt: 'norm', n: d });
+          return;
+        case 'setup-stat':
+          if (d === 1 || d === 2) this.setSetup({ stat: d === 1 });
+          return;
+        case 'setup-disp':
+          if (d === 1 || d === 2) this.setSetup({ dot: d === 1 ? 'Dot' : 'Comma' });
+          return;
+        case 'hyp': {
+          const names = ['sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh'];
+          if (d >= 1 && d <= 6) this.menuInsert({ k: 'fn', v: names[d - 1] });
+          return;
+        }
+        case 'drg': {
+          const u = ['deg', 'rad', 'gra'];
+          if (d >= 1 && d <= 3) this.menuInsert({ k: 'post', v: u[d - 1] });
+          return;
+        }
+        case 'clr':
+          if (d >= 1 && d <= 3) {
+            this.confirm = d;
+            this.screen = 'confirm';
+            this.menu = null;
+          }
+          return;
+        case 'stat-type':
+          if (d >= 1 && d <= 8) this.setStatType(G.cstat.TYPES[d - 1].id);
+          return;
+        case 'stat1':
+        case 'stat2':
+          return this.statMenuChoose(d);
+        case 'stat-sum1':
+          return this.statInsert(['sumx2', 'sumx'][d - 1]);
+        case 'stat-sum2':
+          return this.statInsert(['sumx2', 'sumx', 'sumy2', 'sumy', 'sumxy', 'sumx3', 'sumx2y', 'sumx4'][d - 1]);
+        case 'stat-var1':
+          return this.statInsert(['n', 'xbar', 'sxp', 'sxs'][d - 1]);
+        case 'stat-var2':
+          return this.statInsert(['n', 'xbar', 'sxp', 'sxs', 'ybar', 'syp', 'sys'][d - 1]);
+        case 'stat-reg': {
+          const quad = this.stat.type === '_+CX2';
+          const list = quad ? ['regA', 'regB', 'regC', 'xhat1', 'xhat2', 'yhat'] : ['regA', 'regB', 'regr', 'xhat', 'yhat'];
+          return this.statInsert(list[d - 1]);
+        }
+        case 'stat-mm1':
+          return this.statInsert(['minX', 'maxX'][d - 1]);
+        case 'stat-mm2':
+          return this.statInsert(['minX', 'maxX', 'minY', 'maxY'][d - 1]);
+        case 'stat-edit':
+          return this.statEditChoose(d);
+        default:
+      }
+    }
+    menuInsert(tok) {
+      this.menu = null;
+      this.screen = 'input';
+      if (!tok) return;
+      if (this.res) this.leaveResult();
+      this.insert(tok);
+    }
+    chooseMode(d) {
+      if (d < 1 || d > 3) return;
+      const mode = ['COMP', 'STAT', 'TABLE'][d - 1];
+      this.menu = null;
+      this.screen = 'input';
+      if (mode === this.mode && mode !== 'STAT') {
+        this.clearScreen(false);
+        return;
+      }
+      this.mode = mode;
+      this.clearScreen(true);
+      this.statEditing = false;
+      if (mode === 'STAT') {
+        this.stat = { type: this.stat.type, rows: [{ x: null, y: null, f: null }], sel: { r: 0, c: 0 }, top: 0 };
+        this.menu = { id: 'stat-type', page: 0 };
+        this.screen = 'menu';
+      } else if (mode === 'TABLE') {
+        this.table.stage = 'fx';
+        this.table.fx = [];
+      }
+    }
+    setupChoose(d) {
+      const m = this.menu;
+      if (m.page === 0) {
+        switch (d) {
+          case 1:
+            this.menu = { id: 'setup-mthio', page: 0 };
+            return;
+          case 2:
+            return this.setSetup({ io: 'LineIO' });
+          case 3:
+          case 4:
+          case 5:
+            return this.setSetup({ angle: ['Deg', 'Rad', 'Gra'][d - 3] });
+          case 6:
+          case 7:
+            this.prompt = { kind: d === 6 ? 'fix' : 'sci' };
+            this.screen = 'prompt';
+            this.menu = null;
+            return;
+          case 8:
+            this.menu = { id: 'setup-norm', page: 0 };
+            return;
+          default:
+            return;
+        }
+      }
+      switch (d) {
+        case 1:
+          return this.setSetup({ frac: 'ab/c' });
+        case 2:
+          return this.setSetup({ frac: 'd/c' });
+        case 3:
+          this.menu = { id: 'setup-stat', page: 0 };
+          return;
+        case 4:
+          this.menu = { id: 'setup-disp', page: 0 };
+          return;
+        case 5:
+          this.screen = 'contrast';
+          this.menu = null;
+          return;
+        default:
+      }
+    }
+    setSetup(patch) {
+      const before = JSON.stringify(this.setup);
+      const ioChanged = patch.io !== undefined && patch.io !== this.setup.io;
+      Object.assign(this.setup, patch);
+      this.menu = null;
+      this.screen = 'input';
+      // 표기 형식을 바꾸면 이력과 입력식이 지워진다(설명서). 통계 형식 변경은 통계 데이터도 지운다.
+      if (ioChanged) {
+        this.hist = [];
+        this.tokens = [];
+        this.cur = 0;
+        this.leaveResult();
+        if (this.mode === 'TABLE') this.table.fx = [];
+      }
+      if (patch.stat !== undefined && this.mode === 'STAT') this.stat.rows = [{ x: null, y: null, f: null }];
+      if (this.screen === 'input' && this.res) this.leaveResult();
+      void before;
+    }
+    promptKey(id) {
+      if (id === 'AC') {
+        this.screen = 'input';
+        this.prompt = null;
+        return;
+      }
+      if (/^[0-9]$/.test(id)) {
+        const n = Number(id);
+        this.setSetup({ fmt: this.prompt.kind, n });
+        this.prompt = null;
+      }
+    }
+    contrastKey(id) {
+      if (id === 'LEFT') this.contrast = Math.max(-5, this.contrast - 1);
+      else if (id === 'RIGHT') this.contrast = Math.min(5, this.contrast + 1);
+      else if (id === 'AC' || id === '=') this.screen = 'input';
+    }
+    confirmKey(id) {
+      if (id === 'AC') {
+        this.screen = 'input';
+        return;
+      }
+      if (id !== '=') return;
+      const c = this.confirm;
+      this.screen = 'input';
+      if (c === 1 || c === 3) this.resetSetup();
+      if (c === 2 || c === 3) this.resetMemory();
+      if (c === 3) {
+        this.stat = { type: '1-VAR', rows: [{ x: null, y: null, f: null }], sel: { r: 0, c: 0 }, top: 0 };
+        this.table = { fx: [], start: E.vInt(1), end: E.vInt(5), step: E.vInt(1), rows: [], sel: 0, stage: 'fx' };
+      }
+    }
+
+    // ───────── STAT ─────────
+    get twoVar() {
+      return G.cstat.TYPES.find((t) => t.id === this.stat.type).two;
+    }
+    setStatType(type) {
+      const wasTwo = this.twoVar;
+      this.stat.type = type;
+      const isTwo = this.twoVar;
+      if (wasTwo !== isTwo || !this.stat.rows.length) this.stat.rows = [{ x: null, y: null, f: null }];
+      this.stat.sel = { r: 0, c: 0 };
+      this.stat.top = 0;
+      this.menu = null;
+      this.statEditing = true;
+      this.screen = 'statedit';
+      this.tokens = [];
+      this.cur = 0;
+    }
+    statColumns() {
+      const cols = ['x'];
+      if (this.twoVar) cols.push('y');
+      if (this.setup.stat) cols.push('f');
+      return cols;
+    }
+    statMenuChoose(d) {
+      const two = this.menu.id === 'stat2';
+      switch (d) {
+        case 1:
+          this.menu = { id: 'stat-type', page: 0 };
+          return;
+        case 2:
+          this.statEditing = true;
+          this.menu = null;
+          this.screen = 'statedit';
+          this.tokens = [];
+          this.cur = 0;
+          return;
+        case 3:
+          this.menu = { id: two ? 'stat-sum2' : 'stat-sum1', page: 0 };
+          return;
+        case 4:
+          this.menu = { id: two ? 'stat-var2' : 'stat-var1', page: 0 };
+          return;
+        case 5:
+          this.menu = { id: two ? 'stat-reg' : 'stat-mm1', page: 0 };
+          return;
+        case 6:
+          if (two) this.menu = { id: 'stat-mm2', page: 0 };
+          return;
+        default:
+      }
+    }
+    statInsert(name) {
+      if (!name) return;
+      this.menu = null;
+      this.screen = 'input';
+      this.statEditing = false;
+      if (this.res) this.leaveResult();
+      this.insert({ k: 'stat', v: name });
+    }
+    statResult() {
+      return G.cstat.compute(this.stat.type, this.stat.rows);
+    }
+    statValue(name) {
+      const r = this.statResult();
+      if (!r) throw E.mathErr();
+      const map = { regA: 'A', regB: 'B', regC: 'C', regr: 'r' };
+      let x;
+      if (map[name]) {
+        if (!r.reg) throw E.mathErr();
+        x = r.reg[map[name]];
+      } else x = r[name];
+      if (x === undefined || !isFinite(x)) throw E.mathErr();
+      return E.vF(x);
+    }
+    statEstimate(name, v) {
+      const r = this.statResult();
+      if (!r || !r.reg) throw E.mathErr();
+      const x = G.cstat.estimate(this.stat.type, r.reg, name, v.f);
+      if (!isFinite(x)) throw E.mathErr();
+      return E.vF(x);
+    }
+    statCell(r, c) {
+      const row = this.stat.rows[r];
+      return row ? row[c] : null;
+    }
+    statEditKey(id, sh, al) {
+      const cols = this.statColumns();
+      const st = this.stat;
+      const rowsMax = this.twoVar ? (this.setup.stat ? 26 : 40) : this.setup.stat ? 40 : 80;
+      if (id === 'MODE') return sh ? this.openSetup() : this.openMenu('mode');
+      if (sh && id === '9') return this.openMenu('clr');
+      if (sh && id === '1') {
+        this.menu = { id: 'stat-edit-top', page: 0 };
+        this.menu = { id: 'stat-edit', page: 0 };
+        this.screen = 'menu';
+        return;
+      }
+      if (id === 'AC') {
+        // 입력 중이면 입력 취소, 아니면 계산 화면으로
+        if (this.tokens.length) {
+          this.tokens = [];
+          this.cur = 0;
+          return;
+        }
+        this.statEditing = false;
+        this.screen = 'input';
+        return;
+      }
+      const moveTo = (r, c) => {
+        st.sel = { r: Math.max(0, Math.min(st.rows.length - 1, r)), c: Math.max(0, Math.min(cols.length - 1, c)) };
+        st.top = Math.max(0, Math.min(st.sel.r, Math.max(st.top, st.sel.r - 2)));
+        if (st.sel.r < st.top) st.top = st.sel.r;
+        this.tokens = [];
+        this.cur = 0;
+      };
+      if (id === 'UP') return moveTo(st.sel.r - 1, st.sel.c);
+      if (id === 'DOWN') return moveTo(st.sel.r + 1, st.sel.c);
+      if (id === 'LEFT') return this.tokens.length ? this.horizontal('LEFT') : moveTo(st.sel.r, st.sel.c - 1);
+      if (id === 'RIGHT') return this.tokens.length ? this.horizontal('RIGHT') : moveTo(st.sel.r, st.sel.c + 1);
+      if (id === 'DEL' && !this.tokens.length) {
+        if (st.rows.length > 1 || st.rows[0].x !== null) {
+          st.rows.splice(st.sel.r, 1);
+          if (!st.rows.length) st.rows.push({ x: null, y: null, f: null });
+          moveTo(Math.min(st.sel.r, st.rows.length - 1), st.sel.c);
+        }
+        return;
+      }
+      if (id === '=') {
+        const col = cols[st.sel.c];
+        if (!this.tokens.length) {
+          // 값 없이 =: 아래 칸으로
+          return moveTo(st.sel.r + 1, st.sel.c);
+        }
+        let v;
+        try {
+          v = E.evalItems(E.toTree(this.tokens), this.ctx());
+        } catch (e) {
+          if (e instanceof CalcError) return this.fail(e);
+          throw e;
+        }
+        while (st.rows.length <= st.sel.r) st.rows.push({ x: null, y: null, f: null });
+        st.rows[st.sel.r][col] = v.f;
+        if (col === 'x' && this.setup.stat === false) st.rows[st.sel.r].f = null;
+        // 새 행 추가
+        if (st.sel.r === st.rows.length - 1 && st.rows.length < rowsMax) st.rows.push({ x: null, y: null, f: null });
+        return moveTo(st.sel.r + 1, st.sel.c);
+      }
+      // 값 입력용 편집
+      const line = true;
+      const act = this.action(id, sh, al, line);
+      if (!act || act.menu) return;
+      if (act.struct) return;
+      this.insert(act.tok);
+    }
+    statEditChoose(d) {
+      const st = this.stat;
+      this.menu = null;
+      this.screen = 'statedit';
+      if (d === 1) {
+        st.rows.splice(st.sel.r, 0, { x: null, y: null, f: null });
+      } else if (d === 2) {
+        st.rows = [{ x: null, y: null, f: null }];
+        st.sel = { r: 0, c: 0 };
+        st.top = 0;
+      }
+    }
+
+    // ───────── TABLE ─────────
+    tableFxDone() {
+      if (!this.tokens.length) return;
+      this.table.fx = this.tokens.map((t) => ({ ...t }));
+      this.table.stage = 'start';
+      this.dialogFresh = true;
+      this.tokens = this.valueTokens(this.table.start);
+      this.cur = this.tokens.length;
+    }
+    valueTokens(v) {
+      const s = this.plainDecimal(v.f).replace('−', '-');
+      const toks = [];
+      s.split('').forEach((c) => {
+        if (c === '-') toks.push({ k: 'neg' });
+        else if (/[0-9.]/.test(c)) toks.push({ k: 'd', v: c });
+      });
+      return toks;
+    }
+    tableDialogKey(id, sh, al) {
+      const t = this.table;
+      if (id === 'AC') {
+        t.stage = 'fx';
+        this.tokens = t.fx.map((x) => ({ ...x }));
+        this.cur = this.tokens.length;
+        return;
+      }
+      if (id === 'MODE') return sh ? this.openSetup() : this.openMenu('mode');
+      if (id === 'LEFT') return this.horizontal('LEFT');
+      if (id === 'RIGHT') return this.horizontal('RIGHT');
+      if (id === 'DEL') return this.del();
+      if (id === '=') {
+        let v;
+        try {
+          v = E.evalItems(E.toTree(this.tokens), this.ctx());
+        } catch (e) {
+          if (e instanceof CalcError) return this.fail(e);
+          throw e;
+        }
+        if (t.stage === 'start') {
+          t.start = v;
+          t.stage = 'end';
+          this.dialogFresh = true;
+          this.tokens = this.valueTokens(t.end);
+        } else if (t.stage === 'end') {
+          t.end = v;
+          t.stage = 'step';
+          this.dialogFresh = true;
+          this.tokens = this.valueTokens(t.step);
+        } else {
+          t.step = v;
+          return this.buildTable();
+        }
+        this.cur = this.tokens.length;
+        return;
+      }
+      const act = this.action(id, sh, al, true);
+      if (!act || act.menu || act.struct) return;
+      if (this.dialogFresh) {
+        this.tokens = [];
+        this.cur = 0;
+        this.dialogFresh = false;
+      }
+      this.insert(act.tok);
+    }
+    buildTable() {
+      const t = this.table;
+      const start = t.start.f;
+      const end = t.end.f;
+      const step = t.step.f;
+      if (!(end > start) || !(step > 0)) return this.fail(new CalcError('Argument', this.tokens.length));
+      const count = Math.floor((end - start) / step + 1e-9) + 1;
+      if (count > 30) return this.fail(new CalcError('Insufficient MEM', this.tokens.length));
+      const rows = [];
+      const savedX = this.mem.X;
+      const items = E.toTree(t.fx);
+      for (let i = 0; i < count; i++) {
+        const x = E.vF(E.r15(start + i * step));
+        this.mem.X = x;
+        let fv = null;
+        try {
+          fv = E.evalItems(items, this.ctx());
+        } catch (e) {
+          if (!(e instanceof CalcError)) throw e;
+        }
+        rows.push({ x, fx: fv });
+      }
+      void savedX;
+      t.rows = rows;
+      t.sel = 0;
+      t.col = 0;
+      t.stage = 'table';
+      this.screen = 'table';
+      this.tokens = [];
+      this.cur = 0;
+    }
+    tableKey(id, sh, al) {
+      const t = this.table;
+      if (id === 'MODE') return sh ? this.openSetup() : this.openMenu('mode');
+      if (id === 'AC') {
+        t.stage = 'fx';
+        this.screen = 'input';
+        this.tokens = t.fx.map((x) => ({ ...x }));
+        this.cur = this.tokens.length;
+        return;
+      }
+      if (id === 'UP') t.sel = Math.max(0, t.sel - 1);
+      else if (id === 'DOWN') t.sel = Math.min(t.rows.length - 1, t.sel + 1);
+      else if (id === 'LEFT') t.col = 0;
+      else if (id === 'RIGHT') t.col = 1;
+    }
+
+    // ───────── 숫자 → 문자열/노드 ─────────
+    plainDecimal(x) {
+      const p = F.decimalParts(x, { fmt: 'norm', n: 1, dot: 'Dot' }, null);
+      return p.exp === null ? p.s.replace('-', '−') : p.s.replace('-', '−') + '×10^' + p.exp;
+    }
+    decNodes(x, engK) {
+      return F.decimalNodes(x, this.setup, engK === undefined ? null : engK);
+    }
+
+    // 60진수(°′″) 표시
+    dmsNodes(x) {
+      const neg = x < 0;
+      let a = Math.abs(x);
+      let deg = Math.floor(a + 1e-12);
+      let rest = (a - deg) * 60;
+      let min = Math.floor(rest + 1e-10);
+      let sec = Math.round((rest - min) * 60 * 100) / 100;
+      if (sec >= 60) {
+        sec -= 60;
+        min += 1;
+      }
+      if (min >= 60) {
+        min -= 60;
+        deg += 1;
+      }
+      const secS = String(sec);
+      return [tx((neg ? '−' : '') + deg + '°' + min + '′' + secS + '″')];
+    }
+
+    factorNodes(n) {
+      let m = Number(n);
+      const parts = [];
+      for (let p = 2; p <= 999 && p * p <= m; p++) {
+        if (m % p === 0) {
+          let c = 0;
+          while (m % p === 0) {
+            m /= p;
+            c++;
+          }
+          parts.push([p, c]);
+        }
+      }
+      let rem = null;
+      if (m > 1) {
+        if (m < 1000 || (parts.length && m <= 999)) parts.push([m, 1]);
+        else rem = m;
+      }
+      // 999 이하 소수 인수를 다 뺀 뒤 남은 수: 나머지를 괄호로
+      const out = [];
+      parts.forEach((pc, i) => {
+        if (i) out.push(tx('×'));
+        out.push(tx(String(pc[0])));
+        if (pc[1] > 1) out.push(sup([tx(String(pc[1]))]));
+      });
+      if (rem !== null) {
+        if (out.length) out.push(tx('×'));
+        out.push(tx('(' + rem + ')'));
+      }
+      return out;
+    }
+
+    // 값 하나를 현재 설정으로 표시
+    valueNodes(v, res) {
+      if (this.factView) return this.factorNodes(E.vInteger(v));
+      if (this.eng !== null) return this.decNodes(v.f, this.eng);
+      if (this.dmsView) return this.dmsNodes(v.f);
+      const math = this.io === 'MathO';
+      const linear = !math;
+      let exact = null;
+      if (v.ex) {
+        const setup = this.mixedToggle ? { ...this.setup, frac: this.setup.frac === 'ab/c' ? 'd/c' : 'ab/c' } : this.setup;
+        exact = F.exactNodes(v.ex, setup, linear);
+      }
+      let base;
+      if (math) base = !v.dec && !res.forceDec;
+      else base = !!res.fracInput && !v.dec && !res.forceDec;
+      const useExact = !!exact && (this.toggle ? !base : base);
+      if (useExact) return exact;
+      return this.decNodes(v.f);
+    }
+
+    resultNodes(entry) {
+      const res = entry.res;
+      if (res.pair) {
+        const out = [];
+        res.pair.vals.forEach((v, i) => {
+          if (i) out.push(tx(this.setup.dot === 'Comma' ? ';' : ','));
+          out.push(tx(res.pair.labels[i] + '='));
+          out.push(...this.valueNodes(v, res));
+        });
+        return out;
+      }
+      return this.valueNodes(res.v, res);
+    }
+
+    // ───────── 입력식 → 표시 노드 ─────────
+    tokenNodes(t, ctx) {
+      switch (t.k) {
+        case 'd':
+          return [tx(t.v === '.' ? (this.setup.dot === 'Comma' ? '.' : '.') : t.v)];
+        case 'op':
+          return [tx({ '+': '+', '-': '−', '*': '×', '/': '÷', nPr: 'P', nCr: 'C' }[t.v])];
+        case 'neg':
+          return [tx('−')];
+        case 'lp':
+          return [tx('(')];
+        case 'rp':
+          return [tx(')')];
+        case 'fn': {
+          const nm = FN_NAME[t.v];
+          const out = [tx(nm[0])];
+          if (nm[1]) out.push(sup([tx(nm[1])]));
+          out.push(tx(t.v === 'sqrt' || t.v === 'cbrt' || t.v === 'pow10' || t.v === 'powe' ? '(' : '('));
+          return out;
+        }
+        case 'comma':
+          return [tx(this.setup.dot === 'Comma' ? ';' : ',')];
+        case 'colon':
+          return [tx(':')];
+        case 'sto':
+          return [tx('→' + t.v)];
+        case 'c':
+          return [tx(t.v === 'pi' ? 'π' : 'e')];
+        case 'var':
+          return [tx(t.v)];
+        case 'ans':
+          return [tx('Ans')];
+        case 'ran':
+          return [tx('Ran#')];
+        case 'post':
+          switch (t.v) {
+            case 'x2':
+              return [sup([tx('2')])];
+            case 'x3':
+              return [sup([tx('3')])];
+            case 'xinv':
+              return [sup([tx('−1')])];
+            case 'fact':
+              return [tx('!')];
+            case 'pct':
+              return [tx('%')];
+            case 'deg':
+              return [tx('°')];
+            case 'rad':
+              return [sup([tx('r')])];
+            default:
+              return [sup([tx('g')])];
+          }
+        case 'dms': {
+          const sym = ['°', '′', '″'][ctx.dms % 3];
+          ctx.dms++;
+          return [tx(sym)];
+        }
+        case 'fsep':
+          return [tx('⌟')];
+        case 'stat':
+          return [tx(STAT_NAME[t.v])];
+        case 'val':
+          return [tx(t.label)];
+        case 'powl':
+          return [tx('^(')];
+        case 'nrootl':
+          return [tx('ˣ√(')];
+        case 'x10l':
+          return [tx('×10^')];
+        default:
+          return [];
+      }
+    }
+
+    layout(tokens, cur) {
+      const tree = E.toTree(tokens);
+      return this.layoutSlot(tree, 0, tokens.length, cur);
+    }
+    layoutSlot(items, start, end, cur) {
+      const nodes = [];
+      const ctx = { dms: 0 };
+      items.forEach((it) => {
+        if (it.i === cur) nodes.push({ t: 'cur' });
+        if (it.s) nodes.push(...this.structNodes(it, cur));
+        else {
+          if (it.t.k !== 'd' && it.t.k !== 'dms') ctx.dms = 0;
+          nodes.push(...this.tokenNodes(it.t, ctx));
+        }
+      });
+      if (cur === end) nodes.push({ t: 'cur' });
+      if (!nodes.length) return [{ t: 'box' }];
+      return nodes;
+    }
+    structNodes(it, cur) {
+      const n = it.slots.length;
+      const slot = (k) => {
+        const start = k === 0 ? it.i0 + 1 : it.markers[k - 1] + 1;
+        const end = k < n - 1 ? it.markers[k] : it.iE;
+        return this.layoutSlot(it.slots[k], start, end, cur);
+      };
+      switch (it.s) {
+        case 'frac':
+          return [{ t: 'frac', n: slot(0), d: slot(1) }];
+        case 'mix':
+          return [{ t: 'mix', w: slot(0), n: slot(1), d: slot(2) }];
+        case 'sqrt':
+          return [{ t: 'sqrt', b: slot(0) }];
+        case 'cbrt':
+          return [{ t: 'sqrt', idx: [tx('3')], b: slot(0) }];
+        case 'nroot':
+          return [{ t: 'sqrt', idx: slot(0), b: slot(1) }];
+        case 'abs':
+          return [{ t: 'abs', b: slot(0) }];
+        case 'pow':
+          return [sup(slot(0))];
+        case 'e10':
+          return [tx('10'), sup(slot(0))];
+        case 'ee':
+          return [tx('e'), sup(slot(0))];
+        case 'x10':
+          return [tx('×10'), sup(slot(0))];
+        case 'logb':
+          return [tx('log'), { t: 'sub', b: slot(0) }, tx('('), ...slot(1), tx(')')];
+        default:
+          return [];
+      }
+    }
+
+    // ───────── 화면 ─────────
+    indicators() {
+      const io = this.io;
+      return {
+        shift: this.shift,
+        alpha: this.alpha,
+        M: !E.isZero(this.mem.M),
+        STO: this.pending === 'STO',
+        RCL: this.pending === 'RCL',
+        STAT: this.mode === 'STAT',
+        ang: { Deg: 'D', Rad: 'R', Gra: 'G' }[this.setup.angle],
+        FIX: this.setup.fmt === 'fix',
+        SCI: this.setup.fmt === 'sci',
+        math: io !== 'LineIO',
+        up: this.screen === 'result' && this.hist.length > 0 && this.histPos !== 0 && (this.histPos > 0 || this.hist.length > 1),
+        down: this.histPos >= 0,
+        disp: this.screen === 'result' && !!this.multi && this.multi.next < this.multi.stmts.length,
+      };
+    }
+
+    menuLines() {
+      const m = this.menu;
+      const S = G.cstat.TYPES;
+      switch (m.id) {
+        case 'mode':
+          return ['1:COMP 2:STAT', '3:TABLE'];
+        case 'setup':
+          return m.page === 0 ? ['1:MthIO 2:LineIO', '3:Deg 4:Rad', '5:Gra 6:Fix', '7:Sci 8:Norm'] : ['1:ab/c 2:d/c', '3:STAT 4:Disp', '5:◀CONT▶'];
+        case 'setup-mthio':
+          return ['1:MathO', '2:LineO'];
+        case 'setup-norm':
+          return ['1:Norm1', '2:Norm2'];
+        case 'setup-stat':
+          return ['1:ON', '2:OFF'];
+        case 'setup-disp':
+          return ['1:Dot', '2:Comma'];
+        case 'hyp':
+          return ['1:sinh 2:cosh', '3:tanh 4:sinh⁻¹', '5:cosh⁻¹ 6:tanh⁻¹'];
+        case 'drg':
+          return ['1:° 2:ʳ 3:ᵍ'];
+        case 'clr':
+          return ['1:Setup 2:Memory', '3:All'];
+        case 'stat-type':
+          return [`1:${S[0].label} 2:${S[1].label}`, `3:${S[2].label} 4:${S[3].label}`, `5:${S[4].label} 6:${S[5].label}`, `7:${S[6].label} 8:${S[7].label}`];
+        case 'stat1':
+          return ['1:Type 2:Data', '3:Sum 4:Var', '5:MinMax'];
+        case 'stat2':
+          return ['1:Type 2:Data', '3:Sum 4:Var', '5:Reg 6:MinMax'];
+        case 'stat-edit':
+          return ['1:Ins 2:Del-A'];
+        case 'stat-sum1':
+          return ['1:Σx² 2:Σx'];
+        case 'stat-sum2':
+          return ['1:Σx² 2:Σx', '3:Σy² 4:Σy', '5:Σxy 6:Σx³', '7:Σx²y 8:Σx⁴'];
+        case 'stat-var1':
+          return ['1:n 2:x̄', '3:σx 4:sx'];
+        case 'stat-var2':
+          return ['1:n 2:x̄', '3:σx 4:sx', '5:ȳ 6:σy', '7:sy'];
+        case 'stat-reg':
+          return this.stat.type === '_+CX2' ? ['1:A 2:B', '3:C 4:x̂₁', '5:x̂₂ 6:ŷ'] : ['1:A 2:B', '3:r 4:x̂', '5:ŷ'];
+        case 'stat-mm1':
+          return ['1:minX 2:maxX'];
+        case 'stat-mm2':
+          return ['1:minX 2:maxX', '3:minY 4:maxY'];
+        default:
+          return [];
+      }
+    }
+
+    view() {
+      const ind = this.indicators();
+      if (this.off) return { kind: 'off', ind: {}, lines: [] };
+      switch (this.screen) {
+        case 'menu':
+          return { kind: 'text', ind, lines: this.menuLines(), arrow: this.menu.id === 'setup' ? (this.menu.page === 0 ? 'down' : 'up') : null };
+        case 'error': {
+          const k = this.err.kind;
+          return { kind: 'text', ind, lines: [k === 'Insufficient MEM' ? 'Insufficient MEM Error' : k + ' ERROR', '', '[AC] :Cancel', '[◀][▶]:Goto'], error: true };
+        }
+        case 'confirm': {
+          const name = ['Setup', 'Memory', 'All'][this.confirm - 1];
+          return { kind: 'text', ind, lines: [name + ':Reset?', '', '[=]:Yes', '[AC]:Cancel'] };
+        }
+        case 'prompt':
+          return { kind: 'text', ind, lines: [(this.prompt.kind === 'fix' ? 'Fix' : 'Sci') + ' 0~9', '', '', ''] };
+        case 'contrast':
+          return { kind: 'text', ind, lines: ['CONTRAST', '', 'LIGHT      DARK', ' [◀]       [▶]'] };
+        case 'statedit':
+          return this.statView(ind);
+        case 'table':
+          return this.tableView(ind);
+        default:
+      }
+      if (this.mode === 'TABLE' && this.table.stage !== 'fx') {
+        const label = { start: 'Start?', end: 'End?', step: 'Step?' }[this.table.stage];
+        return { kind: 'expr', ind, upper: [tx(label)], lower: [], input: this.layout(this.tokens, this.cur), dialog: true };
+      }
+      const prefix = this.mode === 'TABLE' ? [tx('f(X)=')] : [];
+      if (this.screen === 'result') {
+        const entry = this.shownEntry();
+        if (entry) {
+          return { kind: 'expr', ind, upper: prefix.concat(this.layout(entry.tokens, -1)), lower: this.resultNodes(entry) };
+        }
+      }
+      return { kind: 'expr', ind, upper: prefix.concat(this.layout(this.tokens, this.cur)), lower: [] };
+    }
+
+    statView(ind) {
+      const st = this.stat;
+      const cols = this.statColumns();
+      const rows = [];
+      for (let i = st.top; i < Math.min(st.rows.length, st.top + 3); i++) {
+        rows.push({ n: i + 1, cells: cols.map((c) => (st.rows[i][c] === null || st.rows[i][c] === undefined ? '' : this.plainDecimal(st.rows[i][c]))) });
+      }
+      const editText = this.tokens.length ? F.flat(this.layout(this.tokens, this.cur)) : null;
+      const cur = st.rows[st.sel.r] ? st.rows[st.sel.r][cols[st.sel.c]] : null;
+      return {
+        kind: 'grid',
+        ind,
+        head: cols.map((c) => ({ x: 'X', y: 'Y', f: 'FREQ' }[c])),
+        rows,
+        sel: { r: st.sel.r - st.top, c: st.sel.c },
+        value: editText !== null ? editText : cur === null || cur === undefined ? '0' : this.plainDecimal(cur),
+        editing: !!this.tokens.length,
+      };
+    }
+    tableView(ind) {
+      const t = this.table;
+      const top = Math.max(0, Math.min(t.sel - 2, t.rows.length - 3));
+      const start = Math.max(0, Math.min(t.sel, top + 2) - 2);
+      const view = t.rows.slice(start, start + 3);
+      const fmt = (v) => (v ? this.plainDecimal(v.f) : '');
+      const sel = t.rows[t.sel];
+      return {
+        kind: 'grid',
+        ind,
+        head: ['X', 'F(X)'],
+        rows: view.map((r, i) => ({ n: start + i + 1, cells: [fmt(r.x), fmt(r.fx)] })),
+        sel: { r: t.sel - start, c: t.col || 0 },
+        value: sel ? ((t.col || 0) === 0 ? fmt(sel.x) : fmt(sel.fx)) : '',
+        table: true,
+      };
+    }
+
+    // 테스트용 평문 화면
+    text() {
+      const v = this.view();
+      if (v.kind === 'text') return v.lines.join(' | ');
+      if (v.kind === 'grid') return v.rows.map((r) => r.n + ':' + r.cells.join(',')).join(' | ') + ' @' + v.value;
+      if (v.kind === 'off') return '(off)';
+      const up = F.flat(v.upper).replace(/‸/g, '');
+      const lo = F.flat(v.lower);
+      return v.dialog ? up + ' ' + F.flat(v.input).replace(/‸/g, '') : up + (lo ? ' => ' + lo : '');
+    }
+    result() {
+      const v = this.view();
+      return v.kind === 'expr' ? F.flat(v.lower) : '';
+    }
+
+    // ───────── 저장·복원(설정과 메모리) ─────────
+    serialize() {
+      const sv = (v) => ({ f: v.f, dec: v.dec, ex: v.ex ? exToJson(v.ex) : null });
+      const mem = {};
+      Object.keys(this.mem).forEach((k) => (mem[k] = sv(this.mem[k])));
+      return { setup: this.setup, mem, contrast: this.contrast };
+    }
+    restore(o) {
+      try {
+        if (o.setup) Object.assign(this.setup, o.setup);
+        if (o.mem) Object.keys(o.mem).forEach((k) => (this.mem[k] = { f: o.mem[k].f, dec: o.mem[k].dec, ex: o.mem[k].ex ? exFromJson(o.mem[k].ex) : null }));
+        if (typeof o.contrast === 'number') this.contrast = o.contrast;
+      } catch (e) {
+        /* 저장본이 깨졌으면 기본값 유지 */
+      }
+    }
+  }
+
+  const qJ = (q) => [q.n.toString(), q.d.toString()];
+  const qF = (a) => N.Q(BigInt(a[0]), BigInt(a[1]));
+  function exToJson(ex) {
+    const r = {};
+    Object.keys(ex.r).forEach((k) => (r[k] = qJ(ex.r[k])));
+    return { q: qJ(ex.q), r, p: qJ(ex.p) };
+  }
+  function exFromJson(o) {
+    const r = {};
+    Object.keys(o.r).forEach((k) => (r[k] = qF(o.r[k])));
+    return N.mk(qF(o.q), r, qF(o.p));
+  }
+
+  G.Calc = Calc;
 })(globalThis.GISA);
 
 /* ── engine/choices.js ── */
@@ -8716,6 +12521,391 @@ button.lesson-row .bar {
   };
 })(globalThis.GISA);
 
+/* ── app/calcui.js ── */
+// 계산기 화면: 카시오 fx-350ES PLUS 모양의 키패드와 액정을 그린다.
+// 계산은 전부 G.Calc(engine/calc.js)가 하고, 여기서는 키 입력을 넘기고 화면(view)을 그리기만 한다.
+(function (G) {
+  'use strict';
+  if (typeof document === 'undefined' || !G.Calc) return;
+
+  const SAVE_KEY = 'gisa-calc-v1';
+  const DOCK_NARROW = 1000; // 오른쪽 AI 패널이 없을 때 왼쪽에 붙이는 최소 폭
+  const DOCK_WIDE = 1280; // AI 패널이 있을 때(양쪽 패널) 최소 폭
+  const FLOAT_MIN = 940; // 이보다 좁으면(폰) 계산기를 숨김
+
+  const calc = new G.Calc();
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+    if (saved) calc.restore(saved);
+  } catch (e) {
+    /* 저장본이 없거나 깨져도 기본값 */
+  }
+  const persist = () => {
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(calc.serialize()));
+    } catch (e) {
+      /* 저장 못 해도 계산은 됨 */
+    }
+  };
+
+  // ───────── 키 배열 (실물 사진 기준) ─────────
+  // [id, 본 글자, SHIFT 글자, ALPHA 글자, 종류]
+  const K = (id, main, sh, al, cls) => ({ id, main, sh: sh || '', al: al || '', cls: cls || 'fn' });
+  const TOP = [
+    K('SHIFT', 'SHIFT', '', '', 'shift'),
+    K('ALPHA', 'ALPHA', '', '', 'alpha'),
+    'PAD',
+    K('MODE', 'MODE', 'SETUP'),
+    K('ON', 'ON'),
+    K('Abs', 'Abs'),
+    K('x3', 'x³', '', ':'),
+    K('x-1', 'x⁻¹', 'x!'),
+    K('LOGAB', 'log▪▯'),
+  ];
+  const FUN = [
+    K('FRAC', '▯⁄▯', '▯▯⁄▯'),
+    K('SQRT', '√▪', '³√▪'),
+    K('x2', 'x²'),
+    K('x^', 'x▪', '▪√▯'),
+    K('log', 'log', '10▪'),
+    K('ln', 'ln', 'e▪'),
+    K('(-)', '(−)', '', 'A'),
+    K('DMS', '°′″', 'FACT', 'B'),
+    K('hyp', 'hyp', '', 'C'),
+    K('sin', 'sin', 'sin⁻¹', 'D'),
+    K('cos', 'cos', 'cos⁻¹', 'E'),
+    K('tan', 'tan', 'tan⁻¹', 'F'),
+    K('RCL', 'RCL', 'STO'),
+    K('ENG', 'ENG', '←'),
+    K('(', '(', '%'),
+    K(')', ')', ',', 'X'),
+    K('S<>D', 'S⇔D', 'ab/c⇔d/c', 'Y'),
+    K('M+', 'M+', 'M−', 'M'),
+  ];
+  const NUM = [
+    K('7', '7', '', '', 'num'),
+    K('8', '8', '', '', 'num'),
+    K('9', '9', 'CLR', '', 'num'),
+    K('DEL', 'DEL', 'INS', '', 'del'),
+    K('AC', 'AC', 'OFF', '', 'del'),
+    K('4', '4', '', '', 'num'),
+    K('5', '5', '', '', 'num'),
+    K('6', '6', '', '', 'num'),
+    K('*', '×', 'nPr', '', 'num'),
+    K('/', '÷', 'nCr', '', 'num'),
+    K('1', '1', 'STAT', '', 'num'),
+    K('2', '2', '', '', 'num'),
+    K('3', '3', '', '', 'num'),
+    K('+', '+', 'Pol', '', 'num'),
+    K('-', '−', 'Rec', '', 'num'),
+    K('0', '0', 'Rnd', '', 'num'),
+    K('.', '•', 'Ran#', 'RanInt', 'num'),
+    K('x10^x', '×10ˣ', 'π', 'e', 'num'),
+    K('Ans', 'Ans', 'DRG▶', '', 'num'),
+    K('=', '=', '', '', 'num'),
+  ];
+
+  // 물리 키보드 → 계산기 키
+  const KEYMAP = {
+    Enter: '=', '=': '=', Backspace: 'DEL', Delete: 'DEL', Escape: 'AC',
+    '+': '+', '-': '-', '*': '*', '/': '/', x: '*', X: '*', '.': '.', ',': '.',
+    '(': '(', ')': ')', ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT',
+    s: 'sin', c: 'cos', t: 'tan', l: 'log', n: 'ln', r: 'SQRT', '^': 'x^', '!': ['SHIFT', 'x-1'], '%': ['SHIFT', '('],
+    p: ['SHIFT', 'x10^x'], a: 'Ans', d: 'S<>D',
+  };
+
+  let root = null;
+  let lcd = null;
+  let toggle = null;
+  let open = false;
+
+  const h = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  };
+
+  // ───────── 액정 그리기 ─────────
+  function nodesToDom(nodes) {
+    const f = document.createDocumentFragment();
+    nodes.forEach((n) => f.appendChild(nodeToDom(n)));
+    return f;
+  }
+  function nodeToDom(n) {
+    switch (n.t) {
+      case 'tx':
+        return h('span', 't', n.s);
+      case 'cur':
+        return h('span', 'cur');
+      case 'box':
+        return h('span', 'bx');
+      case 'frac': {
+        const s = h('span', 'fr');
+        const a = h('span', 'fn');
+        a.appendChild(nodesToDom(n.n));
+        const b = h('span', 'fd');
+        b.appendChild(nodesToDom(n.d));
+        s.append(a, b);
+        return s;
+      }
+      case 'mix': {
+        const s = h('span', 'mx');
+        const w = h('span', 'mw');
+        w.appendChild(nodesToDom(n.w));
+        s.append(w, nodeToDom({ t: 'frac', n: n.n, d: n.d }));
+        return s;
+      }
+      case 'sqrt': {
+        const s = h('span', 'rad');
+        if (n.idx) {
+          const i = h('span', 'ri');
+          i.appendChild(nodesToDom(n.idx));
+          s.appendChild(i);
+        }
+        s.appendChild(h('span', 'rs', '√'));
+        const b = h('span', 'rb');
+        b.appendChild(nodesToDom(n.b));
+        s.appendChild(b);
+        return s;
+      }
+      case 'sup': {
+        const s = h('span', 'sp');
+        s.appendChild(nodesToDom(n.b));
+        return s;
+      }
+      case 'sub': {
+        const s = h('span', 'sb');
+        s.appendChild(nodesToDom(n.b));
+        return s;
+      }
+      case 'abs': {
+        const s = h('span', 'ab');
+        s.appendChild(nodesToDom(n.b));
+        return s;
+      }
+      default:
+        return h('span');
+    }
+  }
+
+  const IND = [
+    ['shift', 'S', 'shift'],
+    ['alpha', 'A', 'alpha'],
+    ['M', 'M'],
+    ['STO', 'STO'],
+    ['RCL', 'RCL'],
+    ['STAT', 'STAT'],
+    ['deg', 'D'],
+    ['rad', 'R'],
+    ['gra', 'G'],
+    ['FIX', 'FIX'],
+    ['SCI', 'SCI'],
+    ['math', 'Math'],
+    ['down', '▼'],
+    ['up', '▲'],
+    ['disp', 'Disp'],
+  ];
+
+  function paintInd(ind, host) {
+    host.textContent = '';
+    IND.forEach(([k, label, cls]) => {
+      let on = !!ind[k];
+      if (k === 'deg') on = ind.ang === 'D';
+      if (k === 'rad') on = ind.ang === 'R';
+      if (k === 'gra') on = ind.ang === 'G';
+      const s = h('span', 'ind' + (on ? ' on' : '') + (cls ? ' ' + cls : ''), label);
+      host.appendChild(s);
+    });
+  }
+
+  function paint() {
+    if (!lcd) return;
+    const v = calc.view();
+    const screen = lcd.screen;
+    const body = lcd.body;
+    lcd.panel.classList.toggle('off', v.kind === 'off');
+    screen.style.setProperty('--ink-a', String(Math.max(0.35, Math.min(1, 0.82 + calc.contrast * 0.06))));
+    paintInd(v.ind || {}, lcd.ind);
+    body.textContent = '';
+    body.className = 'lcd-body ' + v.kind + (v.error ? ' err' : '');
+    if (v.kind === 'off') return;
+    if (v.kind === 'text') {
+      v.lines.forEach((t) => body.appendChild(h('div', 'tl', t || ' ')));
+      if (v.arrow) body.appendChild(h('span', 'arrow', v.arrow === 'down' ? '▼' : '▲'));
+      return;
+    }
+    if (v.kind === 'grid') {
+      const tb = h('div', 'grid');
+      const head = h('div', 'gr gh');
+      head.appendChild(h('span', 'gn', ''));
+      v.head.forEach((t) => head.appendChild(h('span', 'gc', t)));
+      tb.appendChild(head);
+      v.rows.forEach((r, i) => {
+        const row = h('div', 'gr');
+        row.appendChild(h('span', 'gn', String(r.n)));
+        r.cells.forEach((c, j) => row.appendChild(h('span', 'gc' + (i === v.sel.r && j === v.sel.c ? ' sel' : ''), c)));
+        tb.appendChild(row);
+      });
+      body.appendChild(tb);
+      body.appendChild(h('div', 'gv' + (v.editing ? ' edit' : ''), v.value));
+      return;
+    }
+    // expr
+    const up = h('div', 'l1');
+    const inner = h('div', 'l1i' + (calc.overwrite ? ' ow' : ''));
+    if (v.dialog) {
+      body.appendChild(Object.assign(h('div', 'l0'), {}));
+      body.lastChild.appendChild(nodesToDom(v.upper));
+      inner.appendChild(nodesToDom(v.input));
+    } else inner.appendChild(nodesToDom(v.upper));
+    up.appendChild(inner);
+    const lo = h('div', 'l2');
+    lo.appendChild(nodesToDom(v.lower));
+    body.append(up, lo);
+    // 커서가 보이게 가로로 밀어 준다
+    const cur = inner.querySelector('.cur');
+    if (cur) {
+      const need = cur.offsetLeft + cur.offsetWidth + 14 - up.clientWidth;
+      up.scrollLeft = need > 0 ? need : 0;
+    } else up.scrollLeft = 0;
+    if (!v.lower.length) lo.textContent = ' ';
+  }
+
+  function press(id) {
+    calc.press(id);
+    persist();
+    paint();
+    paintKeys();
+  }
+  function pressKeys(list) {
+    (Array.isArray(list) ? list : [list]).forEach((k) => press(k));
+  }
+
+  // SHIFT/ALPHA가 눌려 있는 동안 키 글자를 강조
+  function paintKeys() {
+    if (!root) return;
+    root.classList.toggle('sh-on', calc.shift);
+    root.classList.toggle('al-on', calc.alpha);
+  }
+
+  // ───────── 키패드 ─────────
+  function keyEl(k) {
+    const cell = h('div', 'kc ' + k.cls);
+    const lab = h('div', 'kl');
+    lab.append(h('span', 'ks', k.sh), h('span', 'ka', k.al));
+    const b = h('button', 'key ' + k.cls, k.main);
+    b.type = 'button';
+    b.tabIndex = -1;
+    b.dataset.key = k.id;
+    b.setAttribute('aria-label', k.id === 'x10^x' ? '×10의 x제곱' : k.main + (k.sh ? ', SHIFT ' + k.sh : ''));
+    b.addEventListener('click', () => {
+      press(k.id);
+      root.focus({ preventScroll: true });
+    });
+    cell.append(lab, b);
+    return cell;
+  }
+  function padEl() {
+    const pad = h('div', 'pad');
+    const mk = (id, glyph, cls) => {
+      const b = h('button', 'pb ' + cls, glyph);
+      b.type = 'button';
+      b.tabIndex = -1;
+      b.dataset.key = id;
+      b.setAttribute('aria-label', { UP: '위', DOWN: '아래', LEFT: '왼쪽', RIGHT: '오른쪽' }[id]);
+      b.addEventListener('click', () => {
+        press(id);
+        root.focus({ preventScroll: true });
+      });
+      return b;
+    };
+    pad.append(mk('UP', '▲', 'u'), mk('LEFT', '◀', 'l'), h('span', 'pc', 'REPLAY'), mk('RIGHT', '▶', 'r'), mk('DOWN', '▼', 'd'));
+    return pad;
+  }
+
+  function build() {
+    root = document.getElementById('calc');
+    if (!root) return;
+    root.textContent = '';
+    root.tabIndex = 0;
+    root.setAttribute('aria-label', '계산기 (카시오 fx-350ES PLUS 방식)');
+    const head = h('div', 'calc-head');
+    head.append(h('strong', null, '계산기'), h('span', 'calc-model', 'fx-350ES PLUS'));
+    const close = h('button', 'btn small calc-close', '닫기');
+    close.type = 'button';
+    close.onclick = () => setOpen(false);
+    head.appendChild(close);
+
+    const panel = h('div', 'lcd-panel');
+    const ind = h('div', 'lcd-ind');
+    const screen = h('div', 'lcd');
+    const body = h('div', 'lcd-body');
+    screen.append(ind, body);
+    panel.appendChild(screen);
+    lcd = { panel, screen, ind, body };
+
+    const top = h('div', 'kgrid top');
+    TOP.forEach((k) => top.appendChild(k === 'PAD' ? padEl() : keyEl(k)));
+    FUN.forEach((k) => top.appendChild(keyEl(k)));
+    const num = h('div', 'kgrid num');
+    NUM.forEach((k) => num.appendChild(keyEl(k)));
+    const keys = h('div', 'keys');
+    keys.append(top, num);
+
+    const hint = h('div', 'calc-hint', '이 칸을 누르면 키보드로도 입력돼: 숫자·+−×÷·Enter·Backspace·방향키, s/c/t(삼각), l(log), n(ln), r(√), p(π)');
+    root.append(head, panel, keys, hint);
+    root.addEventListener('keydown', onKey);
+    document.body.classList.add('has-calc');
+
+    toggle = h('button', 'calc-toggle', '계산기');
+    toggle.type = 'button';
+    toggle.setAttribute('aria-label', '계산기 열기');
+    toggle.onclick = () => setOpen(!open);
+    document.body.appendChild(toggle);
+
+    paint();
+    paintKeys();
+    layout();
+    window.addEventListener('resize', layout);
+    new MutationObserver(layout).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  function onKey(e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const m = KEYMAP[e.key];
+    let keys = m;
+    if (!keys && /^[0-9]$/.test(e.key)) keys = e.key;
+    if (!keys) return;
+    e.preventDefault();
+    e.stopPropagation();
+    pressKeys(keys);
+  }
+
+  // ───────── 배치: 넓으면 왼쪽에 붙이고, 중간 폭이면 눌러서 여는 떠 있는 패널 ─────────
+  function layout() {
+    if (!root) return;
+    const w = window.innerWidth;
+    const hasSide = document.body.classList.contains('has-side');
+    const dock = w >= (hasSide ? DOCK_WIDE : DOCK_NARROW);
+    const canFloat = !dock && w >= FLOAT_MIN;
+    document.body.classList.toggle('calc-dock', dock);
+    document.body.classList.toggle('calc-float', canFloat);
+    document.body.classList.toggle('calc-open', canFloat && open);
+    document.body.classList.toggle('calc-off', !dock && !canFloat);
+    if (toggle) toggle.hidden = !canFloat;
+  }
+  function setOpen(v) {
+    open = !!v;
+    layout();
+    if (open && root) root.focus({ preventScroll: true });
+  }
+
+  G.calcUi = { calc, press, pressKeys, paint, setOpen, layout, el: () => root };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
+  else build();
+})(globalThis.GISA);
+
 /* ── app/ui.js ── */
 // 화면. 상태가 바뀌면 현재 탭을 통째로 다시 그린다(작은 앱이라 이게 제일 단순하고 안전함).
 (function (G) {
@@ -10069,6 +14259,7 @@ button.lesson-row .bar {
     if (view.tab !== 'practice' || !view.q || e.metaKey || e.ctrlKey || e.altKey) return;
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (e.target && e.target.closest && e.target.closest('#calc')) return; // 계산기에 입력 중일 땐 문제 단축키 끔
     if (!view.answered && /^[1-4]$/.test(e.key)) {
       answer(Number(e.key) - 1);
       e.preventDefault();
