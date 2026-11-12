@@ -181,10 +181,9 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     }
     check(await page.isVisible('#drill-banner:has-text("익숙해졌어")'), '3연속 정답 → 익숙해짐 표시');
     check(await page.isVisible('#drill-back-bottom'), '익숙해지면 맨 아래에도 단락으로 돌아가기 버튼');
-    check((await page.$$('.cele-bl')).length === 14 && (await page.isVisible('.cele-card')), '익숙해지면 풍선 축하 효과');
-    await page.evaluate(() => { const b = document.querySelector('.cele-bl'); b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); });
-    check((await page.$$('.cele-bl')).length === 13 && (await page.$$('.cele-bit')).length > 0, '풍선을 누르면 터짐');
-    check(await page.evaluate(() => document.querySelector('.cele-hint').textContent.includes('1/14')), '터뜨린 개수 표시');
+    check((await page.$$('.cele-bit')).length === 28 && (await page.isVisible('.cele-badge')), '익숙해지면 작은 폭죽 효과(색종이 28개 + 배지)');
+    check(await page.evaluate(() => { const v = document.querySelector('.verdict').getBoundingClientRect(); const c = document.querySelector('.cele-badge').getBoundingClientRect(); return Math.abs((c.left + c.right) / 2 - (v.left + v.right) / 2) < 6; }), '폭죽이 정답 표시 자리에서 터짐');
+    await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(SHOTS, '05f-iphone-celebrate.png') });
     await page.evaluate(() => GISA.celebrate.clear());
     check((await page.$$('.cele')).length === 0, '축하 효과 정리');

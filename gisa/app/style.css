@@ -1718,110 +1718,61 @@ body.has-side:not(.calc-dock) .toast {
   grid-row: 3;
 }
 
-/* ── 익숙해짐 축하 (풍선) ── */
+/* ── 익숙해짐 축하 (🎉 작은 폭죽: 그 자리에서만 터짐) ── */
 .cele {
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 0;
   pointer-events: none;
   z-index: 40;
-}
-.cele-card {
-  position: absolute;
-  left: 50%;
-  top: 22%;
-  transform: translateX(-50%);
-  text-align: center;
-  padding: 16px 26px;
-  border-radius: 18px;
-  background: var(--surface);
-  color: var(--ink);
-  border: 2px solid var(--accent);
-  box-shadow: 0 10px 34px rgb(0 0 0 / 0.28);
-  max-width: calc(100% - 40px);
-  animation: cele-card 3.4s ease forwards;
-}
-.cele-title {
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--accent);
-}
-.cele-sub {
-  font-size: 14px;
-  color: var(--muted);
-  margin-top: 2px;
-}
-.cele-hint {
-  position: absolute;
-  left: 50%;
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--bg);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.cele-bl {
-  position: absolute;
-  bottom: -90px;
-  border-radius: 50% 50% 48% 48%;
-  pointer-events: auto;
-  cursor: pointer;
-  touch-action: manipulation;
-  animation: cele-rise linear forwards;
-  box-shadow: inset -6px -8px 12px rgb(0 0 0 / 0.12);
-}
-.cele-bl::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 98%;
-  width: 1px;
-  height: 22px;
-  background: var(--c);
-  opacity: 0.7;
+  overflow: visible;
 }
 .cele-bit {
   position: absolute;
-  width: 8px;
-  height: 8px;
+  border-radius: 1px;
+  will-change: transform, opacity;
+}
+.cele-bit.round {
   border-radius: 50%;
-  pointer-events: none;
-  animation: cele-bit 0.65s ease-out forwards;
 }
-@keyframes cele-rise {
+.cele-badge {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+  font-size: 14px;
+  line-height: 1.3;
+  white-space: nowrap;
+  max-width: calc(100vw - 32px);
+  animation: cele-badge 2.4s ease forwards;
+}
+.cele-badge span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+@keyframes cele-badge {
   0% {
-    transform: translate(0, 0);
-  }
-  50% {
-    transform: translate(var(--sway), -60vh);
-  }
-  100% {
-    transform: translate(calc(var(--sway) * -1), -125vh);
-  }
-}
-@keyframes cele-bit {
-  to {
-    transform: translate(var(--dx), var(--dy)) scale(0.2);
     opacity: 0;
-  }
-}
-@keyframes cele-card {
-  0% {
-    opacity: 0;
-    transform: translateX(-50%) scale(0.6);
+    transform: translate(-50%, -60%) scale(0.7);
   }
   12% {
     opacity: 1;
-    transform: translateX(-50%) scale(1.06);
+    transform: translate(-50%, -100%) scale(1.05);
   }
   20% {
-    transform: translateX(-50%) scale(1);
+    transform: translate(-50%, -100%) scale(1);
   }
-  85% {
+  80% {
     opacity: 1;
   }
   100% {

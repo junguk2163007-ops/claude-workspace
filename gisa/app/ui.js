@@ -193,10 +193,10 @@
     const pid = G.pointId ? G.pointId(view.q) : null;
     const wasMastered = pid ? P.pointMastered(S, pid) : false;
     view.event = P.record(S, view.q, ok);
+    let masteredName = null;
     if (pid && !wasMastered && P.pointMastered(S, pid)) {
       const pt = G.pointsFor(view.q.conceptId || '').find((p) => ptKey(p) === pid);
-      const name = pt ? pt.t : '';
-      if (!(G.celebrate && G.celebrate.play('익숙해졌어!', name))) toast('이 포인트는 이제 익숙해졌어!');
+      masteredName = pt ? pt.t : '';
     }
     const after = unlockedSet();
     view.unlocked = after.filter((id) => before.indexOf(id) === -1);
@@ -204,6 +204,8 @@
     render();
     const v = document.querySelector('.verdict');
     if (v && v.scrollIntoView) v.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    // 익숙해졌으면 정답 표시 자리에서 작은 폭죽 (움직임 줄이기 설정이면 짧은 알림만)
+    if (masteredName !== null && !(G.celebrate && G.celebrate.play('익숙해졌어!', masteredName, v))) toast('이 포인트는 이제 익숙해졌어!');
   }
 
   // 지금 읽고 있는 단락/레슨의 기억 키(목록 화면이면 null)
