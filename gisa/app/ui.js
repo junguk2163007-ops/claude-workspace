@@ -250,7 +250,16 @@
           { class: 'brand' },
           h('span', { html: '<svg viewBox="0 0 30 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 9c3.5-9 6.5-9 10 0s6.5 9 10 0 4-6 6-6"/></svg>', 'aria-hidden': 'true' }),
           h('span', null, '통전', h('span', { class: 'bolt', 'aria-hidden': 'true', html: '<svg viewBox="0 0 10 16" fill="currentColor"><path d="M6.4 0 0.6 9.2h3.6L3 16l6.4-9.4H5.6z"/></svg>' }), '기사 ', h('small', null, '전기기사 필기 합격 연습장')),
-          h('span', { class: 'streak', title: '현재 연속 정답' }, '연속 ' + S.streak.cur, h('span', { class: 'syncdot', id: 'sync-dot' }))
+          h('span', { class: 'streak', title: '현재 연속 정답' }, '연속 ' + S.streak.cur, h('span', { class: 'syncdot', id: 'sync-dot' })),
+          h('button', {
+            class: 'wiki-open',
+            id: 'wiki-open',
+            type: 'button',
+            title: '용어 사전',
+            'aria-label': '용어 사전 열기',
+            onclick: () => G.wikiUi && G.wikiUi.openIndex(),
+            html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3"/><path d="M9 7.5h6M9 11h4"/></svg>',
+          })
         ),
         h(
           'nav',
@@ -1395,12 +1404,13 @@
 
   function render() {
     // 다른 문제로 넘어가면 계산기 시연을 끝낸다
-    if (G.calcDemo && G.calcDemo.active() && G.calcDemo.key() !== (view.q && view.q.key)) G.calcDemo.stop();
+    if (G.calcDemo && G.calcDemo.active() && G.calcDemo.scope() === 'question' && G.calcDemo.key() !== (view.q && view.q.key)) G.calcDemo.stop();
     renderBar();
     const root = document.getElementById('view');
     root.textContent = '';
     const fn = { learn: renderLearn, units: renderUnits, practice: renderPractice, review: renderReview, stats: renderStats, settings: renderSettings }[view.tab];
     fn(root);
+    if (G.wikiUi) G.wikiUi.link(root);
     if (G.aiTutor) G.aiTutor.updateSide();
   }
 
@@ -1457,7 +1467,7 @@
     view.tab = 'practice';
     render();
   }
-  G.ui = { start, _view: view, _state: () => S, _load, _answer: answer, _openLesson: openLesson, _openUnit: openUnit, _startDrill: startDrill };
+  G.ui = { openLesson, openUnit, start, _view: view, _state: () => S, _load, _answer: answer, _openLesson: openLesson, _openUnit: openUnit, _startDrill: startDrill };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })(globalThis.GISA);

@@ -39,3 +39,9 @@
 - `calc-guides/*.js`: 템플릿마다 단계별 설명과 계산식(`G.guide(id, (params) => [{ say, expr }])`). 계산식은 `V/R`, `sqrt(R^2+X^2)`, `9e9*Q1*1e-6/d^2`처럼 쓰고, `engine/calc-guide.js`가 실제 fx-350ES PLUS 키 순서로 바꾼다(`$A`는 저장한 변수 A, `store: 'A'`는 결과 저장).
 - `app/calcdemo.js`: 왼쪽 계산기에서 다음 키를 깜박여 알려 주고, 직접 눌러도 되고 "다음 키"·자동 재생도 된다. 시연 중엔 기본 설정(MathIO·Deg·Norm1)으로 바꿔 두었다가 끝나면 원래 설정·메모리로 복구한다.
 - 새 템플릿을 만들면 같은 id로 가이드를 추가해야 `node test/calc-guide-tests.js`가 통과한다(템플릿마다 600문제를 실제 계산기에 눌러 정답과 비교). 식으로 답하는 문제(라플라스 변환 등)는 대상이 아니다.
+
+## 용어 사전 (나무위키처럼 눌러서 보는 해설)
+- `glossary/*.js`: 용어마다 `G.term(id, 이름, { aliases, brief, easy, formulas, units, exam, pitfalls, example, related, concept })`. 글 속에서 이름·별칭이 보이면 자동으로 밑줄 링크가 걸리고(`app/wikiui.js`), 누르면 오른쪽(폰은 전체 화면)에 해설 창이 열린다. 해설 안의 용어도 링크라서 계속 타고 들어갈 수 있다.
+- 링크 규칙(`engine/glossary.js`): 한 카드 안에서 용어마다 첫 한 번만, 더 긴 낱말(예: 선간전압) 안의 짧은 용어(전압)는 걸지 않음, 보기·제목·공식·버튼에는 걸지 않음.
+- 새 용어를 넣으면 `node test/wiki-tests.js`가 형식, 관련 용어 연결, 별칭 충돌, 예제 계산(`example.expr`를 실제 계산기에 눌러서 `ans`와 비교)을 확인한다.
+- 머리글의 책 아이콘 = 전체 목록 + 검색.

@@ -51,10 +51,23 @@
   function start(q) {
     const plan = G.calcPlan(q);
     if (!plan) return false;
+    return begin({ key: q.key, scope: 'question' }, plan);
+  }
+
+  // 용어 사전의 예제: 계산식 하나를 계산기에서 눌러 보여 준다
+  function startExample(termId) {
+    const t = G.glossary && G.glossary.byId[termId];
+    if (!t || !t.example) return false;
+    const e = t.example;
+    const steps = [{ say: e.say, expr: e.expr, keys: G.calcExprKeys(e.expr, {}).concat(['=']) }];
+    return begin({ key: 'wiki:' + termId, scope: 'wiki' }, steps);
+  }
+
+  function begin(meta, plan) {
     stop(true);
     const snap = calc.serialize();
     const steps = withDecimalStep(plan);
-    demo = { q, steps, flat: flatten(steps), idx: 0, auto: false, speed: 'normal', snap, timer: 0, dom: null };
+    demo = { key: meta.key, scope: meta.scope, steps, flat: flatten(steps), idx: 0, auto: false, speed: 'normal', snap, timer: 0, dom: null };
     resetCalc();
     U.setOpen(true);
     buildDom();
@@ -262,7 +275,9 @@
     start,
     stop,
     active: () => !!demo,
-    key: () => (demo ? demo.q.key : null),
+    key: () => (demo ? demo.key : null),
+    scope: () => (demo ? demo.scope : null),
+    startExample,
     onUser,
     _state: () => demo,
     _next: pressNext,

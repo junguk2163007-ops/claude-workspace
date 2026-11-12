@@ -1922,3 +1922,223 @@ body.calc-float .calc-btn {
     transform: translateX(3px);
   }
 }
+
+/* ── 용어 사전 (나무위키처럼 눌러서 보는 해설) ── */
+a.term {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1.5px dotted var(--accent);
+  cursor: help;
+  border-radius: 2px;
+}
+a.term:hover,
+a.term:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+.wiki-open {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 5px;
+  margin-left: 8px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+}
+.wiki-open svg {
+  width: 100%;
+  height: 100%;
+}
+#wiki {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 100vw);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.25);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+#wiki[hidden] {
+  display: none;
+}
+.wiki-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.wiki-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 18px;
+  outline: none;
+  overflow-wrap: anywhere;
+}
+.wiki-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  line-height: 1.7;
+}
+.wiki-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wiki-brief {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 6px;
+  font-weight: 600;
+}
+.wiki-sec {
+  display: grid;
+  gap: 6px;
+}
+.wiki-sec h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--accent);
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--line);
+}
+.wiki-sec p {
+  margin: 0;
+}
+.wiki-sec.warn h3 {
+  color: var(--warn);
+}
+.wiki-sec.warn .wiki-list {
+  background: var(--warn-soft);
+  border-radius: 8px;
+  padding: 8px 12px 8px 28px;
+}
+.wiki-list {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}
+.wiki-formulas {
+  display: grid;
+  gap: 6px;
+}
+.wiki-formula {
+  display: grid;
+  gap: 1px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.wiki-formula code {
+  font-family: var(--font-mono);
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.wiki-formula span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.wiki-units {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wiki-unit {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+.wiki-example {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.wiki-q {
+  font-weight: 600;
+}
+.wiki-ans code {
+  font-family: var(--font-mono);
+}
+.wiki-say {
+  color: var(--muted);
+  font-size: 14px;
+}
+.wiki-example .btn {
+  justify-self: start;
+  margin-top: 4px;
+}
+.wiki-chips,
+.wiki-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wiki-chips .chip {
+  cursor: pointer;
+}
+.wiki-search {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.wiki-results {
+  display: grid;
+  gap: 6px;
+}
+.wiki-group {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: var(--accent);
+}
+.wiki-item {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.wiki-item span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.wiki-item:hover {
+  border-color: var(--accent);
+}
+/* 폰: 화면 전체 */
+@media (max-width: 700px) {
+  #wiki {
+    width: 100vw;
+    border-left: 0;
+  }
+}

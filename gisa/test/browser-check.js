@@ -748,6 +748,77 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     }
   }
 
+  // ── 2-6. 용어 사전 ──
+  {
+    // (가) PC: 문제 속 용어 → 해설 창
+    {
+      const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
+      await page.evaluate(() => GISA.ui._load('t:ohm-current#3'));
+      const terms = await page.$$('.qtext .term');
+      check(terms.length >= 2, '용어 사전: 문제 글 속 용어에 링크가 걸림 (' + terms.length + '개)');
+      check((await page.$$('.choices .term')).length === 0, '용어 사전: 보기에는 링크를 걸지 않음');
+      const firstId = await page.evaluate(() => document.querySelector('.qtext .term').dataset.term);
+      await page.click('.qtext .term');
+      check(await page.isVisible('#wiki'), '용어 사전: 용어를 누르면 해설 창이 열림');
+      const title = await page.textContent('#wiki .wiki-title');
+      check(title === (await page.evaluate((id) => GISA.glossary.byId[id].name, firstId)), '용어 사전: 누른 용어의 해설 (' + title + ')');
+      check((await page.$$('#wiki .wiki-sec')).length >= 3 && (await page.isVisible('#wiki .wiki-brief')), '용어 사전: 한 줄 요약과 여러 해설 항목');
+      check((await page.$$('#wiki .wiki-body .term')).length >= 1, '용어 사전: 해설 안의 용어도 링크');
+      check(await noOverflow(page), '용어 사전: 가로 넘침 없음(PC)');
+      // 같은 용어로 계속 타고 들어가기 → 뒤로
+      const before = await page.textContent('#wiki .wiki-title');
+      await page.click('#wiki .wiki-chips .chip');
+      const after = await page.textContent('#wiki .wiki-title');
+      check(after !== before, '용어 사전: 관련 용어로 이동');
+      await page.click('#wiki-back');
+      check((await page.textContent('#wiki .wiki-title')) === before, '용어 사전: 뒤로 가면 이전 용어');
+      await page.screenshot({ path: path.join(SHOTS, '20-wiki-pc.png') });
+      await page.keyboard.press('Escape');
+      check(!(await page.isVisible('#wiki')), '용어 사전: Esc로 닫힘');
+      // 전체 목록과 검색
+      await page.click('#wiki-open');
+      check(await page.isVisible('#wiki .wiki-search'), '용어 사전: 머리글 책 버튼으로 전체 목록');
+      await page.fill('#wiki .wiki-search', '역률');
+      check((await page.$$('#wiki .wiki-item')).length >= 1 && (await page.textContent('#wiki .wiki-results')).includes('역률'), '용어 사전: 검색');
+      await page.click('#wiki .wiki-item');
+      check((await page.textContent('#wiki .wiki-title')).includes('역률'), '용어 사전: 검색 결과 열기');
+      // 예제를 계산기로 눌러 보기
+      await page.evaluate(() => GISA.wikiUi.open('ohm-law'));
+      check(await page.isVisible('#wiki-demo'), '용어 사전: 예제를 계산기로 눌러 보기 버튼');
+      await page.click('#wiki-demo');
+      check(await page.evaluate(() => GISA.calcDemo.active() && GISA.calcDemo.scope() === 'wiki'), '용어 사전: 예제 시연 시작');
+      await page.click('#demo-step');
+      check((await page.evaluate(() => GISA.calcUi.calc.res && GISA.calcUi.calc.res.v.f)) === 6, '용어 사전: 예제 결과(48÷8=6)');
+      check(await page.evaluate(() => GISA.calcDemo.active()), '용어 사전: 시연 중에 다른 화면을 다시 그려도 시연이 유지됨');
+      await page.click('#demo-close');
+      // 레슨 화면에도 링크
+      await page.evaluate(() => GISA.ui._openLesson(GISA.lessonFor('ohm').id));
+      check((await page.$$('#view .term')).length >= 3, '용어 사전: 배우기 레슨 글 속에도 링크');
+      // 레슨에서 용어 → 레슨 읽기 버튼
+      await page.evaluate(() => GISA.wikiUi.open('power'));
+      check(await page.isVisible('#wiki-lesson') && (await page.isVisible('#wiki-unit')), '용어 사전: 레슨 읽기·문제 반복 버튼');
+      await page.click('#wiki-unit');
+      check(!(await page.isVisible('#wiki')) && (await page.evaluate(() => GISA.ui._view.tab)) === 'units', '용어 사전: 과목별로 이동하면 해설 창이 닫힘');
+      check(errors.length === 0, '용어 사전 콘솔 오류: ' + errors.join(' | '));
+      await ctx.close();
+    }
+    // (나) 폰: 전체 화면
+    {
+      const { ctx, page, errors } = await newPage(browser, Object.assign({ colorScheme: 'light' }, iphone));
+      await page.evaluate(() => GISA.ui._load('t:power-v2r#5'));
+      await page.click('.qtext .term');
+      const box = await page.evaluate(() => { const r = document.querySelector('#wiki').getBoundingClientRect(); return { w: r.width, h: r.height }; });
+      check(box.w >= 389 && box.h >= 800, '용어 사전: 폰에서는 화면 전체 (' + box.w + '×' + box.h + ')');
+      check(await noOverflow(page), '용어 사전: 폰 가로 넘침 없음');
+      check(!(await page.isVisible('#wiki-demo')), '용어 사전: 폰에는 계산기가 없어서 눌러 보기 버튼 숨김');
+      await page.screenshot({ path: path.join(SHOTS, '21-wiki-phone.png') });
+      await page.click('#wiki-close');
+      check(!(await page.isVisible('#wiki')), '용어 사전: 폰에서 닫기');
+      check(errors.length === 0, '용어 사전 폰 콘솔 오류: ' + errors.join(' | '));
+      await ctx.close();
+    }
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });
