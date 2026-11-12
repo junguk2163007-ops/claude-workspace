@@ -24,6 +24,7 @@ const css = read(FILES.style);
 const body =
   '<header class="appbar" id="bar"></header>\n' +
   '<main><div class="wrap" id="view"></div></main>\n' +
+  '<aside id="side" aria-label="AI에게 묻기"></aside>\n' +
   '<noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>\n' +
   '<script>\n' + js + '\n</script>\n';
 

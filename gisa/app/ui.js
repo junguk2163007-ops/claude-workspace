@@ -1243,12 +1243,49 @@
   }
 
   // ───────── 그리기 ─────────
+  // PC 오른쪽 AI 패널이 "지금 무엇을 보고 있는지" 알 수 있게 화면 상태를 정리해서 건넨다
+  function statsSummary() {
+    const rows = G.concepts
+      .map((c) => ({ name: c.name, st: P.conceptStat(S, c.id) }))
+      .filter((r) => r.st.n >= 3)
+      .sort((a, b) => a.st.c / a.st.n - b.st.c / b.st.n)
+      .slice(0, 6);
+    const read = Object.keys(S.lessons || {}).length;
+    return (
+      '푼 문제 ' + S.total.n + '개, 전체 정답률 ' + pct(S.total.c, S.total.n) + ', 읽은 레슨 ' + read + '/' + G.lessons.length + '. ' +
+      (rows.length ? '정답률이 낮은 개념: ' + rows.map((r) => r.name + ' ' + pct(r.st.c, r.st.n) + '(' + r.st.n + '문제)').join(', ') : '아직 3문제 이상 푼 개념이 없어.')
+    );
+  }
+
+  function aiContext() {
+    if (view.tab === 'practice' && view.q) {
+      return { kind: 'question', q: view.q, answered: view.answered, chosen: view.chosen, label: '문제 · ' + concept(view.q.conceptId).name };
+    }
+    if (view.tab === 'learn' && view.lessonId) {
+      const l = G.lessonMap[view.lessonId];
+      return {
+        kind: 'lesson',
+        lesson: l,
+        concept: l.concept ? concept(l.concept) : null,
+        quiz: view.quiz ? { q: view.quiz.q, answered: view.quiz.chosen >= 0 } : null,
+        label: '레슨 · ' + l.title,
+      };
+    }
+    if (view.tab === 'units' && view.unitCid) {
+      const c = concept(view.unitCid);
+      return { kind: 'unit', concept: c, points: G.pointsFor(c.id), label: '단락 · ' + c.name };
+    }
+    const names = { learn: '배우기 목록', units: '과목별 단원 목록', practice: '연습', review: '복습', stats: '기록', settings: '설정' };
+    return { kind: 'general', label: names[view.tab] || '', stats: statsSummary() };
+  }
+
   function render() {
     renderBar();
     const root = document.getElementById('view');
     root.textContent = '';
     const fn = { learn: renderLearn, units: renderUnits, practice: renderPractice, review: renderReview, stats: renderStats, settings: renderSettings }[view.tab];
     fn(root);
+    if (G.aiTutor) G.aiTutor.updateSide();
   }
 
   // 맥 키보드: 1~4 고르기, Enter/N 다음 문제
@@ -1273,7 +1310,11 @@
     applyTheme();
     nextQuestion();
     render();
-    if (G.aiTutor) G.aiTutor.onReady(() => render());
+    if (G.aiTutor) {
+      G.aiTutor.mountSide(aiContext);
+      G.aiTutor.onReady(() => render());
+      G.aiTutor.onLayoutChange(() => render());
+    }
   }
 
   // 테스트(브라우저 점검)용 진입점

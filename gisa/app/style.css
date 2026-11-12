@@ -555,6 +555,86 @@ select {
   color: var(--muted);
 }
 
+/* ── PC: 오른쪽 고정 AI 패널 ── */
+#side {
+  display: none;
+}
+.side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.side-head strong {
+  font-size: 17px;
+}
+.side-ctx {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  overflow-wrap: anywhere;
+}
+.ai-side-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ai-side-body .ai-thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  padding-right: 2px;
+}
+.ai-side-body .ai-thread:empty {
+  display: grid;
+}
+.ai-hint {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+  padding: 10px 2px;
+}
+.ai-form textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 120px;
+  resize: none;
+  font-family: var(--font-body);
+  font-size: 15px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+@media (min-width: 940px) {
+  body.has-side {
+    padding-right: 380px;
+  }
+  body.has-side #side {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: fixed;
+    top: env(safe-area-inset-top, 0px);
+    right: 0;
+    bottom: 0;
+    width: 380px;
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+    background: var(--surface);
+    border-left: 1px solid var(--line);
+    z-index: 11;
+  }
+  body.has-side .toast {
+    left: calc((100% - 380px) / 2);
+  }
+}
+
 /* ── 해설 ── */
 .verdict {
   padding: 12px 14px;

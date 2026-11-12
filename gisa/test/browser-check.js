@@ -368,6 +368,97 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-3. PC 오른쪽 AI 패널 ──
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, colorScheme: 'light' });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await ctx.addInitScript(() => {
+      window.__asked = [];
+      const fake = async (input, opts) => {
+        window.__asked.push(input);
+        await new Promise((r) => setTimeout(r, 30));
+        const text = '가짜 답변 ' + window.__asked.length;
+        opts.onText({ text, delta: text });
+        return { text, truncated: false, modelTierApplied: 'default' };
+      };
+      window.claude = { use: async (n) => (n === 'sample' ? fake : null) };
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(FILE);
+    await page.waitForSelector('#side .side-head');
+    const done = (n) => page.waitForFunction((k) => document.querySelectorAll('#side .ai-msg.ai:not(.pending)').length >= k, n);
+    const promptOf = (i) => page.evaluate((k) => window.__asked[k][0].content, i);
+
+    check(await page.isVisible('#side'), 'PC에서 오른쪽 AI 패널 표시');
+    check(await page.evaluate(() => document.body.classList.contains('has-side')), '본문 오른쪽 자리 확보(has-side)');
+    check(await page.evaluate(() => document.querySelector('#view').getBoundingClientRect().right <= 1280 - 380 + 1 && document.querySelector('#bar').getBoundingClientRect().right <= 1280 - 380 + 1), '본문·상단 바가 패널과 겹치지 않음');
+    check(await noOverflow(page), 'PC 패널 가로 넘침');
+
+    // 문제 화면: 인라인 상자 대신 오른쪽 패널, 정답 숨김 규칙
+    await page.evaluate(() => GISA.ui._load('t:ohm-current#3'));
+    check((await page.$$('.ai-box')).length === 0, 'PC에서는 문제 아래 접힌 상자가 없음');
+    check((await page.textContent('#side .side-ctx')).includes('문제 · 옴의 법칙'), '패널이 지금 문제를 보고 있음');
+    const chips = await page.$$eval('#side .ai-chip', (bs) => bs.map((b) => b.textContent));
+    check(chips.includes('힌트만 줘'), '풀기 전 프리셋');
+    await page.click('#side .ai-chip');
+    await done(1);
+    const p0 = await promptOf(0);
+    check(p0.includes('정답 값이나 정답 번호를 절대') && p0.includes('개념: 옴의 법칙') && p0.includes('[화면 데이터]'), '풀기 전엔 정답 숨김 규칙 + 화면 데이터 전달');
+
+    // 답을 고르면 프리셋과 규칙이 바뀜
+    const a = await page.evaluate(() => GISA.ui._view.q.answerIndex);
+    await page.click('.choice[data-i="' + ((a + 1) % 4) + '"]');
+    const chips2 = await page.$$eval('#side .ai-chip', (bs) => bs.map((b) => b.textContent));
+    check(chips2.includes('내가 고른 답은 왜 틀려?'), '오답 뒤 프리셋 바뀜');
+    await page.click('#side .ai-chip');
+    await done(2);
+    check((await promptOf(1)).includes('학생이 고른 답') && (await promptOf(1)).includes('이미 답을 골랐어'), '답 고른 뒤 규칙 전환');
+
+    // 레슨으로 이동해도 대화가 이어지고, 화면 맥락이 바뀜
+    await page.evaluate(() => GISA.ui._openLesson('l-acpower'));
+    check((await page.textContent('#side .side-ctx')).includes('레슨 · 유효·무효·피상전력과 역률'), '레슨 화면으로 맥락 전환');
+    check((await page.$$('#side .ai-msg')).length === 4, '탭을 옮겨도 대화가 남아 있음');
+    await page.fill('#ai-side-input', '역률이 뭐야?');
+    await page.press('#ai-side-input', 'Enter');
+    await done(3);
+    const p2 = await promptOf(2);
+    check(p2.includes('레슨: 유효·무효·피상전력과 역률') && p2.includes('시험 포인트:'), '레슨 내용이 전달됨');
+    check((await page.inputValue('#ai-side-input')) === '', '보낸 뒤 입력칸 비움');
+
+    // 단락 화면
+    await page.evaluate(() => GISA.ui._openUnit('rlc'));
+    check((await page.textContent('#side .side-ctx')).includes('단락 · R-L-C 직렬 임피던스'), '단락 화면으로 맥락 전환');
+    await page.click('#side .ai-chip');
+    await done(4);
+    check((await promptOf(3)).includes('문제 포인트:') && (await promptOf(3)).includes('R-L-C 직렬 임피던스'), '단락의 포인트 목록이 전달됨');
+
+    // 목록·기록 화면: 일반 질문 + 기록 요약
+    await page.click('#tab-stats');
+    check((await page.textContent('#side .side-ctx')).includes('기록'), '기록 화면으로 맥락 전환');
+    await page.click('#side .ai-chip');
+    await done(5);
+    check((await promptOf(4)).includes('학생 기록 요약'), '일반 화면에선 기록 요약이 전달됨');
+    await page.screenshot({ path: path.join(SHOTS, '14-pc-side-panel.png'), fullPage: false });
+
+    // 대화 지우기
+    await page.click('#side .side-head .btn');
+    check((await page.$$('#side .ai-msg')).length === 0 && (await page.isVisible('#side .ai-hint')), '대화 지우기');
+
+    // 화면 폭이 좁아지면 패널 대신 문제 아래 상자
+    await page.evaluate(() => GISA.ui._load('t:ohm-current#3'));
+    await page.setViewportSize({ width: 700, height: 860 });
+    check(!(await page.isVisible('#side')), '좁은 화면에선 오른쪽 패널 숨김');
+    await page.waitForSelector('.ai-box');
+    check(true, '좁아지면 인라인 상자로 전환');
+    await page.setViewportSize({ width: 1280, height: 860 });
+    await page.waitForFunction(() => document.querySelectorAll('.ai-box').length === 0);
+    check(await page.isVisible('#side'), '다시 넓어지면 오른쪽 패널로 복귀');
+    check(errors.length === 0, 'PC 패널 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });
