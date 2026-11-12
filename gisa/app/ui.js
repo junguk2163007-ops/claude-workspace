@@ -248,7 +248,7 @@
           'div',
           { class: 'brand' },
           h('span', { html: '<svg viewBox="0 0 30 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 9c3.5-9 6.5-9 10 0s6.5 9 10 0 4-6 6-6"/></svg>', 'aria-hidden': 'true' }),
-          h('span', null, '전기기사 필기 ', h('small', null, '연습장')),
+          h('span', null, '통전 기사 ', h('small', null, '전기기사 필기 합격 연습장')),
           h('span', { class: 'streak', title: '현재 연속 정답' }, '연속 ' + S.streak.cur, h('span', { class: 'syncdot', id: 'sync-dot' }))
         ),
         h(

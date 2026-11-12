@@ -1,4 +1,4 @@
-# 전기기사 필기 연습장
+# 통전 기사 — 전기기사 필기 합격 연습장
 
 - 실행: `dist/index.html` 더블클릭 (인터넷 없어도 동작, 글꼴만 기본 글꼴로 바뀜)
 - 빌드: `node build.js` → `dist/index.html`, `dist/artifact.html`
