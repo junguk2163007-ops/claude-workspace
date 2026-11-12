@@ -1779,3 +1779,15 @@ body.has-side:not(.calc-dock) .toast {
     opacity: 0;
   }
 }
+.brand .bolt {
+  display: inline-block;
+  width: 0.62em;
+  height: 1em;
+  margin: 0 0.28em;
+  vertical-align: -0.1em;
+  color: var(--accent);
+}
+.brand .bolt svg {
+  width: 100%;
+  height: 100%;
+}

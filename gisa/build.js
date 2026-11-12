@@ -8,7 +8,7 @@ const FILES = require('./files');
 const ROOT = __dirname;
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
-const TITLE = '통전 기사';
+const TITLE = '통전⚡기사';
 const FONTS =
   '<link rel="preconnect" href="https://fonts.googleapis.com">' +
   '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
@@ -34,7 +34,7 @@ const index =
   '<meta charset="utf-8">\n' +
   '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
   '<meta name="apple-mobile-web-app-capable" content="yes">\n' +
-  '<meta name="apple-mobile-web-app-title" content="통전 기사">\n' +
+  '<meta name="apple-mobile-web-app-title" content="통전⚡기사">\n' +
   '<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">\n' +
   '<meta name="theme-color" content="#161d24" media="(prefers-color-scheme: dark)">\n' +
   '<title>' + TITLE + '</title>\n' + FONTS + '\n<style>\n' + css + '\n</style>\n</head>\n<body>\n' + body + '</body>\n</html>\n';
