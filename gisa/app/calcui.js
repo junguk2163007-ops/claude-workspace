@@ -254,6 +254,11 @@
     paint();
     paintKeys();
   }
+  // 사람이 누른 키: "계산기로 풀기" 시연 중이면 시연이 먼저 받는다(다음 키와 같을 때만 진행)
+  function userPress(id) {
+    if (G.calcDemo && G.calcDemo.active() && G.calcDemo.onUser(id)) return;
+    press(id);
+  }
   function pressKeys(list) {
     (Array.isArray(list) ? list : [list]).forEach((k) => press(k));
   }
@@ -276,7 +281,7 @@
     b.dataset.key = k.id;
     b.setAttribute('aria-label', k.id === 'x10^x' ? '×10의 x제곱' : k.main + (k.sh ? ', SHIFT ' + k.sh : ''));
     b.addEventListener('click', () => {
-      press(k.id);
+      userPress(k.id);
       root.focus({ preventScroll: true });
     });
     cell.append(lab, b);
@@ -291,7 +296,7 @@
       b.dataset.key = id;
       b.setAttribute('aria-label', { UP: '위', DOWN: '아래', LEFT: '왼쪽', RIGHT: '오른쪽' }[id]);
       b.addEventListener('click', () => {
-        press(id);
+        userPress(id);
         root.focus({ preventScroll: true });
       });
       return b;
@@ -355,7 +360,7 @@
     if (!keys) return;
     e.preventDefault();
     e.stopPropagation();
-    pressKeys(keys);
+    (Array.isArray(keys) ? keys : [keys]).forEach(userPress);
   }
 
   // ───────── 배치: 넓으면 왼쪽에 붙이고, 중간 폭이면 눌러서 여는 떠 있는 패널 ─────────
@@ -377,7 +382,40 @@
     if (open && root) root.focus({ preventScroll: true });
   }
 
-  G.calcUi = { calc, press, pressKeys, paint, setOpen, layout, el: () => root };
+  // 시연용: 키 이름 → 글자, 다음 키 표시, 눌림 효과
+  const LABELS = {};
+  const SHIFTS = {};
+  TOP.concat(FUN, NUM).forEach((k) => {
+    if (k === 'PAD') return;
+    LABELS[k.id] = k.main;
+    SHIFTS[k.id] = k.sh;
+  });
+  Object.assign(LABELS, { UP: '▲', DOWN: '▼', LEFT: '◀', RIGHT: '▶' });
+  const keyLabel = (id) => LABELS[id] || id;
+  const shiftLabel = (id) => SHIFTS[id] || '';
+  function btn(id) {
+    return root ? root.querySelector('[data-key="' + id + '"]') : null;
+  }
+  function markNext(id) {
+    if (!root) return;
+    root.querySelectorAll('.demo-next').forEach((b) => b.classList.remove('demo-next'));
+    const b = id ? btn(id) : null;
+    if (b) {
+      b.classList.add('demo-next');
+      if (b.scrollIntoView) b.scrollIntoView({ block: 'nearest' });
+    }
+  }
+  function flash(id, cls) {
+    const b = btn(id);
+    if (!b) return;
+    const c = cls || 'demo-hit';
+    b.classList.remove(c);
+    void b.offsetWidth;
+    b.classList.add(c);
+    setTimeout(() => b.classList.remove(c), 450);
+  }
+
+  G.calcUi = { calc, press, pressKeys, userPress, paint, paintKeys, save: persist, setOpen, layout, el: () => root, keyLabel, shiftLabel, markNext, flash };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
   else build();
 })(globalThis.GISA);

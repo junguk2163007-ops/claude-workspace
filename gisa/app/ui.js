@@ -132,6 +132,7 @@
     view.answered = false;
     view.chosen = -1;
     view.hint = 0;
+    view.calcAsk = false;
     view.analogy = false;
     view.event = null;
     view.unlocked = [];
@@ -358,6 +359,49 @@
     return null;
   }
 
+  // 문제 옆 작은 계산기 버튼: 왼쪽 계산기에서 풀이 키를 한 키씩 눌러 보여 줘(PC)
+  function calcButton(q) {
+    if (!G.calcPlan || !G.calcDemo || !G.calcPlan(q)) return null;
+    const on = G.calcDemo.active() && G.calcDemo.key() === q.key;
+    return h(
+      'button',
+      {
+        class: 'calc-btn' + (on ? ' on' : ''),
+        id: 'calc-solve',
+        type: 'button',
+        title: '계산기로 풀기: 왼쪽 계산기에서 키를 누르는 순서를 보여 줘',
+        'aria-label': '계산기로 풀기',
+        onclick: () => {
+          if (on) {
+            G.calcDemo.stop();
+            render();
+            return;
+          }
+          if (!view.answered) {
+            view.calcAsk = !view.calcAsk;
+            render();
+            return;
+          }
+          G.calcDemo.start(q);
+          render();
+        },
+        html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><rect x="8" y="5.5" width="8" height="3.5" rx="0.8"/><path d="M8.5 13h.01M12 13h.01M15.5 13h.01M8.5 16.5h.01M12 16.5h.01M15.5 16.5h.01"/></svg>',
+      }
+    );
+  }
+
+  // 풀기 전에 풀이를 보려 하면 정답이 드러난다고 한 번 알려 준다
+  function calcAsk(q) {
+    if (!view.calcAsk || view.answered) return null;
+    return h(
+      'div',
+      { class: 'calc-ask', id: 'calc-ask' },
+      h('span', null, '계산기 풀이를 보면 정답이 드러나. 그래도 볼래?'),
+      h('button', { class: 'btn small primary', id: 'calc-ask-yes', onclick: () => { view.calcAsk = false; G.calcDemo.start(q); render(); } }, '볼래'),
+      h('button', { class: 'btn small', id: 'calc-ask-no', onclick: () => { view.calcAsk = false; render(); } }, '아니, 내가 풀래')
+    );
+  }
+
   function hintsBlock(q) {
     if (view.answered) return null;
     const body = [];
@@ -526,7 +570,8 @@
         isReview ? h('span', { class: 'tag review' }, '복습') : null,
         h('span', { class: 'qid', title: '문제 번호 (설정에서 다시 불러올 수 있어)' }, q.key)
       ),
-      h('p', { class: 'qtext' }, q.text),
+      h('div', { class: 'qrow' }, h('p', { class: 'qtext' }, q.text), calcButton(q)),
+      calcAsk(q),
       q.svg ? h('div', { class: 'figure', html: q.svg }) : null,
       hintsBlock(q),
       choiceList(q),
@@ -1349,6 +1394,8 @@
   }
 
   function render() {
+    // 다른 문제로 넘어가면 계산기 시연을 끝낸다
+    if (G.calcDemo && G.calcDemo.active() && G.calcDemo.key() !== (view.q && view.q.key)) G.calcDemo.stop();
     renderBar();
     const root = document.getElementById('view');
     root.textContent = '';

@@ -1804,6 +1804,137 @@ body.has-side:not(.calc-dock) .toast {
   height: 100%;
 }
 
+/* ── 문제 옆 계산기 버튼 + 계산기 풀이 시연 ── */
+.qrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.qrow .qtext {
+  flex: 1;
+  min-width: 0;
+}
+.calc-btn {
+  flex: none;
+  display: none;
+  width: 36px;
+  height: 36px;
+  padding: 7px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+}
+.calc-btn svg {
+  width: 100%;
+  height: 100%;
+}
+.calc-btn.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+/* 계산기가 화면에 있거나 열 수 있는 PC 폭에서만 보임 */
+body.calc-dock .calc-btn,
+body.calc-float .calc-btn {
+  display: inline-block;
+}
+.calc-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 14px;
+}
+.demo {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  font-size: 14px;
+}
+.demo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.demo-say {
+  line-height: 1.55;
+}
+.demo-nextrow {
+  color: var(--muted);
+  font-size: 13px;
+}
+.demo-kbd {
+  display: inline-block;
+  min-width: 28px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: #2a2f37;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+}
+.demo-note {
+  min-height: 1.2em;
+  font-size: 13px;
+  color: var(--bad);
+}
+.demo-ctl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.demo-ctl .btn[disabled] {
+  opacity: 0.45;
+}
+.demo-speed {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.key.demo-next,
+.pb.demo-next {
+  outline: 3px solid #4ac2ff;
+  outline-offset: 1px;
+  animation: demo-pulse 0.9s ease-in-out infinite;
+}
+.key.demo-hit {
+  background: #4ac2ff !important;
+  color: #04202e !important;
+  transform: translateY(2px);
+}
+.key.demo-miss {
+  animation: demo-shake 0.35s;
+}
+@keyframes demo-pulse {
+  50% {
+    outline-color: transparent;
+    outline-offset: 4px;
+  }
+}
+@keyframes demo-shake {
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
 </style>
 </head>
 <body>
@@ -5321,6 +5452,212 @@ body.has-side:not(.calc-dock) .toast {
   }
 
   G.Calc = Calc;
+})(globalThis.GISA);
+
+/* ── engine/calc-guide.js ── */
+// "계산기로 풀기": 문제마다 실제 fx-350ES PLUS에서 누르는 키 순서를 만든다.
+//  - 풀이 가이드(G.guide)는 단계마다 설명(say)과 계산식(expr)을 돌려준다. 식에는 문제의 숫자 변수(params 이름)를 그대로 쓴다.
+//  - 계산식은 이렇게 쓴다:  V/R   sqrt(R^2+X^2)   9e9*Q/d^2   sin(th)   (a+b)*Ans   pi   → 키 순서로 바뀐다.
+//  - 가이드가 낸 키 순서는 test/calc-guide-tests.js가 실제 G.Calc에 눌러 보고 정답과 같은지 문제마다 확인한다.
+(function (G) {
+  'use strict';
+
+  const guides = {};
+  const FUNCS = {
+    sqrt: { keys: ['SQRT'], close: 'RIGHT' },
+    cbrt: { keys: ['SHIFT', 'SQRT'], close: 'RIGHT' },
+    abs: { keys: ['Abs'], close: 'RIGHT' },
+    sin: { keys: ['sin'], close: ')' },
+    cos: { keys: ['cos'], close: ')' },
+    tan: { keys: ['tan'], close: ')' },
+    asin: { keys: ['SHIFT', 'sin'], close: ')' },
+    acos: { keys: ['SHIFT', 'cos'], close: ')' },
+    atan: { keys: ['SHIFT', 'tan'], close: ')' },
+    log: { keys: ['log'], close: ')' },
+    ln: { keys: ['ln'], close: ')' },
+  };
+
+  // 숫자 → 키. 아주 작거나 0이 많이 붙은 큰 수는 시험에서처럼 ×10ˣ 키로 입력한다.
+  function numberKeys(x) {
+    if (!isFinite(x)) throw new Error('계산식에 쓸 수 없는 숫자: ' + x);
+    const neg = x < 0;
+    const ax = Math.abs(x);
+    const keys = [];
+    if (neg) keys.push('(-)');
+    const push = (str) => str.split('').forEach((c) => keys.push(c));
+    const plain = String(Number(ax.toPrecision(12)));
+    const useExp = ax !== 0 && (ax < 1e-3 || (Number.isInteger(ax) && ax >= 1e5 && /0000$/.test(plain)));
+    if (useExp || /e/.test(plain)) {
+      const parts = ax.toExponential(11).split('e');
+      let mant = parts[0].replace(/\.?0+$/, '');
+      const exp = Number(parts[1]);
+      push(mant);
+      keys.push('x10^x');
+      if (exp < 0) keys.push('(-)');
+      push(String(Math.abs(exp)));
+      keys.push('RIGHT');
+    } else push(plain);
+    return keys;
+  }
+
+  const VARKEY = { A: '(-)', B: 'DMS', C: 'hyp', D: 'sin', E: 'cos', F: 'tan', X: ')', Y: 'S<>D', M: 'M+' };
+
+  // 계산식 문자열 → 키 배열. scope: 변수 이름 → 숫자
+  function exprKeys(expr, scope) {
+    const keys = [];
+    const stack = []; // 열린 괄호의 종류: ')' 또는 'RIGHT'
+    const s = String(expr).replace(/\s+/g, '');
+    let i = 0;
+    let prev = 'start'; // start | op | open | value
+    // ×10ˣ 로 입력하는 수가 나누기 바로 뒤에 오면 괄호로 묶어서 헷갈리지 않게 한다
+    const pushNum = (v) => {
+      const nk = numberKeys(v);
+      if (nk.indexOf('x10^x') >= 0 && keys[keys.length - 1] === '/') keys.push('(', ...nk, ')');
+      else keys.push(...nk);
+    };
+    const err = (m) => {
+      throw new Error('계산식 오류(' + m + '): ' + expr);
+    };
+    while (i < s.length) {
+      const c = s[i];
+      // 숫자 (1.5, 9e9, 1.5e-6)
+      const nm = /^(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:e[+-]?[0-9]+)?/.exec(s.slice(i));
+      if (nm) {
+        if (prev === 'value') err('숫자 앞에 연산자가 없음');
+        pushNum(Number(nm[0]));
+        i += nm[0].length;
+        prev = 'value';
+        continue;
+      }
+      if (c === '$') {
+        const vk = VARKEY[s[i + 1]];
+        if (!vk) err('계산기 변수 이름이 이상함');
+        if (prev === 'value') err('변수 앞에 연산자가 없음');
+        keys.push('ALPHA', vk);
+        i += 2;
+        prev = 'value';
+        continue;
+      }
+      const wm = /^[A-Za-z_][A-Za-z_0-9]*/.exec(s.slice(i));
+      if (wm) {
+        const w = wm[0];
+        i += w.length;
+        if (FUNCS[w] && s[i] === '(') {
+          if (prev === 'value') err('함수 앞에 연산자가 없음');
+          keys.push(...FUNCS[w].keys);
+          stack.push(FUNCS[w].close);
+          i++;
+          prev = 'open';
+        } else if (w === 'pi') {
+          if (prev === 'value') err('π 앞에 연산자가 없음');
+          keys.push('SHIFT', 'x10^x');
+          prev = 'value';
+        } else if (w === 'Ans') {
+          if (prev === 'value') err('Ans 앞에 연산자가 없음');
+          keys.push('Ans');
+          prev = 'value';
+        } else {
+          if (prev === 'value') err('변수 앞에 연산자가 없음');
+          const v = scope ? scope[w] : undefined;
+          if (typeof v !== 'number') err('알 수 없는 이름 ' + w);
+          pushNum(v);
+          prev = 'value';
+        }
+        continue;
+      }
+      if (c === '(') {
+        if (prev === 'value') err('( 앞에 연산자가 없음');
+        keys.push('(');
+        stack.push(')');
+        i++;
+        prev = 'open';
+        continue;
+      }
+      if (c === ')') {
+        if (!stack.length) err('닫는 괄호가 더 많음');
+        keys.push(stack.pop());
+        i++;
+        prev = 'value';
+        continue;
+      }
+      if (c === '^') {
+        if (prev !== 'value') err('^ 앞에 값이 없음');
+        i++;
+        // 2, 3, -1 은 전용 키(x², x³, x⁻¹)
+        const sm = /^(2|3|\(-1\)|-1)(?![0-9.])/.exec(s.slice(i));
+        if (sm) {
+          keys.push(sm[1] === '2' ? 'x2' : sm[1] === '3' ? 'x3' : 'x-1');
+          i += sm[0].length;
+          continue;
+        }
+        keys.push('x^');
+        // 지수: 괄호 묶음이면 안쪽, 아니면 숫자 하나
+        if (s[i] === '(') {
+          let d = 0;
+          let j = i;
+          for (; j < s.length; j++) {
+            if (s[j] === '(') d++;
+            else if (s[j] === ')') {
+              d--;
+              if (d === 0) break;
+            }
+          }
+          if (d !== 0) err('지수 괄호가 안 닫힘');
+          keys.push(...exprKeys(s.slice(i + 1, j), scope));
+          i = j + 1;
+        } else {
+          const em = /^-?(?:[0-9]+\.?[0-9]*|[A-Za-z_][A-Za-z_0-9]*)/.exec(s.slice(i));
+          if (!em) err('지수를 읽을 수 없음');
+          keys.push(...exprKeys(em[0], scope));
+          i += em[0].length;
+        }
+        keys.push('RIGHT');
+        prev = 'value';
+        continue;
+      }
+      if (c === '+' || c === '*' || c === '/') {
+        if (prev === 'open') err('연산자가 괄호 바로 뒤에 옴');
+        keys.push(c);
+        i++;
+        prev = 'op';
+        continue;
+      }
+      if (c === '-') {
+        if (prev === 'value') keys.push('-');
+        else keys.push('(-)');
+        i++;
+        prev = prev === 'value' ? 'op' : 'start';
+        continue;
+      }
+      err('읽을 수 없는 글자 ' + c);
+    }
+    if (stack.length) err('괄호가 안 닫힘');
+    return keys;
+  }
+
+  const guide = (id, fn) => {
+    if (guides[id]) throw new Error('계산기 가이드 id 중복: ' + id);
+    guides[id] = fn;
+  };
+
+  // 문제 → 단계 목록 [{say, expr, keys:[... , '=']}] . 가이드가 없으면 null
+  function plan(q) {
+    const fn = q && q.templateId ? guides[q.templateId] : null;
+    if (!fn || q.answerValue === null || q.answerValue === undefined) return null;
+    const raw = fn(q.params || {}, q);
+    if (!raw || !raw.length) return null;
+    return raw.map((st) => ({
+      say: st.say,
+      expr: st.expr,
+      keys: exprKeys(st.expr, Object.assign({}, q.params, st.vars)).concat(st.store ? ['SHIFT', 'RCL', VARKEY[st.store]] : [], ['=']),
+      store: st.store || null,
+    }));
+  }
+
+  G.guide = guide;
+  G.calcGuides = guides;
+  G.calcPlan = plan;
+  G.calcExprKeys = exprKeys;
 })(globalThis.GISA);
 
 /* ── engine/choices.js ── */
@@ -11769,6 +12106,335 @@ body.has-side:not(.calc-dock) .toast {
   };
 })(globalThis.GISA);
 
+/* ── calc-guides/base-basics.js ── */
+// 계산기 풀이 가이드: 기초 수학 + 회로이론 기초(옴·직병렬·전력·전력량·3상)
+// G.guide(템플릿 id, (params) => [{ say: '설명', expr: '계산식', vars: {추가 변수} }, ...])
+(function (G) {
+  'use strict';
+  const g = G.guide;
+
+  // ── 기초 수학 ──
+  const PREFIX = { G: 9, M: 6, k: 3, '': 0, m: -3, μ: -6, n: -9, p: -12 };
+  g('base-prefix', (p) => {
+    const diff = PREFIX[p.from] - PREFIX[p.to];
+    return [{ say: '접두어 차이만큼 10의 거듭제곱을 곱해: 10^(' + diff + ')', expr: 'v*10^(d)', vars: { d: diff } }];
+  });
+  g('base-trig', (p) => [
+    { say: '피타고라스로 높이를 구해: √(빗변² − 밑변²)', expr: 'sqrt(c^2-a^2)' },
+    p.ask === 'tan' ? { say: 'tanθ = 높이 ÷ 밑변', expr: 'Ans/a' } : { say: 'sinθ = 높이 ÷ 빗변', expr: 'Ans/c' },
+  ]);
+  g('base-pythag', (p) =>
+    p.ask === 'c'
+      ? [{ say: '빗변 = √(밑변² + 높이²)', expr: 'sqrt(a^2+b^2)' }]
+      : [{ say: '나머지 변 = √(빗변² − 한 변²)', expr: 'sqrt(c^2-a^2)' }]
+  );
+  g('base-ratio', (p) => [{ say: 'A의 배수 = (B 배수) ÷ (C 배수)', expr: 'm' + (p.pa === 2 ? '^2' : '') + '/k' + (p.pb === 2 ? '^2' : '') }]);
+
+  // ── 옴의 법칙 ──
+  g('ohm-current', () => [{ say: 'I = V ÷ R', expr: 'V/R' }]);
+  g('ohm-voltage', () => [{ say: 'V = I × R', expr: 'I*R' }]);
+  g('ohm-resistance', () => [
+    { say: 'mA를 A로 바꿔: ÷ 1000', expr: 'ImA/1000' },
+    { say: 'R = V ÷ I (방금 구한 전류 Ans로 나눠)', expr: 'V/Ans' },
+  ]);
+
+  // ── 직렬·병렬 ──
+  g('series-total', (p) => [{ say: '직렬은 전부 더해', expr: p.Rs.join('+') }]);
+  g('series-current', (p) => [
+    { say: '직렬 합성저항: 전부 더해', expr: p.Rs.join('+') },
+    { say: 'I = V ÷ R (Ans가 합성저항)', expr: 'V/Ans' },
+  ]);
+  g('parallel-two', () => [{ say: '병렬 두 개: 곱 ÷ 합', expr: 'R1*R2/(R1+R2)' }]);
+  g('parallel-three', (p) => [
+    { say: '병렬은 역수의 합을 구해', expr: p.Rs.map((x) => '1/' + x).join('+') },
+    { say: '뒤집으면 합성저항: Ans의 역수 (x⁻¹ 키)', expr: 'Ans^-1' },
+  ]);
+  g('parallel-current', () => [{ say: '두 갈래 전류를 각각 구해서 더해: V/R₁ + V/R₂', expr: 'V/R1+V/R2' }]);
+
+  // ── 전압 분배 ──
+  g('divider-two', () => [{ say: 'V₂ = V × R₂ ÷ (R₁ + R₂)', expr: 'V*R2/(R1+R2)' }]);
+  g('divider-three', (p) => [
+    { say: '전체 저항: 전부 더해', expr: p.Rs.join('+') },
+    { say: 'V₂ = V × R₂ ÷ (전체 저항 Ans)', expr: 'V*' + p.Rs[1] + '/Ans' },
+  ]);
+
+  // ── 전력 ──
+  g('power-i2r', () => [{ say: 'P = I² × R', expr: 'I^2*R' }]);
+  g('power-v2r', () => [{ say: 'P = V² ÷ R', expr: 'V^2/R' }]);
+  g('power-ratio', (p) =>
+    p.mode === 'V' || p.mode === 'I'
+      ? [{ say: '전력은 ' + (p.mode === 'V' ? '전압' : '전류') + '의 제곱에 비례: ' + p.k + '²', expr: 'k^2' }]
+      : p.mode === 'R-constV'
+      ? [{ say: '전압 일정 → P ∝ 1/R: 1 ÷ ' + p.k, expr: '1/k' }]
+      : [{ say: '전류 일정 → P ∝ R: ' + p.k + '배', expr: 'k' }]
+  );
+
+  // ── 전력량·요금 ──
+  g('energy-kwh', () => [
+    { say: 'W를 kW로: ÷ 1000', expr: 'P/1000' },
+    { say: 'kW × 하루 시간 × 일수 = kWh', expr: 'Ans*h*days' },
+  ]);
+  g('energy-cost', () => [
+    { say: 'W를 kW로: ÷ 1000', expr: 'P/1000' },
+    { say: '전력량 = kW × 시간 × 일수', expr: 'Ans*h*days' },
+    { say: '요금 = 전력량 × 단가', expr: 'Ans*price' },
+  ]);
+  g('energy-joule', () => [{ say: '1 kWh = 3.6 MJ 이니까 3.6을 곱해', expr: 'W*3.6' }]);
+
+  // ── 3상 전력 ──
+  g('tp-power', () => [
+    { say: 'P = √3 × V × I × cosθ (W 단위)', expr: 'sqrt(3)*V*I*pf' },
+    { say: 'kW로 바꿔: ÷ 1000', expr: 'Ans/1000' },
+  ]);
+  g('tp-current', () => [
+    { say: '분모부터: √3 × V × cosθ', expr: 'sqrt(3)*V*pf' },
+    { say: 'I = P[W] ÷ 분모 (kW는 ×1000 해서 W로)', expr: 'PkW*1000/Ans' },
+  ]);
+})(globalThis.GISA);
+
+/* ── calc-guides/circuit-ac.js ── */
+// 계산기 풀이 가이드: 교류·RLC·교류 전력·공진·Y-Δ·제어(라플라스·전달함수)
+(function (G) {
+  'use strict';
+  const g = G.guide;
+
+  // ── 교류 기초 ──
+  g('ac-rms', () => [
+    { say: 'sin 앞의 X√2가 최댓값이야', expr: 'X*sqrt(2)' },
+    { say: '실효값 = 최댓값 ÷ √2', expr: 'Ans/sqrt(2)' },
+  ]);
+  g('ac-average', () => [{ say: '평균값 = 2 × 최댓값 ÷ π', expr: '2*Vm/pi' }]);
+  g('ac-period', (p) =>
+    p.mode === 'f2T'
+      ? [
+          { say: 'T = 1 ÷ f (초)', expr: '1/f' },
+          { say: 'ms로: × 1000', expr: 'Ans*1000' },
+        ]
+      : [
+          { say: 'ms를 s로: ÷ 1000', expr: 'Tms/1000' },
+          { say: 'f = 1 ÷ T', expr: '1/Ans' },
+        ]
+  );
+  g('ac-omega', (p) => [{ say: 't 앞의 숫자가 ω = 2fπ 야. f = ω ÷ 2π', expr: 'w*pi/(2*pi)', vars: { w: 2 * p.f } }]);
+
+  // ── RLC 임피던스 ──
+  g('rlc-rl', () => [{ say: 'Z = √(R² + XL²)', expr: 'sqrt(R^2+X^2)' }]);
+  g('rlc-series', () => [{ say: 'Z = √(R² + (XL − XC)²)', expr: 'sqrt(R^2+(XL-XC)^2)' }]);
+  g('rlc-omega', () => [
+    { say: 'XL = ωL (mH → H는 ÷ 1000)  — 결과를 A에 저장', expr: 'w*LmH/1000', store: 'A' },
+    { say: 'XC = 1 ÷ (ωC) (μF → F는 ÷ 1000000)  — 결과를 B에 저장', expr: '1/(w*CuF/1000000)', store: 'B' },
+    { say: 'Z = √(R² + (XL − XC)²) — A, B를 불러 써', expr: 'sqrt(R^2+($A-$B)^2)' },
+  ]);
+  g('rlc-current', () => [
+    { say: 'Z = √(R² + X²)', expr: 'sqrt(R^2+X^2)' },
+    { say: 'I = V ÷ Z', expr: 'V/Ans' },
+  ]);
+
+  // ── 교류 전력 ──
+  g('acp-active', () => [{ say: 'P = V × I × cosθ', expr: 'V*I*pf' }]);
+  g('acp-reactive', () => [
+    { say: 'sinθ = √(1 − cos²θ)', expr: 'sqrt(1-pf^2)' },
+    { say: 'Q = V × I × sinθ', expr: 'V*I*Ans' },
+  ]);
+  g('acp-apparent', () => [{ say: 'S = √(P² + Q²)', expr: 'sqrt(P^2+Q^2)' }]);
+  g('acp-pf', () => [
+    { say: 'Z = √(R² + X²)', expr: 'sqrt(R^2+X^2)' },
+    { say: 'cosθ = R ÷ Z', expr: 'R/Ans' },
+  ]);
+  g('acp-q-from-p', () => [
+    { say: '피상전력 S = P ÷ cosθ — 결과를 A에 저장', expr: 'P/pf', store: 'A' },
+    { say: 'sinθ = √(1 − cos²θ)', expr: 'sqrt(1-pf^2)' },
+    { say: 'Q = S × sinθ (A에 저장해 둔 S를 불러 써)', expr: '$A*Ans' },
+  ]);
+
+  // ── 직렬 공진 ──
+  g('res-omega', () => [{ say: 'ω₀ = 1 ÷ √(L·C) (mH, μF를 H, F로 바꿔서)', expr: '1/sqrt(LmH/1000*CuF/1000000)' }]);
+  g('res-f0', () => [
+    { say: 'ω₀ = 1 ÷ √(L·C)', expr: '1/sqrt(LmH/1000*CuF/1000000)' },
+    { say: 'f₀ = ω₀ ÷ 2π', expr: 'Ans/(2*pi)' },
+  ]);
+  g('res-current', () => [{ say: '공진이면 Z = R 이라서 I = V ÷ R', expr: 'V/R' }]);
+  g('res-scale', (p) => [{ say: 'f₀ ∝ 1/√(LC): LC가 ' + (p.up ? p.a * p.b + '배' : '1/' + p.a * p.b + '배') + ' → ' + (p.up ? '1 ÷ √(' + p.a * p.b + ')' : '√(' + p.a * p.b + ')'), expr: p.up ? '1/sqrt(a*b)' : 'sqrt(a*b)' }]);
+  g('res-q', () => [{ say: 'Q = (1 ÷ R) × √(L ÷ C)', expr: '1/R*sqrt((LmH/1000)/(CuF/1000000))' }]);
+
+  // ── Y·Δ 결선 ──
+  g('yd-voltage', (p) => (p.mode === 'p2l' ? [{ say: 'Y결선: VL = √3 × Vp', expr: 'sqrt(3)*Vp' }] : [{ say: 'Y결선: Vp = VL ÷ √3', expr: 'VL/sqrt(3)' }]));
+  g('yd-current', (p) => (p.mode === 'p2l' ? [{ say: 'Δ결선: IL = √3 × Ip', expr: 'sqrt(3)*Ip' }] : [{ say: 'Δ결선: Ip = IL ÷ √3', expr: 'IL/sqrt(3)' }]));
+  g('yd-load', (p) =>
+    p.type === 'Y'
+      ? [{ say: 'Y: 상전압 VL÷√3 을 Z로 나눈 게 선전류', expr: 'VL/sqrt(3)/Z' }]
+      : [
+          { say: 'Δ: 상전류 Ip = VL ÷ Z', expr: 'VL/Z' },
+          { say: '선전류 IL = √3 × Ip', expr: 'sqrt(3)*Ans' },
+        ]
+  );
+  g('yd-convert', (p) => (p.mode === 'D2Y' ? [{ say: 'Δ→Y: 임피던스를 3으로 나눠', expr: 'Z/3' }] : [{ say: 'Y→Δ: 임피던스에 3을 곱해', expr: 'Z*3' }]));
+
+  // ── 제어: 라플라스·전달함수 ──
+  g('lp-final', (p) =>
+    p.ask === 'final'
+      ? [{ say: 'sF(s)에서 s = 0 을 넣으면 b ÷ a', expr: 'b/a' }]
+      : [{ say: 's → ∞ 이면 분자의 s 계수 K ÷ 분모의 s 계수 1', expr: 'K/1' }]
+  );
+  g('tf-feedback', () => [{ say: '부궤환: C/R = G ÷ (1 + GH)', expr: 'K/(1+K*h)' }]);
+  g('tf-standard', (p) => (p.ask === 'T' ? [{ say: '분모 상수항 d로 나눠서 s 앞이 시정수: T = c ÷ d', expr: 'c/d' }] : [{ say: '분모 상수항 d로 나눠서 분자가 이득: K = b ÷ d', expr: 'b/d' }]));
+})(globalThis.GISA);
+
+/* ── calc-guides/em.js ── */
+// 계산기 풀이 가이드: 전기자기학
+(function (G) {
+  'use strict';
+  const g = G.guide;
+
+  // ── 쿨롱의 법칙 ──
+  g('em-coulomb-force', () => [{ say: 'F = 9×10⁹ × Q₁Q₂ ÷ r² (μC는 ×10⁻⁶)', expr: '9e9*Q1*1e-6*Q2*1e-6/d^2' }]);
+  g('em-coulomb-ratio', () => [{ say: 'F ∝ Q ÷ r²: 전하 a배, 거리 b배 → a ÷ b²', expr: 'a/b^2' }]);
+
+  // ── 전계와 전위 ──
+  g('em-point', (p) =>
+    p.ask === 'E'
+      ? [{ say: 'nC이면 9×10⁹ × 10⁻⁹ = 9 → E = 9Q ÷ r²', expr: '9*Q/d^2' }]
+      : [{ say: 'nC이면 V = 9Q ÷ r', expr: '9*Q/d' }]
+  );
+  g('em-line', () => [{ say: 'E = 18×10⁹ × λ ÷ r (λ는 nC/m라서 18λ ÷ r)', expr: '18*lam/d' }]);
+
+  // ── 정전용량과 콘덴서 ──
+  g('em-cap-scale', () => [{ say: 'C ∝ 유전율 × 면적 ÷ 간격', expr: 'e*a/b' }]);
+  g('em-cap-plate', () => [{ say: 'C = ε₀·εs·S ÷ d (mm는 ×10⁻³), pF로 바꾸려고 ×10¹²', expr: '8.855e-12*es*S/(dmm*1e-3)*1e12' }]);
+  g('em-cap-combo', (p) => (p.how === 'series' ? [{ say: '콘덴서 직렬: 곱 ÷ 합', expr: 'C1*C2/(C1+C2)' }] : [{ say: '콘덴서 병렬: 그냥 더해', expr: 'C1+C2' }]));
+  g('em-cap-energy', () => [{ say: 'W = ½CV² (μF는 ×10⁻⁶)', expr: '0.5*CuF*1e-6*V^2' }]);
+
+  // ── 전류가 만드는 자계 ──
+  g('em-mag-wire', () => [{ say: 'H = I ÷ (2πr)', expr: 'I/(2*pi*d)' }]);
+  g('em-mag-coil', () => [{ say: 'H = NI ÷ (2a)', expr: 'N*I/(2*a)' }]);
+  g('em-mag-solenoid', (p) => (p.kind === 'toroid' ? [{ say: '환상 솔레노이드: H = NI ÷ (2πr)', expr: 'N*I/(2*pi*r)' }] : [{ say: '무한장 솔레노이드: H = NI ÷ l', expr: 'N*I/len' }]));
+
+  // ── 전자력 ──
+  g('em-force-bil', () => [{ say: 'F = B I l sinθ', expr: 'B*I*l*sin(th)' }]);
+  g('em-force-parallel', () => [{ say: 'F = 2 I₁ I₂ ÷ r × 10⁻⁷', expr: '2*I1*I2/d*1e-7' }]);
+
+  // ── 전자유도 ──
+  g('em-faraday', () => [{ say: 'e = N × ΔΦ ÷ Δt', expr: 'N*dP/dt' }]);
+  g('em-motional', () => [{ say: 'e = B l v sinθ', expr: 'B*l*v*sin(th)' }]);
+
+  // ── 인덕턴스 ──
+  g('em-ind-energy', () => [{ say: 'W = ½LI² (mH는 ÷ 1000)', expr: '0.5*LmH/1000*I^2' }]);
+  g('em-ind-self', () => [{ say: 'L = NΦ ÷ I (Φ가 mWb니까 L도 mH)', expr: 'N*PmWb/I' }]);
+  g('em-ind-mutual', () => [{ say: 'M = k × √(L₁L₂)', expr: 'k*sqrt(L1*L2)' }]);
+  g('em-ind-series', (p) => [p.aid ? { say: '가동 결합: L₁ + L₂ + 2M', expr: 'L1+L2+2*M' } : { say: '차동 결합: L₁ + L₂ − 2M', expr: 'L1+L2-2*M' }]);
+
+  // ── 자기회로 ──
+  g('em-mc-flux', () => [{ say: 'Φ = NI ÷ Rm, Wb를 mWb로 ×1000', expr: 'N*I/Rm*1000' }]);
+  g('em-mc-scale', () => [{ say: 'Rm ∝ 길이 ÷ (투자율 × 단면적)', expr: 'a/(b*c)' }]);
+})(globalThis.GISA);
+
+/* ── calc-guides/power-machine.js ── */
+// 계산기 풀이 가이드: 전력공학 + 전기기기
+(function (G) {
+  'use strict';
+  const g = G.guide;
+
+  // ── 전압강하 ──
+  g('pw-vdrop-3ph', (p) => {
+    const core = 'sqrt(3)*I*(R*pf+X*sqrt(1-pf^2))';
+    return p.ask === 'Vs'
+      ? [
+          { say: '전압강하 e = √3·I(R cosθ + X sinθ), sinθ = √(1 − cos²θ)', expr: core },
+          { say: '송전단전압 = 수전단전압 + 전압강하', expr: 'Vr+Ans' },
+        ]
+      : [{ say: '전압강하 e = √3·I(R cosθ + X sinθ), sinθ = √(1 − cos²θ)', expr: core }];
+  });
+  g('pw-vdrop-rate', () => [{ say: '전압강하율 = (Vs − Vr) ÷ Vr × 100', expr: '(Vs-Vr)/Vr*100' }]);
+
+  // ── 전력손실 ──
+  g('pw-loss-3i2r', () => [{ say: 'Pℓ = 3I²R', expr: '3*I^2*R' }]);
+  g('pw-loss-power', () => [{ say: 'Pℓ = P²R ÷ (V²cos²θ). kW÷kV 비를 제곱하면 W가 되니까 마지막에 ÷1000 해서 kW', expr: '(PkW/VkV)^2*R/pf^2/1000' }]);
+  g('pw-loss-ratio', (p) => (p.mode === 'V' ? [{ say: '손실은 전압의 제곱에 반비례: 1 ÷ k²', expr: '1/k^2' }] : [{ say: '손실은 역률의 제곱에 반비례: (처음 역률 ÷ 나중 역률)²', expr: '(a/b)^2' }]));
+
+  // ── %임피던스·단락 ──
+  g('pw-short-current', () => [{ say: 'Is = (100 ÷ %Z) × In', expr: '100/z*In' }]);
+  g('pw-short-capacity', () => [{ say: 'Ps = (100 ÷ %Z) × Pn', expr: '100/z*Pn' }]);
+  g('pw-pctz-calc', () => [{ say: '%Z = P[kVA] × Z ÷ (10 × V²[kV])', expr: 'P*Z/(10*V^2)' }]);
+
+  // ── 역률 개선 ──
+  g('pw-pfc', () => [{ say: 'Qc = P (tanθ₁ − tanθ₂), 각은 cos⁻¹(역률)로 구해', expr: 'P*(tan(acos(a))-tan(acos(b)))' }]);
+
+  // ── 이도 ──
+  g('pw-sag-d', () => [{ say: 'D = W S² ÷ (8T)', expr: 'W*S^2/(8*T)' }]);
+  g('pw-sag-len', () => [{ say: '전선 길이 − 경간 = 8D² ÷ (3S)', expr: '8*D^2/(3*S)' }]);
+
+  // ── 선로정수 ──
+  g('pw-gmd', () => [{ say: '등가 선간거리 = ∛(D₁·D₂·D₃)', expr: 'cbrt(D1*D2*D3)' }]);
+  g('pw-line-lc', (p) =>
+    p.ask === 'L'
+      ? [{ say: 'L = 0.05 + 0.4605 log₁₀(D ÷ r) — D는 cm로 ×100', expr: '0.05+0.4605*log(Dm*100/rcm)' }]
+      : [{ say: 'C = 0.02413 ÷ log₁₀(D ÷ r)', expr: '0.02413/log(Dm*100/rcm)' }]
+  );
+
+  // ── 발전 ──
+  g('pw-hydro', () => [{ say: 'P = 9.8 × Q × H × η [kW]', expr: '9.8*Q*H*eta' }]);
+  g('pw-thermal', () => [{ say: 'η = 860W ÷ (mH) × 100', expr: '860*W/(m*H)*100' }]);
+
+  // ── 수용률·부등률·부하율 ──
+  g('pw-transformer-cap', (p) => [
+    { say: '설비용량 × 수용률을 전부 더해 (합성 최대수요)', expr: p.loads.map(([a, b]) => a + '*' + b).join('+') },
+    { say: '변압기 용량 = 합 ÷ (부등률 × 역률)', expr: 'Ans/(div*pf)' },
+  ]);
+  g('pw-rates', (p) => (p.mode === 'demand' ? [{ say: '수용률 = 최대수요전력 ÷ 설비용량 × 100', expr: 'Pm/Pi*100' }] : [{ say: '부하율 = (전력량 ÷ 24) ÷ 최대전력 × 100', expr: 'Wd/24/Pm*100' }]));
+
+  // ── 직류기 ──
+  g('mc-dc-emf', () => [{ say: 'E = pZΦN ÷ (60a)', expr: 'p*Z*phi*N/(60*a)' }]);
+  g('mc-dc-terminal', () => [{ say: '전압 − 전기자 전압강하 (Ia·Ra)', expr: 'V0-Ia*Ra' }]);
+  g('mc-dc-torque', () => [{ say: 'T = 60P ÷ (2πN), kW는 ×1000', expr: '60*PkW*1000/(2*pi*N)' }]);
+  g('mc-dc-speed', () => [
+    { say: '처음 역기전력 E₁ = V − I₁Ra — A에 저장', expr: 'V-I1*Ra', store: 'A' },
+    { say: '나중 역기전력 E₂ = V − I₂Ra', expr: 'V-I2*Ra' },
+    { say: 'N₂ = N₁ × E₂ ÷ E₁ (자속 일정)', expr: 'N1*Ans/$A' },
+  ]);
+
+  // ── 변압기 ──
+  g('mc-tr-ratio', (p) =>
+    p.mode === 'Z'
+      ? [{ say: '임피던스는 권수비의 제곱: Z₁ = (N₁÷N₂)² × Z₂', expr: '(N1/N2)^2*x' }]
+      : [{ say: (p.mode === 'V' ? '전압' : '전류') + '은 권수 N₂ ÷ N₁ 비로 바뀌어', expr: 'x*N2/N1' }]
+  );
+  g('mc-tr-eff', () => [
+    { say: '출력 = 부하율 × 용량 × 역률 — A에 저장', expr: 'm*S*pf', store: 'A' },
+    { say: '손실 = 철손 + 부하율² × 동손', expr: 'Pi+m^2*Pc' },
+    { say: '효율 = 출력 ÷ (출력 + 손실) × 100', expr: '$A/($A+Ans)*100' },
+  ]);
+  g('mc-tr-maxeff', () => [{ say: '최대 효율 부하율 m = √(철손 ÷ 동손), %로 ×100', expr: 'sqrt(Pi/Pc)*100' }]);
+  g('mc-tr-reg', () => [{ say: 'ε ≈ p cosθ + q sinθ, sinθ = √(1 − cos²θ)', expr: 'p*pf+q*sqrt(1-pf^2)' }]);
+
+  // ── 유도기 ──
+  g('mc-im-slip', () => [
+    { say: '동기속도 Ns = 120f ÷ P', expr: '120*f/P' },
+    { say: '슬립 s = (Ns − N) ÷ Ns × 100', expr: '(Ans-N)/Ans*100' },
+  ]);
+  g('mc-im-speed', () => [
+    { say: '동기속도 Ns = 120f ÷ P', expr: '120*f/P' },
+    { say: 'N = Ns × (1 − s) (s는 %라서 ÷100)', expr: 'Ans*(1-s/100)' },
+  ]);
+  g('mc-im-power', (p) =>
+    p.mode === 'P2'
+      ? [{ say: '2차 입력 P₂ = 출력 ÷ (1 − s)', expr: 'x/(1-s)' }]
+      : p.mode === 'Pc'
+      ? [{ say: '2차 동손 = s × 2차 입력', expr: 's*x' }]
+      : [{ say: '출력 = (1 − s) × 2차 입력', expr: '(1-s)*x' }]
+  );
+  g('mc-im-torque-v', () => [{ say: '토크는 전압의 제곱에 비례: k²', expr: 'k^2' }]);
+
+  // ── 동기기 ──
+  g('mc-sync-speed', () => [{ say: 'Ns = 120f ÷ P', expr: '120*f/P' }]);
+  g('mc-sync-power', () => [{ say: 'P = 3·E·V·sinδ ÷ Xs, W를 kW로 ÷1000', expr: '3*E*V*sin(d)/Xs/1000' }]);
+  g('mc-sync-scr', (p) => (p.mode === 'z' ? [{ say: '단락비 = 100 ÷ %Z', expr: '100/z' }] : [{ say: '단락비 = 무부하 정격전압 If ÷ 단락 정격전류 If', expr: 'If1/If2' }]));
+
+  // ── 정류회로 ──
+  const RECT = { h1: 'sqrt(2)/pi*E', f1: '2*sqrt(2)/pi*E', h3: '3*sqrt(6)/(2*pi)*E', f3: '3*sqrt(2)/pi*E' };
+  const RECT_SAY = { h1: '단상 반파: √2/π × E', f1: '단상 전파: 2√2/π × E', h3: '3상 반파: 3√6/(2π) × E', f3: '3상 전파: 3√2/π × E' };
+  g('mc-rect', (p) => [{ say: RECT_SAY[p.type], expr: RECT[p.type] }]);
+})(globalThis.GISA);
+
 /* ── app/progress.js ── */
 // 학습 기록 로직(순수 함수). 저장은 storage.js가 맡는다.
 (function (G) {
@@ -12862,6 +13528,11 @@ body.has-side:not(.calc-dock) .toast {
     paint();
     paintKeys();
   }
+  // 사람이 누른 키: "계산기로 풀기" 시연 중이면 시연이 먼저 받는다(다음 키와 같을 때만 진행)
+  function userPress(id) {
+    if (G.calcDemo && G.calcDemo.active() && G.calcDemo.onUser(id)) return;
+    press(id);
+  }
   function pressKeys(list) {
     (Array.isArray(list) ? list : [list]).forEach((k) => press(k));
   }
@@ -12884,7 +13555,7 @@ body.has-side:not(.calc-dock) .toast {
     b.dataset.key = k.id;
     b.setAttribute('aria-label', k.id === 'x10^x' ? '×10의 x제곱' : k.main + (k.sh ? ', SHIFT ' + k.sh : ''));
     b.addEventListener('click', () => {
-      press(k.id);
+      userPress(k.id);
       root.focus({ preventScroll: true });
     });
     cell.append(lab, b);
@@ -12899,7 +13570,7 @@ body.has-side:not(.calc-dock) .toast {
       b.dataset.key = id;
       b.setAttribute('aria-label', { UP: '위', DOWN: '아래', LEFT: '왼쪽', RIGHT: '오른쪽' }[id]);
       b.addEventListener('click', () => {
-        press(id);
+        userPress(id);
         root.focus({ preventScroll: true });
       });
       return b;
@@ -12963,7 +13634,7 @@ body.has-side:not(.calc-dock) .toast {
     if (!keys) return;
     e.preventDefault();
     e.stopPropagation();
-    pressKeys(keys);
+    (Array.isArray(keys) ? keys : [keys]).forEach(userPress);
   }
 
   // ───────── 배치: 넓으면 왼쪽에 붙이고, 중간 폭이면 눌러서 여는 떠 있는 패널 ─────────
@@ -12985,9 +13656,314 @@ body.has-side:not(.calc-dock) .toast {
     if (open && root) root.focus({ preventScroll: true });
   }
 
-  G.calcUi = { calc, press, pressKeys, paint, setOpen, layout, el: () => root };
+  // 시연용: 키 이름 → 글자, 다음 키 표시, 눌림 효과
+  const LABELS = {};
+  const SHIFTS = {};
+  TOP.concat(FUN, NUM).forEach((k) => {
+    if (k === 'PAD') return;
+    LABELS[k.id] = k.main;
+    SHIFTS[k.id] = k.sh;
+  });
+  Object.assign(LABELS, { UP: '▲', DOWN: '▼', LEFT: '◀', RIGHT: '▶' });
+  const keyLabel = (id) => LABELS[id] || id;
+  const shiftLabel = (id) => SHIFTS[id] || '';
+  function btn(id) {
+    return root ? root.querySelector('[data-key="' + id + '"]') : null;
+  }
+  function markNext(id) {
+    if (!root) return;
+    root.querySelectorAll('.demo-next').forEach((b) => b.classList.remove('demo-next'));
+    const b = id ? btn(id) : null;
+    if (b) {
+      b.classList.add('demo-next');
+      if (b.scrollIntoView) b.scrollIntoView({ block: 'nearest' });
+    }
+  }
+  function flash(id, cls) {
+    const b = btn(id);
+    if (!b) return;
+    const c = cls || 'demo-hit';
+    b.classList.remove(c);
+    void b.offsetWidth;
+    b.classList.add(c);
+    setTimeout(() => b.classList.remove(c), 450);
+  }
+
+  G.calcUi = { calc, press, pressKeys, userPress, paint, paintKeys, save: persist, setOpen, layout, el: () => root, keyLabel, shiftLabel, markNext, flash };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
   else build();
+})(globalThis.GISA);
+
+/* ── app/calcdemo.js ── */
+// "계산기로 풀기" 시연: 문제의 풀이 키 순서를 왼쪽 계산기에서 한 키씩(또는 자동으로) 눌러 보여 준다.
+//  - 다음에 누를 키에 고리가 깜박이고, 직접 그 키를 눌러도 되고 "다음 키" 버튼을 눌러도 돼.
+//  - 시연하는 동안은 계산기를 기본 설정(MathIO · Deg · Norm1)으로 바꿔 두고, 끝내면 원래 설정과 메모리로 돌려놓는다.
+(function (G) {
+  'use strict';
+  if (typeof document === 'undefined' || !G.calcUi) return;
+
+  const U = G.calcUi;
+  const calc = U.calc;
+  const DEFAULT_SETUP = { io: 'MathO', angle: 'Deg', fmt: 'norm', n: 1, frac: 'd/c', stat: false, dot: 'Dot' };
+  const SPEEDS = [
+    { id: 'slow', label: '느리게', ms: 1100 },
+    { id: 'normal', label: '보통', ms: 700 },
+    { id: 'fast', label: '빠르게', ms: 350 },
+  ];
+
+  let demo = null; // { q, steps, flat, idx, auto, speed, snap, timer, dom }
+
+  const h = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  };
+
+  function resetCalc() {
+    calc.setup = Object.assign({}, DEFAULT_SETUP);
+    calc.mode = 'COMP';
+    calc.resetMemory();
+    calc.clearScreen(true);
+  }
+
+  // 단계 목록 → 키 하나하나의 목록
+  function flatten(steps) {
+    const flat = [];
+    steps.forEach((st, si) => st.keys.forEach((k, ki) => flat.push({ si, key: k, last: ki === st.keys.length - 1 })));
+    return flat;
+  }
+
+  // 마지막 결과가 분수·근호·π 모양이면 S⇔D로 소수로 바꾸는 단계를 덧붙인다
+  function withDecimalStep(steps) {
+    const c = new G.Calc();
+    c.setup = Object.assign({}, DEFAULT_SETUP);
+    steps.forEach((st) => st.keys.forEach((k) => c.press(k)));
+    const lower = c.view().lower || [];
+    const exact = lower.some((n) => n.t === 'frac' || n.t === 'sqrt' || n.t === 'mix' || (n.t === 'tx' && /π/.test(n.s)));
+    if (!exact) return steps;
+    return steps.concat([{ say: '결과가 분수·근호·π 모양이야. S⇔D 키로 소수로 바꿔서 읽어', expr: 'S⇔D', keys: ['S<>D'] }]);
+  }
+
+  function start(q) {
+    const plan = G.calcPlan(q);
+    if (!plan) return false;
+    stop(true);
+    const snap = calc.serialize();
+    const steps = withDecimalStep(plan);
+    demo = { q, steps, flat: flatten(steps), idx: 0, auto: false, speed: 'normal', snap, timer: 0, dom: null };
+    resetCalc();
+    U.setOpen(true);
+    buildDom();
+    U.paint();
+    update();
+    return true;
+  }
+
+  function stop(silent) {
+    if (!demo) return;
+    clearTimeout(demo.timer);
+    const d = demo;
+    demo = null;
+    if (d.dom && d.dom.parentNode) d.dom.parentNode.removeChild(d.dom);
+    U.markNext(null);
+    calc.restore(d.snap);
+    calc.clearScreen(true);
+    U.paint();
+    U.save();
+    if (!silent) U.paintKeys();
+  }
+
+  // ───────── 진행 ─────────
+  function pressNext() {
+    if (!demo || demo.idx >= demo.flat.length) return false;
+    const item = demo.flat[demo.idx];
+    demo.idx++;
+    U.press(item.key);
+    U.flash(item.key);
+    update();
+    return true;
+  }
+  function finishStep() {
+    if (!demo) return;
+    const si = demo.idx < demo.flat.length ? demo.flat[demo.idx].si : -1;
+    if (si < 0) return;
+    while (demo.idx < demo.flat.length && demo.flat[demo.idx].si === si) pressNext();
+  }
+  function rewindTo(idx) {
+    // 계산기를 처음 상태로 되돌린 뒤 idx개 키까지 다시 누른다
+    clearTimeout(demo.timer);
+    demo.auto = false;
+    resetCalc();
+    demo.idx = 0;
+    while (demo.idx < idx) {
+      const item = demo.flat[demo.idx++];
+      U.press(item.key);
+    }
+    update();
+  }
+  function stepBack() {
+    if (!demo || demo.idx <= 0) return;
+    const start = (st) => demo.flat.findIndex((x) => x.si === st);
+    const cur = demo.idx < demo.flat.length ? demo.flat[demo.idx].si : demo.steps.length;
+    const curStart = cur < demo.steps.length ? start(cur) : demo.flat.length;
+    rewindTo(demo.idx > curStart ? curStart : cur > 0 ? start(cur - 1) : 0);
+  }
+
+  function schedule() {
+    clearTimeout(demo.timer);
+    if (!demo.auto) return;
+    if (demo.idx >= demo.flat.length) {
+      demo.auto = false;
+      update();
+      return;
+    }
+    const ms = SPEEDS.find((s) => s.id === demo.speed).ms;
+    const prev = demo.idx > 0 ? demo.flat[demo.idx - 1] : null;
+    // 식이 끝나고 결과가 나온 뒤에는 읽을 시간을 조금 더 준다
+    const wait = prev && prev.last ? ms * 2 : ms;
+    demo.timer = setTimeout(() => {
+      if (!demo || !demo.auto) return;
+      pressNext();
+      schedule();
+    }, wait);
+  }
+  function toggleAuto() {
+    if (!demo) return;
+    if (demo.idx >= demo.flat.length) rewindTo(0);
+    demo.auto = !demo.auto;
+    update();
+    schedule();
+  }
+
+  // 사용자가 계산기 키를 직접 눌렀을 때
+  function onUser(id) {
+    if (!demo) return false;
+    const next = demo.flat[demo.idx];
+    if (!next) {
+      note('시연이 끝났어. "처음부터"를 누르거나 닫고 마음대로 써 봐.');
+      return true;
+    }
+    if (id === next.key) {
+      demo.auto = false;
+      pressNext();
+      return true;
+    }
+    note('지금은 ' + U.keyLabel(next.key) + ' 키를 눌러야 해.');
+    U.flash(next.key, 'demo-miss');
+    return true;
+  }
+
+  // ───────── 화면 ─────────
+  function note(text) {
+    if (!demo || !demo.dom) return;
+    const n = demo.dom.querySelector('.demo-note');
+    n.textContent = text;
+    clearTimeout(note.t);
+    note.t = setTimeout(() => {
+      if (n) n.textContent = '';
+    }, 2200);
+  }
+
+  function buildDom() {
+    const root = U.el();
+    const dom = h('section', 'demo');
+    dom.setAttribute('aria-label', '계산기로 풀기');
+    const head = h('div', 'demo-head');
+    head.append(h('strong', null, '🖩 계산기로 풀기'));
+    const close = h('button', 'btn small', '닫기');
+    close.type = 'button';
+    close.id = 'demo-close';
+    close.onclick = () => stop();
+    head.appendChild(close);
+    const say = h('div', 'demo-say');
+    say.id = 'demo-say';
+    const nextRow = h('div', 'demo-nextrow');
+    const noteEl = h('div', 'demo-note');
+    noteEl.setAttribute('role', 'status');
+    const ctl = h('div', 'demo-ctl');
+    const mk = (id, label, fn, cls) => {
+      const b = h('button', 'btn small ' + (cls || ''), label);
+      b.type = 'button';
+      b.id = id;
+      b.onclick = fn;
+      return b;
+    };
+    const speed = h('select', 'demo-speed');
+    speed.id = 'demo-speed';
+    speed.setAttribute('aria-label', '재생 속도');
+    SPEEDS.forEach((s) => {
+      const o = h('option', null, s.label);
+      o.value = s.id;
+      if (s.id === 'normal') o.selected = true;
+      speed.appendChild(o);
+    });
+    speed.onchange = () => {
+      demo.speed = speed.value;
+      schedule();
+    };
+    ctl.append(
+      mk('demo-reset', '⏮ 처음부터', () => rewindTo(0)),
+      mk('demo-prev', '◀ 이전 단계', stepBack),
+      mk('demo-key', '다음 키 ▶', () => {
+        demo.auto = false;
+        pressNext();
+      }, 'primary'),
+      mk('demo-step', '단계 끝까지 ⏩', () => {
+        demo.auto = false;
+        finishStep();
+      }),
+      mk('demo-auto', '▶ 자동 재생', toggleAuto, 'soft'),
+      speed
+    );
+    dom.append(head, say, nextRow, noteEl, ctl);
+    const anchor = root.querySelector('.calc-head');
+    anchor.parentNode.insertBefore(dom, anchor.nextSibling);
+    demo.dom = dom;
+  }
+
+  function update() {
+    if (!demo || !demo.dom) return;
+    const dom = demo.dom;
+    const total = demo.steps.length;
+    const done = demo.idx >= demo.flat.length;
+    const item = done ? null : demo.flat[demo.idx];
+    const si = item ? item.si : total - 1;
+    const st = demo.steps[si];
+    const say = dom.querySelector('.demo-say');
+    say.textContent = '';
+    if (done) {
+      const lcd = G.cfmt && calc.view().lower ? G.cfmt.flat(calc.view().lower) : '';
+      say.append(h('b', null, '끝! '), '계산기 결과는 ', h('b', null, lcd || ''), '이야. 보기에서 같은 값을 찾아봐.');
+    } else {
+      say.append(h('b', null, '단계 ' + (si + 1) + '/' + total + ' · '), st.say);
+    }
+    const row = dom.querySelector('.demo-nextrow');
+    row.textContent = '';
+    if (item) {
+      row.append('다음에 누를 키: ');
+      const k = h('span', 'demo-kbd', U.keyLabel(item.key, calc.shift));
+      row.appendChild(k);
+      if (calc.shift && U.shiftLabel(item.key)) row.append(' (SHIFT 기능: ' + U.shiftLabel(item.key) + ')');
+      row.append('  · ' + demo.idx + '/' + demo.flat.length + ' 키');
+    } else row.append(demo.idx + '/' + demo.flat.length + ' 키 완료');
+    U.markNext(item ? item.key : null);
+    dom.querySelector('#demo-auto').textContent = demo.auto ? '⏸ 멈춤' : '▶ 자동 재생';
+    dom.querySelector('#demo-key').disabled = done;
+    dom.querySelector('#demo-step').disabled = done;
+    dom.querySelector('#demo-prev').disabled = demo.idx === 0;
+    dom.querySelector('#demo-reset').disabled = demo.idx === 0;
+  }
+
+  G.calcDemo = {
+    start,
+    stop,
+    active: () => !!demo,
+    key: () => (demo ? demo.q.key : null),
+    onUser,
+    _state: () => demo,
+    _next: pressNext,
+  };
 })(globalThis.GISA);
 
 /* ── app/celebrate.js ── */
@@ -13211,6 +14187,7 @@ body.has-side:not(.calc-dock) .toast {
     view.answered = false;
     view.chosen = -1;
     view.hint = 0;
+    view.calcAsk = false;
     view.analogy = false;
     view.event = null;
     view.unlocked = [];
@@ -13437,6 +14414,49 @@ body.has-side:not(.calc-dock) .toast {
     return null;
   }
 
+  // 문제 옆 작은 계산기 버튼: 왼쪽 계산기에서 풀이 키를 한 키씩 눌러 보여 줘(PC)
+  function calcButton(q) {
+    if (!G.calcPlan || !G.calcDemo || !G.calcPlan(q)) return null;
+    const on = G.calcDemo.active() && G.calcDemo.key() === q.key;
+    return h(
+      'button',
+      {
+        class: 'calc-btn' + (on ? ' on' : ''),
+        id: 'calc-solve',
+        type: 'button',
+        title: '계산기로 풀기: 왼쪽 계산기에서 키를 누르는 순서를 보여 줘',
+        'aria-label': '계산기로 풀기',
+        onclick: () => {
+          if (on) {
+            G.calcDemo.stop();
+            render();
+            return;
+          }
+          if (!view.answered) {
+            view.calcAsk = !view.calcAsk;
+            render();
+            return;
+          }
+          G.calcDemo.start(q);
+          render();
+        },
+        html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><rect x="8" y="5.5" width="8" height="3.5" rx="0.8"/><path d="M8.5 13h.01M12 13h.01M15.5 13h.01M8.5 16.5h.01M12 16.5h.01M15.5 16.5h.01"/></svg>',
+      }
+    );
+  }
+
+  // 풀기 전에 풀이를 보려 하면 정답이 드러난다고 한 번 알려 준다
+  function calcAsk(q) {
+    if (!view.calcAsk || view.answered) return null;
+    return h(
+      'div',
+      { class: 'calc-ask', id: 'calc-ask' },
+      h('span', null, '계산기 풀이를 보면 정답이 드러나. 그래도 볼래?'),
+      h('button', { class: 'btn small primary', id: 'calc-ask-yes', onclick: () => { view.calcAsk = false; G.calcDemo.start(q); render(); } }, '볼래'),
+      h('button', { class: 'btn small', id: 'calc-ask-no', onclick: () => { view.calcAsk = false; render(); } }, '아니, 내가 풀래')
+    );
+  }
+
   function hintsBlock(q) {
     if (view.answered) return null;
     const body = [];
@@ -13605,7 +14625,8 @@ body.has-side:not(.calc-dock) .toast {
         isReview ? h('span', { class: 'tag review' }, '복습') : null,
         h('span', { class: 'qid', title: '문제 번호 (설정에서 다시 불러올 수 있어)' }, q.key)
       ),
-      h('p', { class: 'qtext' }, q.text),
+      h('div', { class: 'qrow' }, h('p', { class: 'qtext' }, q.text), calcButton(q)),
+      calcAsk(q),
       q.svg ? h('div', { class: 'figure', html: q.svg }) : null,
       hintsBlock(q),
       choiceList(q),
@@ -14428,6 +15449,8 @@ body.has-side:not(.calc-dock) .toast {
   }
 
   function render() {
+    // 다른 문제로 넘어가면 계산기 시연을 끝낸다
+    if (G.calcDemo && G.calcDemo.active() && G.calcDemo.key() !== (view.q && view.q.key)) G.calcDemo.stop();
     renderBar();
     const root = document.getElementById('view');
     root.textContent = '';

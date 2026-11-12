@@ -666,6 +666,43 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
       await clickKeys(page, 'AC');
       await page.evaluate(() => GISA.calcUi.pressKeys(['ALPHA', '(-)', '=']));
       check((await page.textContent('#calc .l2')) === '5', '계산기: 새로고침 후에도 변수 A 유지');
+      // 계산기로 풀기 시연
+      await page.evaluate(() => GISA.ui._load('t:parallel-two#9'));
+      check(await page.isVisible('#calc-solve'), '계산기로 풀기: 문제 옆 버튼');
+      await page.click('#calc-solve');
+      check(await page.isVisible('#calc-ask'), '계산기로 풀기: 풀기 전에는 정답이 드러난다고 먼저 물어봄');
+      await page.click('#calc-ask-no');
+      check(!(await page.isVisible('#calc-ask')) && !(await page.evaluate(() => GISA.calcDemo.active())), '계산기로 풀기: 거절하면 시작 안 함');
+      await page.click('#calc-solve');
+      await page.click('#calc-ask-yes');
+      check((await page.evaluate(() => GISA.calcDemo.active())) && (await page.isVisible('.demo')), '계산기로 풀기: 시연 시작');
+      check(await page.evaluate(() => GISA.calcUi.calc.text() === ''), '계산기로 풀기: 계산기가 깨끗하게 시작');
+      const wantAns = await page.evaluate(() => GISA.ui._view.q.answerValue);
+      check((await page.$$('#calc .key.demo-next')).length === 1, '계산기로 풀기: 다음에 누를 키 하나만 표시');
+      // 잘못된 키를 누르면 진행하지 않음
+      const firstKey = await page.evaluate(() => GISA.calcDemo._state().flat[0].key);
+      const wrongKey = firstKey === '9' ? '8' : '9';
+      await page.click('#calc [data-key="' + wrongKey + '"]');
+      check((await page.evaluate(() => GISA.calcDemo._state().idx)) === 0 && (await page.textContent('.demo-note')).includes('눌러야'), '계산기로 풀기: 틀린 키는 무시하고 안내');
+      // 맞는 키를 직접 눌러 진행
+      await page.click('#calc [data-key="' + firstKey + '"]');
+      check((await page.evaluate(() => GISA.calcDemo._state().idx)) === 1, '계산기로 풀기: 맞는 키를 누르면 진행');
+      await page.click('#demo-step');
+      check((await page.textContent('#demo-say')).includes('단계'), '계산기로 풀기: 단계 설명 표시');
+      await page.click('#demo-prev');
+      check((await page.evaluate(() => GISA.calcDemo._state().idx)) === 0, '계산기로 풀기: 이전 단계로 되감기');
+      // 자동 재생으로 끝까지
+      await page.selectOption('#demo-speed', 'fast');
+      await page.click('#demo-auto');
+      await page.waitForFunction(() => { const d = GISA.calcDemo._state(); return d && d.idx >= d.flat.length; }, null, { timeout: 30000 });
+      const shown = await page.evaluate(() => GISA.calcUi.calc.res && GISA.calcUi.calc.res.v.f);
+      check(Math.abs(shown - wantAns) < 1e-9, '계산기로 풀기: 시연 결과가 정답과 같음 (' + shown + ' / ' + wantAns + ')');
+      check((await page.textContent('#demo-say')).includes('끝!'), '계산기로 풀기: 끝 안내');
+      await page.screenshot({ path: path.join(SHOTS, '19-calc-demo.png') });
+      // 다른 문제로 넘어가면 자동으로 닫히고 원래 설정으로 복구
+      await page.evaluate(() => GISA.ui._load('t:ohm-current#4'));
+      check(!(await page.evaluate(() => GISA.calcDemo.active())) && !(await page.isVisible('.demo')), '계산기로 풀기: 다른 문제로 가면 시연 종료');
+      check(await page.evaluate(() => GISA.calcUi.calc.setup.angle === 'Deg'), '계산기로 풀기: 종료 후 설정 복구');
       await page.screenshot({ path: path.join(SHOTS, '16-calc-left.png') });
       check(errors.length === 0, '계산기 콘솔 오류: ' + errors.join(' | '));
       await ctx.close();

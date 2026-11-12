@@ -1791,3 +1791,134 @@ body.has-side:not(.calc-dock) .toast {
   width: 100%;
   height: 100%;
 }
+
+/* ── 문제 옆 계산기 버튼 + 계산기 풀이 시연 ── */
+.qrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.qrow .qtext {
+  flex: 1;
+  min-width: 0;
+}
+.calc-btn {
+  flex: none;
+  display: none;
+  width: 36px;
+  height: 36px;
+  padding: 7px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+}
+.calc-btn svg {
+  width: 100%;
+  height: 100%;
+}
+.calc-btn.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+/* 계산기가 화면에 있거나 열 수 있는 PC 폭에서만 보임 */
+body.calc-dock .calc-btn,
+body.calc-float .calc-btn {
+  display: inline-block;
+}
+.calc-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 14px;
+}
+.demo {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  font-size: 14px;
+}
+.demo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.demo-say {
+  line-height: 1.55;
+}
+.demo-nextrow {
+  color: var(--muted);
+  font-size: 13px;
+}
+.demo-kbd {
+  display: inline-block;
+  min-width: 28px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: #2a2f37;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+}
+.demo-note {
+  min-height: 1.2em;
+  font-size: 13px;
+  color: var(--bad);
+}
+.demo-ctl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.demo-ctl .btn[disabled] {
+  opacity: 0.45;
+}
+.demo-speed {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.key.demo-next,
+.pb.demo-next {
+  outline: 3px solid #4ac2ff;
+  outline-offset: 1px;
+  animation: demo-pulse 0.9s ease-in-out infinite;
+}
+.key.demo-hit {
+  background: #4ac2ff !important;
+  color: #04202e !important;
+  transform: translateY(2px);
+}
+.key.demo-miss {
+  animation: demo-shake 0.35s;
+}
+@keyframes demo-pulse {
+  50% {
+    outline-color: transparent;
+    outline-offset: 4px;
+  }
+}
+@keyframes demo-shake {
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
