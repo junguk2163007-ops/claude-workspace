@@ -867,6 +867,35 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     }
   }
 
+  // ── 2-8. 연습에서 기초 수학 빼기 ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });
+    await page.evaluate(() => { GISA.ui._state().settings.subject = 'base'; GISA.ui._state().settings.skipOrder = true; });
+    await page.click('#tab-practice');
+    const chips = await page.$$eval('.panel .chips .chip', (els) => els.map((e) => e.textContent.trim()));
+    check(chips.length > 0 && !chips.some((t) => t.includes('기초 수학')), '연습 과목 칩에 기초 수학이 없음: ' + chips.join(','));
+    check(await page.evaluate(() => document.querySelector('.panel .chips .chip[aria-pressed="true"]').textContent.trim().startsWith('전체')), '예전에 기초 수학을 골라 둔 기록은 전체로 표시');
+    const optLabels = await page.$$eval('#concept-select optgroup', (els) => els.map((e) => e.label));
+    check(!optLabels.some((t) => t.includes('기초 수학') || t.includes('시작하기')), '개념 선택 목록에도 기초 수학이 없음: ' + optLabels.join(' | '));
+    // 자동 출제 300번 동안 기초 수학 문제가 한 번도 안 나옴
+    const bad = await page.evaluate(() => {
+      let n = 0;
+      for (let i = 0; i < 300; i++) {
+        const q = GISA.ui._view.q;
+        if (q && GISA.concepts.find((c) => c.id === q.conceptId).subject === 'base') n++;
+        GISA.ui._answer(0);
+        document.querySelector('#next') && document.querySelector('#next').click();
+      }
+      return n;
+    });
+    check(bad === 0, '자동 연습 300문제에 기초 수학이 안 나옴 (나온 수 ' + bad + ')');
+    // 레슨에서 "문제 풀기"로는 기초 수학 개념도 풀 수 있음
+    await page.evaluate(() => GISA.ui._openLesson(GISA.lessonFor('base-units').id));
+    check(await page.isVisible('#lesson-practice'), '기초 수학 레슨의 문제 풀기 버튼은 그대로');
+    check(errors.length === 0, '기초 수학 제외 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });

@@ -16028,16 +16028,19 @@ a.term:focus-visible {
   }
 
   // ───────── 문제 고르기 ─────────
+  // 연습에서 고르는 과목. 예전에 "기초 수학"을 골라 둔 기록은 "전체"로 본다.
+  const practiceSubject = () => (S.settings.subject === 'base' ? 'all' : S.settings.subject);
   function inSubject(c) {
-    const s = S.settings.subject;
+    const s = practiceSubject();
     return s === 'all' || c.subject === s;
   }
   function subjectReady() {
-    const s = S.settings.subject;
+    const s = practiceSubject();
     return s === 'all' || (G.subjects.find((x) => x.id === s) || {}).ready;
   }
+  // 자동으로 뽑는 연습 문제에는 기초 수학 개념을 넣지 않는다(레슨의 "문제 풀기"나 기초로 내려가기로는 여전히 풀 수 있음)
   function openConcepts() {
-    return G.concepts.filter((c) => inSubject(c) && P.isUnlocked(S, c.id)).map((c) => c.id);
+    return G.concepts.filter((c) => c.subject !== 'base' && inSubject(c) && P.isUnlocked(S, c.id)).map((c) => c.id);
   }
   function unlockedSet() {
     return G.concepts.filter((c) => P.isUnlocked(S, c.id)).map((c) => c.id);
@@ -16227,7 +16230,7 @@ a.term:focus-visible {
 
   // ───────── 연습 탭 ─────────
   function subjectChips() {
-    const all = [{ id: 'all', short: '전체', ready: true }].concat(G.subjects);
+    const all = [{ id: 'all', short: '전체', ready: true }].concat(G.subjects.filter((x) => x.id !== 'base')); // 기초 수학은 연습 과목에서 뺌(배우기·과목별에는 그대로)
     return h(
       'div',
       { class: 'chips', role: 'group', 'aria-label': '과목' },
@@ -16236,7 +16239,7 @@ a.term:focus-visible {
           'button',
           {
             class: 'chip',
-            'aria-pressed': String(S.settings.subject === s.id),
+            'aria-pressed': String(practiceSubject() === s.id),
             onclick: () => {
               S.settings.subject = s.id;
               S.settings.focus = 'auto';
@@ -16266,10 +16269,11 @@ a.term:focus-visible {
       },
     });
     sel.appendChild(h('option', { value: 'auto' }, '자동 (열린 개념 골고루)'));
-    groupsOf(S.settings.subject).forEach((g) => {
+    groupsOf(practiceSubject()).forEach((g) => {
+      if (g.subject === 'base') return;
       const list = G.concepts.filter((c) => c.subject === g.subject && c.group === g.name);
       if (!list.length) return;
-      const og = h('optgroup', { label: S.settings.subject === 'all' ? subjectName(g.subject) + ' · ' + g.name : g.name });
+      const og = h('optgroup', { label: practiceSubject() === 'all' ? subjectName(g.subject) + ' · ' + g.name : g.name });
       list.forEach((c) => {
         const open = P.isUnlocked(S, c.id);
         og.appendChild(h('option', { value: c.id, disabled: !open }, c.name + (open ? '' : ' (잠김)')));
@@ -16502,7 +16506,7 @@ a.term:focus-visible {
 
   function questionCard() {
     if (!subjectReady()) {
-      const s = G.subjects.find((x) => x.id === S.settings.subject);
+      const s = G.subjects.find((x) => x.id === practiceSubject());
       return h(
         'div',
         { class: 'empty' },
@@ -16539,7 +16543,7 @@ a.term:focus-visible {
   // 잠긴 개념이 있으면 몇 개가 열렸는지와 "전부 열기"를 연습 화면에서 바로 보여 준다
   function lockBar() {
     if (S.settings.skipOrder || !subjectReady() || view.mode === 'drill') return null;
-    const list = G.concepts.filter(inSubject);
+    const list = G.concepts.filter((c) => c.subject !== 'base' && inSubject(c));
     const open = list.filter((c) => P.isUnlocked(S, c.id)).length;
     if (open === list.length) return null;
     return h(
