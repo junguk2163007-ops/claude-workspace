@@ -204,6 +204,37 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(await page.evaluate(() => GISA.progress.isUnlocked(GISA.ui._state(), 'power')), '레슨을 읽으면 개념이 열림');
     await page.click('#tab-practice');
 
+    // 읽던 자리 기억: 단락 아래쪽 포인트에서 반복을 시작했다가 돌아오면 그 자리로
+    await page.evaluate(() => GISA.ui._openUnit('ac-power'));
+    await page.evaluate(() => document.querySelectorAll('.point-card')[3].scrollIntoView());
+    const y1 = await page.evaluate(() => window.scrollY);
+    check(y1 > 800, '4번째 포인트까지 내려감 (scrollY ' + y1 + ')');
+    await page.click('[data-drill="acp-pf"]');
+    check((await page.evaluate(() => window.scrollY)) < 50, '연습 화면은 맨 위에서 시작');
+    await page.click('#drill-exit');
+    const y2 = await page.evaluate(() => window.scrollY);
+    check(Math.abs(y2 - y1) <= 60, '반복하다 단락으로 돌아오면 읽던 자리로 (' + y1 + ' → ' + y2 + ')');
+    check(await page.evaluate(() => { const r = document.querySelectorAll('.point-card')[3].getBoundingClientRect(); return r.top > -40 && r.top < 844; }), '돌아온 화면에 읽던 포인트 카드가 보임');
+    // 탭을 갔다 와도 같은 자리
+    await page.click('#tab-practice');
+    await page.click('#tab-units');
+    const y3 = await page.evaluate(() => window.scrollY);
+    check(Math.abs(y3 - y1) <= 60, '다른 탭에 갔다 와도 읽던 자리 (' + y1 + ' → ' + y3 + ')');
+    // 단락 목록을 다시 눌러 목록으로 갔다가 다른 단락을 열면 맨 위
+    await page.click('#tab-units');
+    await page.click('.lesson-row[data-unit="rlc"]');
+    check((await page.evaluate(() => window.scrollY)) < 5, '다른 단락은 맨 위에서 시작');
+    // 레슨도 같은 방식
+    await page.evaluate(() => GISA.ui._openLesson('l-acpower'));
+    await page.evaluate(() => document.querySelector('#lesson-practice').scrollIntoView({ block: 'center' }));
+    const y4 = await page.evaluate(() => window.scrollY);
+    check(y4 > 300, '레슨 아래쪽 버튼까지 내려감 (scrollY ' + y4 + ')');
+    await page.click('#lesson-practice');
+    await page.click('#tab-learn');
+    const y5 = await page.evaluate(() => window.scrollY);
+    check(Math.abs(y5 - y4) <= 60, '레슨도 문제 풀고 돌아오면 읽던 자리 (' + y4 + ' → ' + y5 + ')');
+    await page.click('#tab-practice');
+
     // 설정: 순서 건너뛰기 → 잠긴 개념 선택 → 틀리고 기초로 내려가기
     await page.click('#tab-settings');
     await page.check('#skip-order');

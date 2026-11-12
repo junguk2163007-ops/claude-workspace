@@ -38,6 +38,7 @@
     unitCid: null,
     exSeeds: {},
     exOpen: {},
+    scrollMemo: {}, // 읽던 단락·레슨의 스크롤 위치(문제를 풀고 돌아오면 거기로)
   };
   const ptKey = (p) => (p.kind === 'static' ? 's:' + p.ref : p.ref);
 
@@ -185,13 +186,23 @@
     if (v && v.scrollIntoView) v.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
+  // 지금 읽고 있는 단락/레슨의 기억 키(목록 화면이면 null)
+  function scrollKey() {
+    if (view.tab === 'units' && view.unitCid) return 'unit:' + view.unitCid;
+    if (view.tab === 'learn' && view.lessonId) return 'lesson:' + view.lessonId;
+    return null;
+  }
+
   function goTab(tab) {
+    const leaving = scrollKey();
+    if (leaving) view.scrollMemo[leaving] = window.scrollY;
     if (tab === 'learn' && view.tab === 'learn') view.lessonId = null;
     if (tab === 'units' && view.tab === 'units') view.unitCid = null;
     view.tab = tab;
     view.resetArmed = false;
     render();
-    window.scrollTo(0, 0);
+    const back = scrollKey();
+    window.scrollTo(0, (back && view.scrollMemo[back]) || 0);
   }
 
   // ───────── 상단 바 ─────────
@@ -302,7 +313,7 @@
         'div',
         { class: 'banner', id: 'drill-banner' },
         label,
-        h('button', { class: 'btn small', id: 'drill-exit', onclick: () => { view.mode = 'normal'; view.drill = null; openUnit(d.cid); } }, '단락으로 돌아가기')
+        h('button', { class: 'btn small', id: 'drill-exit', onclick: () => { view.mode = 'normal'; view.drill = null; openUnit(d.cid, true); } }, '단락으로 돌아가기')
       );
     }
     if (view.mode === 'review') {
@@ -744,12 +755,13 @@
   }
 
   // ───────── 과목별(단원) 탭 ─────────
-  function openUnit(cid) {
+  // restore가 true면(문제 풀다가 돌아올 때) 읽던 자리로, 아니면 맨 위로
+  function openUnit(cid, restore) {
     view.unitSubject = concept(cid).subject;
     view.unitCid = cid;
     view.tab = 'units';
     render();
-    window.scrollTo(0, 0);
+    window.scrollTo(0, (restore && view.scrollMemo['unit:' + cid]) || 0);
   }
 
   // 포인트 문제만 반복. 반복을 시작하면 개념을 읽은 것으로 쳐서 잠금도 풀어 준다.
