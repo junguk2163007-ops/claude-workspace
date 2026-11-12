@@ -819,6 +819,54 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     }
   }
 
+  // ── 2-7. 처음 화면 버튼 · 검색 ──
+  {
+    for (const dev of ['phone', 'pc']) {
+      const opts = dev === 'phone' ? Object.assign({ colorScheme: 'light' }, iphone) : { viewport: { width: 1440, height: 900 }, colorScheme: 'light' };
+      const { ctx, page, errors } = await newPage(browser, opts);
+      const tag = '검색(' + dev + '): ';
+      check((await page.textContent('.brand small')) === '전기기사 필기', tag + '제목 옆 작은 글씨는 "전기기사 필기"까지');
+      check((await page.title()).includes('통전') && (await page.title()).endsWith('전기기사 필기'), tag + '탭 제목: ' + (await page.title()));
+      check(await noOverflow(page), tag + '머리글 가로 넘침 없음');
+      // 홈 버튼
+      await page.evaluate(() => GISA.ui._load('t:ohm-current#3'));
+      check((await page.evaluate(() => GISA.ui._view.tab)) === 'practice', tag + '연습 화면에서 시작');
+      await page.click('#home-btn');
+      check((await page.evaluate(() => GISA.ui._view.tab)) === 'learn' && (await page.isVisible('#search-input')), tag + '홈 버튼 → 처음 화면(검색창이 맨 위)');
+      check(await noOverflow(page), tag + '홈 화면 가로 넘침 없음');
+      // 검색
+      await page.fill('#search-input', '역률');
+      check((await page.$$('#search-results .wiki-item')).length >= 1, tag + '용어 해설 결과');
+      check((await page.$$('#search-results .search-concept')).length >= 1, tag + '개념 결과');
+      check(await page.isVisible('#search-results [data-concept="ac-power"]'), tag + '"역률" → 교류 전력 개념 카드');
+      check(!(await page.isVisible('#continue-lesson')), tag + '검색 중에는 레슨 목록을 숨김');
+      await page.screenshot({ path: path.join(SHOTS, dev === 'phone' ? '22-search-phone.png' : '22-search-pc.png') });
+      // 용어 열기
+      await page.click('#search-results .wiki-item');
+      check(await page.isVisible('#wiki'), tag + '용어 결과를 누르면 해설 창');
+      await page.click('#wiki-close');
+      // 레슨 읽기
+      await page.click('#search-results [data-concept="ac-power"] [data-lesson]');
+      check((await page.evaluate(() => GISA.ui._view.lessonId)) !== null && (await page.evaluate(() => GISA.ui._view.tab)) === 'learn', tag + '레슨 읽기 버튼');
+      await page.click('#home-btn');
+      check((await page.evaluate(() => GISA.ui._view.lessonId)) === null && (await page.inputValue('#search-input')) === '', tag + '홈 버튼은 레슨에서 빠져나오고 검색도 비움');
+      // 문제 풀기
+      await page.fill('#search-input', '전기요금');
+      check(await page.isVisible('#search-results [data-point="energy-cost"]'), tag + '"전기요금" → 문제 유형 버튼');
+      await page.click('#search-results [data-point="energy-cost"]');
+      check((await page.evaluate(() => GISA.ui._view.tab)) === 'practice' && (await page.evaluate(() => GISA.ui._view.q.templateId)) === 'energy-cost', tag + '문제 유형 버튼 → 그 유형 문제 풀이');
+      await page.click('#home-btn');
+      await page.fill('#search-input', '변압기');
+      await page.click('#search-results [data-drill]');
+      check((await page.evaluate(() => GISA.ui._view.mode)) === 'drill' && (await page.evaluate(() => GISA.ui._view.tab)) === 'practice', tag + '문제 풀기 버튼 → 개념 반복');
+      await page.click('#home-btn');
+      await page.fill('#search-input', '존재하지않는말');
+      check(await page.isVisible('#search-empty'), tag + '결과 없음 안내');
+      check(errors.length === 0, tag + '콘솔 오류: ' + errors.join(' | '));
+      await ctx.close();
+    }
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });

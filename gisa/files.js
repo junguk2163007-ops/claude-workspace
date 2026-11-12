@@ -11,6 +11,7 @@ module.exports = {
     'engine/calc.js',
     'engine/calc-guide.js',
     'engine/glossary.js',
+    'engine/search.js',
     'engine/choices.js',
     'engine/explain.js',
     'engine/generate.js',

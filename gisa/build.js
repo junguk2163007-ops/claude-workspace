@@ -8,7 +8,7 @@ const FILES = require('./files');
 const ROOT = __dirname;
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
-const TITLE = '통전⚡기사';
+const TITLE = '통전⚡기사 전기기사 필기';
 const FONTS =
   '<link rel="preconnect" href="https://fonts.googleapis.com">' +
   '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +

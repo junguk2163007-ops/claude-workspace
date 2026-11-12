@@ -228,6 +228,19 @@
     window.scrollTo(0, (back && view.scrollMemo[back]) || 0);
   }
 
+  // 처음(메인) 화면 = 배우기 첫 화면(검색창이 맨 위에 있음)
+  function goHome() {
+    if (G.wikiUi && G.wikiUi.isOpen()) G.wikiUi.close();
+    view.search = '';
+    view.lessonId = null;
+    view.unitCid = null;
+    view.mode = view.mode === 'review' ? 'normal' : view.mode;
+    view.tab = 'learn';
+    view.resetArmed = false;
+    render();
+    window.scrollTo(0, 0);
+  }
+
   // ───────── 상단 바 ─────────
   function renderBar() {
     const due = P.dueReviews(S).length;
@@ -249,7 +262,16 @@
           'div',
           { class: 'brand' },
           h('span', { html: '<svg viewBox="0 0 30 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 9c3.5-9 6.5-9 10 0s6.5 9 10 0 4-6 6-6"/></svg>', 'aria-hidden': 'true' }),
-          h('span', null, '통전', h('span', { class: 'bolt', 'aria-hidden': 'true', html: '<svg viewBox="0 0 10 16" fill="currentColor"><path d="M6.4 0 0.6 9.2h3.6L3 16l6.4-9.4H5.6z"/></svg>' }), '기사 ', h('small', null, '전기기사 필기 합격 연습장')),
+          h('span', null, '통전', h('span', { class: 'bolt', 'aria-hidden': 'true', html: '<svg viewBox="0 0 10 16" fill="currentColor"><path d="M6.4 0 0.6 9.2h3.6L3 16l6.4-9.4H5.6z"/></svg>' }), '기사 ', h('small', null, '전기기사 필기')),
+          h('button', {
+            class: 'home-btn',
+            id: 'home-btn',
+            type: 'button',
+            title: '처음 화면으로',
+            'aria-label': '처음 화면으로',
+            onclick: goHome,
+            html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 11 12 3.5 20.5 11"/><path d="M5.5 9.8V20h4.5v-5.5h4V20h4.5V9.8"/></svg>',
+          }),
           h('span', { class: 'streak', title: '현재 연속 정답' }, '연속 ' + S.streak.cur, h('span', { class: 'syncdot', id: 'sync-dot' })),
           h('button', {
             class: 'wiki-open',
@@ -639,7 +661,84 @@
     view.quiz = { q: G.generate(t.id, G.rng.newSeed()), chosen: -1 };
   }
 
-  function renderLearnList(root) {
+  // 검색: 용어 해설 · 개념(레슨·단락) · 그 개념의 문제 유형을 한 번에
+  function searchPanel(listEl) {
+    const box = h('div', { class: 'search-results', id: 'search-results', 'aria-live': 'polite' });
+    const input = h('input', {
+      class: 'search-input',
+      id: 'search-input',
+      type: 'search',
+      placeholder: '궁금한 개념·용어 검색 (예: 역률, 임피던스, 슬립)',
+      'aria-label': '개념·용어 검색',
+      autocomplete: 'off',
+    });
+    input.value = view.search || '';
+    input.addEventListener('input', () => {
+      view.search = input.value;
+      if (listEl) listEl.hidden = !!view.search.trim();
+      fillSearch(box);
+    });
+    fillSearch(box);
+    return h('div', { class: 'panel search-panel' }, h('label', { class: 'search-label', for: 'search-input' }, '무엇이 궁금해?'), input, box);
+  }
+
+  const snippet = (t, n) => (t.length > n ? t.slice(0, n).replace(/\s+\S*$/, '') + '…' : t);
+
+  function fillSearch(box) {
+    box.textContent = '';
+    const q = (view.search || '').trim();
+    if (!q) return;
+    const r = G.search(q);
+    if (!r.terms.length && !r.concepts.length) {
+      box.appendChild(h('p', { class: 'muted small', id: 'search-empty' }, '"' + q + '"에 맞는 게 없어. 다른 말로 검색해 봐. (예: 옴, 전력, 변압기)'));
+      return;
+    }
+    if (r.terms.length) {
+      box.appendChild(h('h3', { class: 'group-title eyebrow' }, '용어 해설 ' + r.terms.length));
+      r.terms.slice(0, 8).forEach((t) =>
+        box.appendChild(h('button', { class: 'wiki-item', type: 'button', 'data-term': t.id }, h('strong', null, t.name), h('span', null, t.brief)))
+      );
+    }
+    if (r.concepts.length) {
+      box.appendChild(h('h3', { class: 'group-title eyebrow' }, '개념과 문제 ' + r.concepts.length));
+      r.concepts.slice(0, 10).forEach(({ c, points, via }) => {
+        const lesson = G.lessonFor(c.id);
+        const st = P.conceptStat(S, c.id);
+        box.appendChild(
+          h(
+            'div',
+            { class: 'tile search-concept', 'data-concept': c.id },
+            h('div', { class: 'row-head' }, h('strong', { class: 'name' }, c.name), h('span', { class: 'tag plain' }, c.group)),
+            h('p', { class: 'muted small' }, snippet(c.card, 110)),
+            via ? h('p', { class: 'muted small' }, '“' + via + '” 용어와 이어진 개념') : null,
+            st && st.n ? h('p', { class: 'muted small' }, '푼 문제 ' + st.n + '개 · 정답률 ' + Math.round((100 * st.c) / st.n) + '%') : null,
+            points.length
+              ? h(
+                  'div',
+                  { class: 'search-points' },
+                  points.map((p) => h('button', { class: 'btn small soft', type: 'button', 'data-point': ptKey(p), onclick: () => { view.search = ''; startDrill(c.id, ptKey(p)); } }, '문제 유형: ' + p.t))
+                )
+              : null,
+            h(
+              'div',
+              { class: 'actions' },
+              lesson ? h('button', { class: 'btn small', type: 'button', 'data-lesson': lesson.id, onclick: () => openLesson(lesson.id) }, '레슨 읽기') : null,
+              h('button', { class: 'btn small', type: 'button', 'data-unit': c.id, onclick: () => openUnit(c.id) }, '단락 보기'),
+              h('button', { class: 'btn small primary', type: 'button', 'data-drill': c.id, onclick: () => { view.search = ''; startDrill(c.id, null); } }, '문제 풀기')
+            )
+          )
+        );
+      });
+    }
+    if (G.wikiUi) G.wikiUi.link(box);
+  }
+
+  function renderLearnList(outer) {
+    // 검색어가 있는 동안에는 레슨 목록을 숨기고 결과만 보여 준다(입력 중에 화면을 다시 그리지 않으려고 hidden으로 처리)
+    const root = h('div', { id: 'learn-lists' });
+    root.hidden = !!(view.search || '').trim();
+    outer.appendChild(searchPanel(root));
+    outer.appendChild(root);
     const done = G.lessons.filter((l) => S.lessons[l.id]).length;
     const next = firstUnread();
     root.appendChild(

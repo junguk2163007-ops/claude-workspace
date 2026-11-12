@@ -2142,3 +2142,79 @@ a.term:focus-visible {
     border-left: 0;
   }
 }
+
+/* ── 처음 화면 버튼 · 검색 ── */
+.home-btn {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 4px;
+  margin-left: 6px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+}
+.home-btn svg {
+  width: 100%;
+  height: 100%;
+}
+.search-panel {
+  display: grid;
+  gap: 8px;
+}
+.search-label {
+  font-weight: 700;
+  font-size: 15px;
+}
+.search-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 16px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.search-results {
+  display: grid;
+  gap: 8px;
+}
+.search-results:empty {
+  display: none;
+}
+.search-concept {
+  display: grid;
+  gap: 6px;
+}
+.search-concept p {
+  margin: 0;
+}
+.search-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.brand {
+  flex-wrap: nowrap;
+}
+.brand small,
+.brand .streak {
+  white-space: nowrap;
+}
+@media (max-width: 430px) {
+  /* 폰에서는 장식 물결 로고를 숨겨 머리글이 한 줄에 들어오게 */
+  .brand > span:first-child {
+    display: none;
+  }
+  .brand {
+    gap: 4px;
+  }
+}
