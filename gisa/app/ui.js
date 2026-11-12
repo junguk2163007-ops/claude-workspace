@@ -193,7 +193,11 @@
     const pid = G.pointId ? G.pointId(view.q) : null;
     const wasMastered = pid ? P.pointMastered(S, pid) : false;
     view.event = P.record(S, view.q, ok);
-    if (pid && !wasMastered && P.pointMastered(S, pid)) toast('이 포인트는 이제 익숙해졌어!');
+    if (pid && !wasMastered && P.pointMastered(S, pid)) {
+      const pt = G.pointsFor(view.q.conceptId || '').find((p) => ptKey(p) === pid);
+      const name = pt ? pt.t : '';
+      if (!(G.celebrate && G.celebrate.play('익숙해졌어!', name))) toast('이 포인트는 이제 익숙해졌어!');
+    }
     const after = unlockedSet();
     view.unlocked = after.filter((id) => before.indexOf(id) === -1);
     save();
@@ -482,6 +486,12 @@
             '기초로 내려가기: ' + concept(pid).name
           )
         )
+      );
+    }
+    if (view.mode === 'drill' && view.drill && view.drill.pid && P.pointMastered(S, view.drill.pid)) {
+      const d = view.drill;
+      actions.push(
+        h('button', { class: 'btn soft', id: 'drill-back-bottom', onclick: () => { view.mode = 'normal'; view.drill = null; openUnit(d.cid, true); } }, '익숙해졌어! 단락으로 돌아가기')
       );
     }
     cards.push(h('div', { class: 'actions' }, actions));

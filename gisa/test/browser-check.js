@@ -180,11 +180,20 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
       if (i < 2) await page.click('#next');
     }
     check(await page.isVisible('#drill-banner:has-text("익숙해졌어")'), '3연속 정답 → 익숙해짐 표시');
+    check(await page.isVisible('#drill-back-bottom'), '익숙해지면 맨 아래에도 단락으로 돌아가기 버튼');
+    check((await page.$$('.cele-bl')).length === 14 && (await page.isVisible('.cele-card')), '익숙해지면 풍선 축하 효과');
+    await page.evaluate(() => { const b = document.querySelector('.cele-bl'); b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); });
+    check((await page.$$('.cele-bl')).length === 13 && (await page.$$('.cele-bit')).length > 0, '풍선을 누르면 터짐');
+    check(await page.evaluate(() => document.querySelector('.cele-hint').textContent.includes('1/14')), '터뜨린 개수 표시');
+    await page.screenshot({ path: path.join(SHOTS, '05f-iphone-celebrate.png') });
+    await page.evaluate(() => GISA.celebrate.clear());
+    check((await page.$$('.cele')).length === 0, '축하 효과 정리');
     await page.click('#next');
     check((await page.evaluate(() => GISA.ui._view.q.templateId)) === 'ohm-current', '익숙해진 뒤에도 같은 포인트 반복 가능');
     await page.screenshot({ path: path.join(SHOTS, '05e-iphone-drill.png'), fullPage: true });
-    await page.click('#drill-exit');
-    check((await page.evaluate(() => GISA.ui._view.unitCid)) === 'ohm', '단락으로 돌아가기');
+    await page.click('.choice[data-i="' + (await page.evaluate(() => GISA.ui._view.q.answerIndex)) + '"]');
+    await page.click('#drill-back-bottom');
+    check((await page.evaluate(() => GISA.ui._view.unitCid)) === 'ohm', '맨 아래 버튼으로 단락으로 돌아가기');
     check(await page.isVisible('.point-card[data-point="ohm-current"] .state.open'), '포인트 카드에 익숙해짐 표시');
     await page.click('#drill-all');
     const seenT = new Set();

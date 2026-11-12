@@ -38,6 +38,6 @@ module.exports = {
     'lessons/points.js',
   ],
   logic: ['app/progress.js'],
-  app: ['app/storage.js', 'app/sync.js', 'app/ai.js', 'app/calcui.js', 'app/ui.js'],
+  app: ['app/storage.js', 'app/sync.js', 'app/ai.js', 'app/calcui.js', 'app/celebrate.js', 'app/ui.js'],
   style: 'app/style.css',
 };
