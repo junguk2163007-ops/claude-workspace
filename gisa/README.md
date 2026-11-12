@@ -10,6 +10,7 @@
 - `concepts/concepts.js` 과목 목록 + 회로·제어 개념, `concepts/em.js`·`power.js`·`machine.js` 과목별 개념
   (id, 이름, 그룹, 선행 개념, 개념 카드, 쉬운 비유, 공식)
 - `subjects/<과목>/` 문제 템플릿과 정적(이론형) 문제: circuit, em, power, machine
+- `lessons/points.js` 문제 포인트(템플릿·이론 문제마다 "이런 문제 / 풀이 핵심 / 자주 틀리는 곳"). 과목별 탭과 포인트 반복이 이걸 씀
 - `lessons/` 배우기 레슨(0. 시작하기 ~ 6. 제어공학). 개념마다 레슨 1개, 예제는 실제 템플릿에서 생성
 - `app/` 학습 기록 로직(progress), 저장(storage), 화면(ui), 스타일
 - `test/reference.js` 템플릿과 따로 짠 독립 검산기 (새 템플릿을 넣으면 여기에도 추가해야 테스트가 통과함)

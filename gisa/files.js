@@ -30,6 +30,7 @@ module.exports = {
     'subjects/machine/static.js',
     'lessons/part1.js',
     'lessons/part2.js',
+    'lessons/points.js',
   ],
   logic: ['app/progress.js'],
   app: ['app/storage.js', 'app/ai.js', 'app/ui.js'],

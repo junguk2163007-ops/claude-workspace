@@ -161,11 +161,11 @@ button:disabled {
 .tab {
   flex: 1;
   min-width: 0;
-  padding: 10px 4px 11px;
+  padding: 10px 2px 11px;
   border: 0;
   background: none;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   border-bottom: 3px solid transparent;
   white-space: nowrap;
@@ -1085,6 +1085,72 @@ textarea {
 }
 .example div.choice {
   cursor: default;
+}
+
+/* ── 과목별(단원) ── */
+.nowrap {
+  white-space: nowrap;
+}
+.pt-list {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 8px;
+}
+.pt-list li {
+  font-size: 15px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.point-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.point-head {
+  display: flex;
+  align-items: center;
+  gap: 8px 10px;
+  flex-wrap: wrap;
+}
+.point-head h3 {
+  flex: 1 1 140px;
+  min-width: 0;
+  font-size: 17px;
+}
+.point-ask {
+  font-size: 15px;
+  line-height: 1.7;
+}
+.box.trap-box {
+  background: var(--warn-soft);
+}
+.box.trap-box .eyebrow {
+  color: var(--warn);
+}
+.point-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.mini-example summary {
+  font-size: 14px;
+}
+.mini-example .example {
+  margin-top: 8px;
+  background: var(--surface-2);
+  border: 0;
+}
+.mini-example .example .choice {
+  background: var(--surface);
+}
+button.lesson-row .bar {
+  display: block;
 }
 
 @media (min-width: 560px) {
@@ -7557,6 +7623,170 @@ textarea {
   });
 })(globalThis.GISA);
 
+/* ── lessons/points.js ── */
+// 문제 포인트: 템플릿(또는 이론형 문제) 하나 = 시험에 나오는 "문제 유형" 하나.
+// P(id, 이름, 이런 문제, 풀이 핵심, 자주 틀리는 곳)
+// id: 템플릿 id 또는 's:<정적 문제 id>' (이론형)
+(function (G) {
+  'use strict';
+  G.points = G.points || {};
+  const P = (id, t, ask, key, trap) => {
+    if (G.points[id]) throw new Error('포인트 id 중복: ' + id);
+    G.points[id] = { id, t, ask, key, trap };
+  };
+
+  // ───────── 기초 수학 도구 ─────────
+  P('base-prefix', '접두어 바꾸기', '5 kW를 MW로, 2 mA를 kA로처럼 접두어끼리 값을 바꾸는 문제야.', '두 접두어의 10의 거듭제곱 차이만큼 소수점을 옮겨. 큰 단위로 가면 숫자는 작아지고, 작은 단위로 가면 커져.', 'k와 m 사이는 1000배가 아니라 10⁶(100만)배 차이야. 한 칸에 1000배씩 두 칸이라고 세면 돼.');
+  P('base-trig', 'cos으로 sin·tan 구하기', 'cosθ가 4/5처럼 분수로 주어지고 sinθ나 tanθ를 묻는 문제야.', '분수를 "밑변/빗변"으로 해서 직각삼각형을 그려. 피타고라스로 높이를 구한 뒤 sin = 높이/빗변, tan = 높이/밑변으로 읽어.', 'sinθ = 1 − cosθ라고 계산하면 틀려. 항상 직각삼각형으로 구해.');
+  P('base-pythag', '피타고라스로 변 구하기', '두 변을 주고 빗변을, 또는 빗변과 한 변을 주고 나머지 변을 구하는 문제야.', '빗변을 구할 땐 두 변의 제곱을 더하고, 나머지 변을 구할 땐 빗변 제곱에서 빼. 마지막에 √를 씌워.', '길이를 그냥 더하거나 빼면 안 돼. 반드시 제곱해서 계산해.');
+  P('base-ratio', '몇 배가 될까', 'A = B²/C 같은 관계에서 B와 C를 몇 배 바꾸면 A가 몇 배가 되는지 묻는 문제야.', '분자 값의 배수는 곱하고 분모 값의 배수는 나눠. 제곱이 붙은 값은 배수도 제곱해서 넣어.', '제곱이 붙은 값만 제곱해야 해. 전부 제곱하거나 하나도 안 하면 틀려.');
+  P('s:st-base-ampere', '전류의 정의', '1 A가 무엇을 뜻하는지 묻는 이론 문제야.', '전류는 1초 동안 지나가는 전하량이야. I = Q/t, 그래서 1 A = 1 C/s.', '전력의 정의(1 W = 1 J/s)와 헷갈리기 쉬워. 전하는 C, 에너지는 J야.');
+
+  // ───────── 회로: 기초 ─────────
+  P('ohm-current', '전류 구하기', '저항과 걸린 전압을 주고 흐르는 전류를 묻는 문제야.', 'I = V ÷ R. 저항이 클수록 전류는 작아지는 감각으로 답을 확인해.', 'V × R이나 R ÷ V는 나올 수 없는 계산이야. 보기에 있으면 함정이야.');
+  P('ohm-voltage', '전압 구하기', '저항과 흐르는 전류를 주고 저항 양 끝의 전압을 묻는 문제야.', 'V = I × R. 전류가 같으면 저항이 클수록 전압도 커.', '나누면 안 돼. 전압은 전류와 저항의 "곱"이야.');
+  P('ohm-resistance', 'mA로 저항 구하기', '전압과 mA 단위의 전류를 주고 저항을 Ω으로 묻는 문제야.', 'mA를 A로(÷1000) 먼저 바꾸고 R = V ÷ I. 결과가 크면 kΩ으로 바꿔 읽어.', 'mA를 그대로 넣으면 1000배 틀려. 오답 보기에 단골로 들어 있어.');
+  P('series-total', '직렬 합성저항', '저항 여러 개를 직렬로 연결했을 때 합성저항을 묻는 문제야.', '저항을 전부 더해. 답은 가장 큰 저항보다 커야 해.', '역수를 더하는 건 병렬 계산이야. 직렬은 값 자체를 더해.');
+  P('series-current', '직렬 회로의 전류', '직렬 저항과 전원 전압을 주고 전류를 묻는 문제야.', '합성저항(저항 합)을 먼저 구하고 I = V ÷ 합성저항. 직렬이라 모든 저항에 같은 전류가 흘러.', '저항 하나만으로 나누면 틀려. 전원은 전체 저항을 상대해.');
+  P('parallel-two', '저항 2개 병렬', '저항 두 개를 병렬로 연결한 합성저항을 묻는 문제야.', '곱 나누기 합: R₁R₂/(R₁ + R₂). 답은 작은 저항보다 작아야 해. 같은 저항 두 개면 절반이야.', '그냥 더하면 직렬 계산이야. 병렬은 오히려 작아져.');
+  P('parallel-three', '저항 3개 병렬', '저항 세 개를 모두 병렬로 연결한 합성저항을 묻는 문제야.', '1/R = 1/R₁ + 1/R₂ + 1/R₃을 더한 뒤 마지막에 뒤집어. 또는 두 개씩 차례로 합쳐.', '역수 합에서 멈추거나, 곱 나누기 합을 세 개에 그대로 쓰면 틀려.');
+  P('parallel-current', '병렬 회로의 전체 전류', '병렬 저항과 전원 전압을 주고 전원에서 나오는 전체 전류를 묻는 문제야.', '병렬은 모든 갈래에 같은 전압이야. 갈래마다 I = V ÷ R을 구해서 더해.', '한 갈래 전류만 답하면 안 돼. 전체는 갈래 전류의 합이야.');
+  P('divider-two', '저항 2개 전압 분배', '직렬 저항 두 개 중 하나에 걸리는 전압을 묻는 문제야.', '구하는 저항 ÷ 전체 저항 = 그 저항의 몫. 전원 전압에 그 몫을 곱해.', '분자에 반대쪽 저항을 넣으면 다른 저항의 전압이 나와.');
+  P('divider-three', '저항 3개 전압 분배', '직렬 저항 세 개 중 가운데 저항에 걸리는 전압을 묻는 문제야.', '분모는 세 저항의 합, 분자는 구하는 저항. 나머지 전압과 더해서 전원 전압이 되는지 검산해.', '분모에서 하나를 빠뜨리거나 셋이 똑같이 나눈다고 생각하면 틀려.');
+  P('power-i2r', '전류와 저항으로 전력', '저항과 흐르는 전류를 주고 소비전력을 묻는 문제야.', '주어진 값이 I와 R이니까 P = I²R. 제곱을 먼저 계산해.', 'I × R은 전압이야. 제곱을 빠뜨리지 마.');
+  P('power-v2r', '전압과 저항으로 전력', '저항과 걸린 전압을 주고 소비전력을 묻는 문제야.', '주어진 값이 V와 R이니까 P = V²/R. 전압이 일정하면 저항이 작을수록 전력이 커.', 'V/R은 전류야. 제곱과 나눗셈 순서를 확인해.');
+  P('power-ratio', '전력이 몇 배가 될까', '전압·전류·저항을 몇 배 바꾸면 전력이 몇 배가 되는지 묻는 문제야.', '무엇이 일정한지부터 봐. 전압 일정이면 P = V²/R, 전류 일정이면 P = I²R을 써서 배수를 계산해.', '저항을 바꾸면 전류도 바뀌어. 일정하지 않은 값이 들어간 공식을 그대로 쓰면 틀려.');
+  P('energy-kwh', '전력량(kWh) 구하기', '전력, 하루 사용 시간, 일수를 주고 전력량을 묻는 문제야.', 'W를 kW로(÷1000) 바꿔서 kW × 시간 × 일수.', 'W 그대로 곱하면 1000배 커져. 초로 바꾸는 건 J로 바꿀 때만이야.');
+  P('energy-cost', '전기요금 구하기', '사용량과 kWh당 단가를 주고 요금을 묻는 문제야.', '전력량(kWh)부터 구하고 단가를 곱해.', 'kW(전력)에 단가를 곱하면 안 돼. 요금은 전력량 기준이야.');
+  P('energy-joule', 'kWh를 J·MJ로 바꾸기', 'kWh를 열량 J나 MJ로 바꾸는 문제야.', '1 kWh = 1000 W × 3600 s = 3.6 MJ. 이 숫자 하나로 풀려.', '1시간을 60초로 계산하거나 kJ와 MJ를 헷갈리기 쉬워.');
+  P('tp-power', '3상 유효전력', '선간전압·선전류·역률을 주고 3상 소비전력을 묻는 문제야.', 'P = √3 × V × I × cosθ. √3 × V × I가 피상전력, 거기에 역률을 곱해.', '√3을 빠뜨리거나 √3 대신 3을 곱하는 게 단골 오답이야.');
+  P('tp-current', '3상 선전류', '3상 전력·전압·역률을 주고 선전류를 묻는 문제야.', 'I = P ÷ (√3 × V × cosθ). kW는 먼저 W로(×1000) 바꿔.', '역률은 곱하는 게 아니라 나눠야 해. 역률이 낮으면 전류가 커져.');
+
+  // ───────── 회로: 교류 ─────────
+  P('ac-rms', '최댓값에서 실효값', 'v = 220√2 sin ωt처럼 식이 주어지고 실효값을 묻는 문제야.', 'sin 앞의 숫자가 최댓값이야. 실효값 = 최댓값 ÷ √2.', '최댓값을 그대로 답하거나 평균값(2/π)과 헷갈리면 틀려.');
+  P('ac-average', '평균값', '최댓값이 주어지고 정현파의 평균값을 묻는 문제야.', '반주기 평균값 = 2 × 최댓값 ÷ π ≈ 0.637 × 최댓값.', '절반(0.5)이나 실효값(0.707)으로 답하면 안 돼.');
+  P('ac-period', '주파수와 주기', '주파수를 주고 주기를, 또는 주기를 주고 주파수를 묻는 문제야.', 'T = 1/f, f = 1/T. ms를 쓰면 s로 바꿔서 계산해.', 'ms를 s로 안 바꾸면 1000배 틀려.');
+  P('ac-omega', '식에서 주파수 읽기', 'v = 311 sin(800πt)처럼 식이 주어지고 주파수를 묻는 문제야.', 't 앞의 숫자가 ω(각주파수)야. f = ω ÷ 2π.', 'ω를 그대로 주파수로 답하면 안 돼. 2π로 나눠야 해.');
+  P('s:st-meter-rms', '교류계기가 가리키는 값', '교류 전압계·전류계가 어떤 값을 가리키는지 묻는 이론 문제야.', '계기와 정격 표시는 모두 실효값이야. 220 V의 최댓값은 약 311 V.', '문제에 말이 없으면 교류 값은 실효값이야.');
+  P('rlc-rl', 'R-L 직렬 임피던스', 'R과 XL이 주어지고 임피던스 Z를 묻는 문제야.', 'Z = √(R² + XL²). 3-4-5, 6-8-10, 5-12-13 같은 직각삼각형이면 바로 읽혀.', 'R + XL처럼 그냥 더하면 틀려. 두 값은 직각 방향이야.');
+  P('rlc-series', 'R-L-C 직렬 임피던스', 'R, XL, XC가 모두 주어지고 임피던스를 묻는 문제야.', 'XL과 XC는 반대 방향이라 먼저 빼서 X를 구해. 그다음 Z = √(R² + X²).', 'XL + XC로 더하거나 세 값을 그냥 더하면 틀려.');
+  P('rlc-omega', 'ω·L·C에서 임피던스', 'R, L(mH), C(μF), ω가 주어지고 임피던스를 묻는 문제야.', 'XL = ωL, XC = 1/(ωC)를 기본 단위(H, F)로 계산한 뒤 X = XL − XC, Z = √(R² + X²).', 'mH, μF를 그대로 넣으면 10³~10⁶배 틀려.');
+  P('rlc-current', '교류 회로의 전류', '전압과 R, XL이 주어지고 전류를 묻는 문제야.', 'Z를 먼저 구하고 I = V ÷ Z. 교류에서도 옴의 법칙이 그대로야.', 'R이나 X 하나만으로 나누면 틀려. 반드시 Z로 나눠.');
+  P('s:st-inductor-phase', '코일의 전류 위상', '순수 코일 회로에서 전류와 전압의 위상 관계를 묻는 이론 문제야.', '코일은 전류가 전압보다 90° 늦어(지상). 콘덴서는 90° 앞서고(진상), 저항은 같아.', 'L과 C는 정반대야. 한쪽만 외우고 나머지는 거꾸로 하면 돼.');
+  P('acp-active', '유효전력', '전압·전류·역률을 주고 유효전력을 묻는 문제야.', 'P = V × I × cosθ. VI는 피상전력이니까 역률만큼만 일한 몫이야.', 'sinθ를 곱하면 무효전력이 나와. 역률로 나누면 피상전력보다 커져서 틀려.');
+  P('acp-reactive', '무효전력', '전압·전류·역률을 주고 무효전력을 묻는 문제야.', 'sinθ = √(1 − cos²θ)를 먼저 구하고 Q = V × I × sinθ. 역률 0.8 ↔ sin 0.6, 역률 0.6 ↔ sin 0.8.', 'sinθ = 1 − cosθ로 계산하면 틀려.');
+  P('acp-apparent', 'P와 Q로 피상전력', '유효전력과 무효전력이 주어지고 피상전력을 묻는 문제야.', 'S = √(P² + Q²). 전력 삼각형의 빗변이야.', 'P + Q로 더하거나 제곱을 빼면 틀려. 답은 P, Q보다 커야 해.');
+  P('acp-pf', 'R과 X로 역률', 'R-L 직렬회로에서 역률을 묻는 문제야.', 'Z = √(R² + X²)를 구하고 cosθ = R ÷ Z. 역률은 항상 1 이하야.', 'X/Z는 sinθ야. R/Z를 뒤집은 값은 1보다 커서 오답이야.');
+  P('acp-q-from-p', 'P와 역률로 무효전력', '유효전력과 역률이 주어지고 무효전력을 묻는 문제야.', 'S = P ÷ cosθ를 먼저 구하고 Q = S × sinθ. (또는 Q = P × tanθ)', 'P에 sinθ를 바로 곱하면 틀려. sin은 피상전력에 곱해.');
+  P('res-omega', '공진 각주파수', 'L(mH)과 C(μF)가 주어지고 공진 각주파수를 묻는 문제야.', 'ω₀ = 1 ÷ √(LC). H, F로 바꿔서 LC를 곱하고 √를 씌워.', '√를 빠뜨리거나, f₀(Hz)와 ω₀(rad/s)를 헷갈려.');
+  P('res-f0', '공진 주파수', 'L과 C가 주어지고 공진 주파수 f₀를 Hz로 묻는 문제야.', 'ω₀ = 1/√(LC)를 구한 뒤 f₀ = ω₀ ÷ 2π.', '2π를 빠뜨리면 각주파수가 돼.');
+  P('res-current', '공진 때의 전류', 'XL = XC인 회로에 전압을 걸고 전류를 묻는 문제야.', 'XL = XC면 공진이야. 리액턴스가 지워져서 Z = R이니까 I = V ÷ R.', '리액턴스를 계산에 넣으면 안 돼. 공진 전류가 가장 커.');
+  P('res-scale', '공진 주파수가 몇 배', 'L이나 C를 몇 배 바꾸면 공진 주파수가 몇 배가 되는지 묻는 문제야.', 'f₀ ∝ 1/√(LC). LC가 몇 배 되는지 곱한 뒤 √를 씌우고 뒤집어.', '√를 빠뜨리거나 방향(반비례)을 거꾸로 하면 틀려.');
+  P('res-q', '선택도 Q', 'R, L, C가 주어지고 직렬 공진회로의 선택도를 묻는 문제야.', 'Q = (1/R) × √(L/C). H, F로 바꾸고 L/C를 구해 √를 씌운 뒤 R로 나눠.', 'R로 나누는 걸 빠뜨리거나 √를 빼먹으면 틀려. R이 작을수록 Q가 커.');
+  P('s:st-resonance-state', '직렬 공진 상태', '직렬 공진일 때 임피던스·전류·역률이 어떻게 되는지 묻는 이론 문제야.', 'Z는 최소(= R), 전류는 최대, 역률은 1. 병렬 공진은 정반대야.', '직렬과 병렬 공진을 서로 바꿔 외우지 마.');
+  P('yd-voltage', 'Y결선 전압', 'Y결선에서 상전압과 선간전압을 서로 바꾸는 문제야.', '선간전압 = √3 × 상전압. 거꾸로면 상전압 = 선간전압 ÷ √3.', '√3을 곱할지 나눌지 방향을 헷갈려. 선간전압이 더 커야 해.');
+  P('yd-current', 'Δ결선 전류', 'Δ결선에서 상전류와 선전류를 서로 바꾸는 문제야.', '선전류 = √3 × 상전류. 거꾸로면 상전류 = 선전류 ÷ √3.', 'Δ는 전압에 √3이 붙는 게 아니라 전류에 붙어.');
+  P('yd-load', '결선된 부하의 선전류', '선간전압과 한 상 임피던스를 주고 Y 또는 Δ 부하의 선전류를 묻는 문제야.', '한 상으로 바꿔서 풀어. Y는 상전압 = VL/√3(선전류 = 상전류), Δ는 상전압 = VL(선전류 = √3 × 상전류).', '결선을 확인하지 않고 한 공식으로 풀면 틀려.');
+  P('yd-convert', 'Δ↔Y 임피던스 변환', '같은 부하를 Δ에서 Y로, 또는 Y에서 Δ로 바꿀 때 한 상 임피던스를 묻는 문제야.', '평형 부하에서 Δ → Y는 1/3, Y → Δ는 3배.', '√3으로 계산하면 틀려. 임피던스 변환은 3이야.');
+  P('s:st-wye-phase', 'Y결선 선간전압의 위상', 'Y결선 선간전압의 크기와 위상을 묻는 이론 문제야.', '선간전압은 상전압의 √3배이고 위상은 30° 앞서.', '크기는 같아도 위상 방향(앞섬/뒤짐)을 거꾸로 외우기 쉬워.');
+
+  // ───────── 회로: 제어 ─────────
+  P('lp-power', 'tⁿ의 라플라스 변환', 'f(t) = 4t³ 같은 식의 F(s)를 구하는 문제야.', 'tⁿ → n!/sⁿ⁺¹. 상수배는 그대로 앞에 두고 n!과 s의 지수 n+1을 챙겨.', 'n!을 빠뜨리거나 s의 지수를 n으로 쓰면 틀려.');
+  P('lp-exp', '지수함수의 변환', 'f(t) = 3e^(−2t) 같은 식의 F(s)를 구하는 문제야.', 'e^(−at) → 1/(s + a). 상수배는 분자에 그대로 남아.', '부호를 바꿔 1/(s − a)로 쓰는 게 단골 오답이야.');
+  P('lp-trig', 'sin·cos의 변환', 'f(t) = 2 sin 5t 같은 식의 F(s)를 구하는 문제야.', 'sin ωt → ω/(s² + ω²), cos ωt → s/(s² + ω²). 분자는 sin이면 ω, cos이면 s.', 'sin과 cos의 분자를 바꿔 쓰거나 분모를 s² − ω²로 쓰면 틀려.');
+  P('lp-final', '초기값·최종값 정리', 'F(s)가 주어지고 f(0⁺) 또는 f(∞)를 묻는 문제야.', 'sF(s)를 만든 뒤 최종값은 s → 0, 초기값은 s → ∞ 극한을 구해.', '초기값과 최종값의 극한 방향을 바꾸거나 s를 곱하는 걸 빠뜨려.');
+  P('tf-rc', 'RC 회로 전달함수', 'R과 C를 직렬로 연결하고 R 또는 C 양단을 출력으로 할 때 전달함수를 묻는 문제야.', '전압 분배로 풀어. 출력이 C면 1/(RCs+1), R이면 RCs/(RCs+1). 시정수 τ = RC.', '출력 위치(C냐 R이냐)를 확인하지 않으면 틀려. kΩ × μF = ms 단위도 조심해.');
+  P('tf-rl', 'RL 회로 전달함수', 'R과 L을 직렬로 연결하고 R 또는 L 양단을 출력으로 할 때 전달함수를 묻는 문제야.', '전압 분배로 풀어. 출력이 R이면 1/((L/R)s + 1), L이면 (L/R)s/((L/R)s + 1). τ = L/R.', 'RC는 τ = RC, RL은 τ = L/R이야. 곱과 나눗셈을 바꿔 쓰지 마.');
+  P('tf-feedback', '피드백 전체 이득', '전향 이득 G와 피드백 H가 숫자로 주어지고 전체 이득을 묻는 문제야.', 'C/R = G ÷ (1 + GH). 부궤환(−)이면 1 + GH야.', '분모를 1 + H로 쓰거나 1 − GH(정궤환)로 쓰면 틀려.');
+  P('tf-feedback-s', 's 영역 피드백', 'G(s)가 s의 식으로 주어지고 H = 1인 피드백의 전달함수를 묻는 문제야.', 'G/(1 + G)에서 분자·분모에 G의 분모를 곱해 정리해. 극점이 −a에서 −(a + K)로 이동해.', 'G(s)를 그대로 답하거나 분모를 통분하지 않으면 틀려.');
+  P('tf-standard', '1차 표준형 읽기', 'G(s) = 100/(40s + 10)을 K/(Ts + 1)로 바꿔 K나 T를 읽는 문제야.', '분자·분모를 분모의 상수항으로 나눠 상수항을 1로 만들어. 분자가 K, s 앞이 T야.', '표준형으로 바꾸기 전에 숫자를 바로 읽으면 틀려.');
+  P('s:st-transfer-def', '전달함수의 정의', '전달함수가 무엇인지 묻는 이론 문제야.', '초기값을 0으로 했을 때 출력의 라플라스 변환 ÷ 입력의 라플라스 변환.', '입력과 출력을 뒤집거나 초기값을 0으로 안 두면 틀려.');
+
+  // ───────── 전기자기학 ─────────
+  P('em-coulomb-force', '쿨롱의 힘', '두 점전하의 크기와 거리를 주고 힘의 크기를 묻는 문제야.', 'F = 9×10⁹ × Q₁Q₂ ÷ r². μC, nC는 C로 바꾸고 거리는 제곱해.', '두 전하 모두 단위를 바꿔야 해. 거리 제곱을 빠뜨리지 마.');
+  P('em-coulomb-ratio', '쿨롱의 힘이 몇 배', '전하나 거리를 몇 배 바꾸면 힘이 몇 배가 되는지 묻는 문제야.', 'F ∝ Q₁Q₂/r². 전하 배수는 곱하고 거리 배수는 제곱해서 나눠.', '거리가 멀어지면 힘이 커진다고 착각하지 마. 거리 제곱에 반비례야.');
+  P('em-point', '점전하의 전계·전위', '점전하의 크기와 거리를 주고 전계 또는 전위를 묻는 문제야.', '전계 E = 9×10⁹ Q/r² [V/m], 전위 V = 9×10⁹ Q/r [V]. nC이면 9×10⁹ × 10⁻⁹ = 9로 간단해져.', '전계는 r², 전위는 r이야. 단위(V/m, V)로 구분해.');
+  P('em-line', '직선 전하의 전계', '무한히 긴 직선 전하의 선전하밀도와 거리를 주고 전계를 묻는 문제야.', 'E = λ/(2πε₀r) = 18×10⁹ × λ/r. 거리에 한 번만 반비례해.', '점전하 공식(9×10⁹, r²)을 그대로 쓰면 틀려.');
+  P('s:st-em-conductor', '도체 내부의 전계', '정전 평형 상태 도체 내부의 전계를 묻는 이론 문제야.', '도체 내부 전계는 0이고 전하는 표면에만 있어. 도체 전체가 등전위야.', '내부 전계는 0이지만 전위는 0이 아니야. 표면과 같은 값이야.');
+  P('em-cap-scale', '콘덴서 용량이 몇 배', '극판 면적, 간격, 유전체를 바꾸면 용량이 몇 배가 되는지 묻는 문제야.', 'C = ε₀εₛS/d. 면적과 비유전율은 곱하고 간격은 나눠.', '간격을 분자에 넣으면 틀려. 간격이 멀어지면 용량은 줄어.');
+  P('em-cap-plate', '평행판 콘덴서 용량', '면적, 간격, 비유전율을 주고 정전용량을 pF로 묻는 문제야.', 'C = ε₀εₛS/d (ε₀ = 8.855×10⁻¹²). mm는 m로 바꿔 계산하고 pF로 환산해.', 'mm를 m로 안 바꾸면 1000배 틀려. 비유전율도 빠뜨리지 마.');
+  P('em-cap-combo', '콘덴서 직렬·병렬', '콘덴서 두 개를 직렬 또는 병렬로 연결한 합성 용량을 묻는 문제야.', '병렬은 더하고, 직렬은 곱 나누기 합. 저항과 정반대야.', '저항 공식을 그대로 쓰면 틀려. 콘덴서 직렬 = 저항 병렬 꼴이야.');
+  P('em-cap-energy', '콘덴서 저장 에너지', '정전용량과 충전 전압을 주고 저장된 에너지를 묻는 문제야.', 'W = ½CV². μF는 F로 바꾸고 전압은 제곱해.', '½을 빠뜨리거나 전압을 제곱하지 않으면 틀려.');
+  P('em-mag-wire', '직선 도선의 자계', '긴 직선 도선의 전류와 거리를 주고 자계를 묻는 문제야.', 'H = I ÷ (2πr). 앙페르 법칙에서 원둘레 2πr로 나눈 거야.', '원형 코일 공식(2a)과 바꿔 쓰지 마.');
+  P('em-mag-coil', '원형 코일 중심의 자계', '반지름, 감은 수, 전류를 주고 코일 중심의 자계를 묻는 문제야.', 'H = NI ÷ (2a). 감은 수 N을 곱하고 지름(2a)으로 나눠.', 'π가 들어가는 직선·환상 공식을 쓰면 틀려. N을 빠뜨리지 마.');
+  P('em-mag-solenoid', '솔레노이드의 자계', '환상 솔레노이드나 무한장 솔레노이드의 내부 자계를 묻는 문제야.', '환상은 H = NI/(2πr), 무한장은 H = nI (n = N/l, 1 m당 감은 수).', 'n이 "1 m당" 감은 수라는 걸 잊고 N을 그대로 쓰면 틀려.');
+  P('em-force-bil', '도체가 받는 힘', '자속밀도, 전류, 길이, 각도를 주고 전자력을 묻는 문제야.', 'F = BIl·sinθ. θ는 도체와 자계 사이 각이야. 90°면 최대, 0°면 0.', 'sin 대신 cos을 쓰거나 각도를 빠뜨리면 틀려.');
+  P('em-force-parallel', '평행 도선 사이의 힘', '평행한 두 도선의 전류와 거리를 주고 1 m당 힘을 묻는 문제야.', 'F = 2I₁I₂/r × 10⁻⁷ [N/m]. 같은 방향이면 흡인, 반대 방향이면 반발.', '2를 빠뜨리거나 거리를 제곱하면 틀려. 전하(같은 부호 반발)와 반대 규칙이야.');
+  P('s:st-em-parallel-current', '평행 전류의 힘의 방향', '같은 방향으로 흐르는 평행 도선 사이의 힘을 묻는 이론 문제야.', '같은 방향 전류는 끌어당기고(흡인), 반대 방향은 밀어내(반발).', '전하는 같은 부호가 반발이라 정반대야.');
+  P('em-faraday', '자속 변화로 생기는 기전력', '코일의 감은 수와 자속 변화·시간을 주고 유도 기전력을 묻는 문제야.', 'e = N × ΔΦ/Δt. ΔΦ는 나중 자속 − 처음 자속.', '자속의 크기가 아니라 변화량을 써야 해. 시간으로 나누는 걸 잊지 마.');
+  P('em-motional', '움직이는 도체의 기전력', '자속밀도, 길이, 속도, 각도를 주고 도체에 생기는 기전력을 묻는 문제야.', 'e = Blv·sinθ. 자계를 직각으로 가를 때(90°) 최대야.', 'sin 대신 cos을 쓰거나 각도를 빠뜨리면 틀려.');
+  P('em-ind-energy', '코일 저장 에너지', '인덕턴스와 전류를 주고 코일에 저장된 에너지를 묻는 문제야.', 'W = ½LI². mH는 H로 바꾸고 전류는 제곱해.', '½을 빠뜨리거나 전류를 제곱하지 않으면 틀려.');
+  P('em-ind-self', '자기 인덕턴스 구하기', '감은 수, 전류, 쇄교 자속으로 자기 인덕턴스를 묻는 문제야.', 'L = NΦ ÷ I. 단위를 mWb로 맞추면 답이 mH로 나와.', '감은 수 N을 빠뜨리면 틀려. 자속과 전류의 위치도 확인해.');
+  P('em-ind-mutual', '상호 인덕턴스', '두 코일의 인덕턴스와 결합계수로 상호 인덕턴스를 묻는 문제야.', 'M = k × √(L₁L₂). 기하평균을 구한 뒤 k를 곱해.', '√를 빠뜨리거나 평균(산술)을 내면 틀려. k는 1 이하야.');
+  P('em-ind-series', '코일 직렬 합성', '두 코일을 가동 또는 차동 결합으로 직렬 연결한 합성 인덕턴스를 묻는 문제야.', '가동(자속 같은 방향)은 L₁ + L₂ + 2M, 차동은 L₁ + L₂ − 2M.', '2를 빠뜨리거나 가동·차동 부호를 바꾸면 틀려.');
+  P('em-mc-flux', '철심의 자속', '자기저항, 감은 수, 전류를 주고 자속을 묻는 문제야.', '기자력 F = NI를 구하고 Φ = F ÷ Rm. 자기회로 옴의 법칙이야.', '자기저항으로 나눠야 해. 곱하거나 N을 빠뜨리면 틀려.');
+  P('em-mc-scale', '자기저항이 몇 배', '길이, 단면적, 투자율을 바꾸면 자기저항이 몇 배가 되는지 묻는 문제야.', 'Rm = l/(μS). 길이는 분자, 투자율과 단면적은 분모로 배수를 계산해.', '전기저항 R = ρl/S와 같은 꼴이라는 걸 기억해. 투자율이 크면 저항은 작아져.');
+
+  // ───────── 전력공학 ─────────
+  P('pw-vdrop-3ph', '3상 선로의 전압강하', 'R, X, 전류, 역률을 주고 전압강하나 송전단 전압을 묻는 문제야.', 'e = √3 × I × (R cosθ + X sinθ). 송전단 전압 = 수전단 전압 + e.', 'R에는 cos, X에는 sin이야. 단상 2선식 계수(2)와 헷갈리지 마.');
+  P('pw-vdrop-rate', '전압강하율', '송전단·수전단 전압을 주고 전압강하율을 % 로 묻는 문제야.', '(송전단 − 수전단) ÷ 수전단 × 100.', '분모는 수전단이야. 송전단으로 나누면 틀려.');
+  P('s:st-pw-ferranti', '페란티 현상', '장거리 선로에서 수전단 전압이 오르는 현상의 원인·대책을 묻는 이론 문제야.', '원인은 선로 정전용량의 충전전류(진상)야. 대책은 분로 리액터.', '콘덴서를 달면 오히려 심해져. 진상 문제에는 리액터를 써.');
+  P('pw-loss-3i2r', '3상 선로 손실 3I²R', '선전류와 한 선의 저항을 주고 선로 전체 손실을 묻는 문제야.', 'Pℓ = 3I²R. 선이 세 가닥이라 한 선 손실의 3배야.', '한 선만 구하거나 √3을 곱하면 틀려.');
+  P('pw-loss-power', '전력·전압·역률로 손실', '송전 전력, 전압, 역률, 저항을 주고 선로 손실을 묻는 문제야.', 'I = P/(√3 V cosθ)를 구해 3I²R. 또는 Pℓ = P²R/(V²cos²θ). W, V 단위로 계산하고 마지막에 kW로.', '역률을 빠뜨리거나 제곱하지 않으면 틀려. 단위(kW, kV)를 맞춰.');
+  P('pw-loss-ratio', '손실이 몇 배', '전압을 올리거나 역률을 개선하면 손실이 몇 배가 되는지 묻는 문제야.', '손실 ∝ 1/V², ∝ 1/cos²θ. 전압 k배면 1/k², 역률 a → b면 (a/b)².', '제곱을 빠뜨리거나 방향을 거꾸로 하면 틀려. 좋아지면 손실은 줄어.');
+  P('pw-short-current', '단락전류', '정격전류와 %임피던스를 주고 단락전류를 묻는 문제야.', 'Is = (100 ÷ %Z) × In.', '%Z를 곱하면 안 돼. %Z가 작을수록 단락전류가 커.');
+  P('pw-short-capacity', '단락용량', '기준 용량과 %임피던스를 주고 단락용량을 묻는 문제야.', 'Ps = (100 ÷ %Z) × Pn. MVA끼리는 √3이 필요 없어.', '√3을 곱하거나 %Z를 곱하면 틀려.');
+  P('pw-pctz-calc', '%임피던스 계산', '정격 용량·전압과 한 상 임피던스를 주고 %Z를 묻는 문제야.', '%Z = P[kVA] × Z[Ω] ÷ (10 × V²[kV]). 단위는 kVA, kV 그대로.', '분모의 10과 전압 제곱을 빠뜨리면 틀려.');
+  P('pw-pfc', '역률 개선 콘덴서 용량', '유효전력과 개선 전·후 역률을 주고 필요한 콘덴서 용량을 묻는 문제야.', 'Qc = P(tanθ₁ − tanθ₂). 역률 0.6 → tan 4/3, 0.8 → 0.75, 1 → 0.', 'sin의 차나 피상전력의 차를 쓰면 틀려. P에 곱하는 건 tan이야.');
+  P('pw-sag-d', '이도 구하기', '경간, 전선 무게, 수평장력을 주고 이도를 묻는 문제야.', 'D = WS² ÷ (8T). 경간을 제곱하고 8T로 나눠.', '경간 제곱, 8로 나누기 순서를 확인해. W와 T는 단위를 맞춰.');
+  P('pw-sag-len', '전선의 실제 길이', '경간과 이도를 주고 전선이 경간보다 얼마나 긴지 묻는 문제야.', '늘어난 길이 = 8D² ÷ (3S).', '이도를 제곱하고 3S로 나누는 걸 확인해. 8과 3을 바꾸지 마.');
+  P('pw-gmd', '등가선간거리', '세 선 사이 거리를 주고 등가선간거리를 묻는 문제야.', 'D = ∛(D₁D₂D₃). 곱해서 세제곱근을 씌워.', '산술평균이나 제곱근을 쓰면 틀려.');
+  P('pw-line-lc', '작용 인덕턴스·정전용량', '등가선간거리와 전선 반지름을 주고 L 또는 C를 묻는 문제야.', 'L = 0.05 + 0.4605 log₁₀(D/r), C = 0.02413 ÷ log₁₀(D/r). D, r은 같은 단위로.', '상용로그(log₁₀)를 써야 해. C는 log로 "나눠".');
+  P('s:st-pw-corona', '코로나 방지 대책', '코로나 방전을 줄이는 방법을 묻는 이론 문제야.', '전선 표면 전계를 낮추면 돼. 복도체·다도체나 굵은 전선을 써.', '전선을 가늘게 하거나 전압을 높이면 오히려 심해져.');
+  P('pw-hydro', '수력 발전 출력', '유량, 유효낙차, 효율을 주고 출력을 kW로 묻는 문제야.', 'P = 9.8 × Q × H × η.', '9.8과 효율을 빠뜨리지 마. 효율은 곱해야 해.');
+  P('pw-thermal', '화력 열효율', '연료량, 발열량, 발전량을 주고 열효율을 묻는 문제야.', 'η = 860W ÷ (mH) × 100. 1 kWh = 860 kcal.', '860을 빠뜨리거나 분자·분모를 뒤집으면 틀려.');
+  P('pw-transformer-cap', '변압기 용량 정하기', '설비용량·수용률·부등률·역률을 주고 필요한 변압기 용량을 묻는 문제야.', 'Σ(설비 × 수용률) ÷ (부등률 × 역률).', '수용률은 곱하고 부등률·역률은 나눠. 부등률을 곱하면 틀려.');
+  P('pw-rates', '수용률·부하율 계산', '최대수용전력과 설비용량으로 수용률을, 또는 사용 전력량으로 부하율을 묻는 문제야.', '수용률 = 최대전력 ÷ 설비용량, 부하율 = 평균전력 ÷ 최대전력 (평균 = 전력량 ÷ 24).', '분자와 분모를 뒤집거나 24시간으로 나누는 걸 빠뜨리지 마.');
+
+  // ───────── 전기기기 ─────────
+  P('mc-dc-emf', '직류기 유기기전력', '극수·도체 수·자속·회전수·권선 방식을 주고 유기기전력을 묻는 문제야.', 'E = pZΦN ÷ (60a). 중권은 a = p, 파권은 a = 2.', '60을 빠뜨리거나 중권·파권 a를 바꿔 쓰면 틀려.');
+  P('mc-dc-terminal', '단자전압·역기전력', '전기자 저항과 전류를 주고 발전기 단자전압 또는 전동기 역기전력을 묻는 문제야.', '발전기는 V = E − IaRa, 전동기는 E = V − IaRa. 큰 값에서 IaRa를 빼.', '더하면 안 돼. 발전기·전동기 어느 쪽이든 내부 강하만큼 줄어.');
+  P('mc-dc-torque', '직류전동기 토크', '출력(kW)과 회전수(rpm)를 주고 토크를 묻는 문제야.', 'T = P ÷ ω, ω = 2πN/60. kW는 W로 바꿔.', '60이나 2π를 빠뜨리면 틀려. kW를 W로 바꾸는 것도 잊지 마.');
+  P('mc-dc-speed', '부하가 변할 때 속도', '전기자 전류가 바뀔 때 분권 전동기의 회전수를 묻는 문제야.', '자속이 일정하면 N ∝ E = V − IaRa. 두 상태의 역기전력 비로 속도를 구해.', '속도를 전류에 비례·반비례한다고 착각하면 틀려. 역기전력에 비례해.');
+  P('mc-tr-ratio', '변압기 권수비', '권수가 주어지고 전압·전류·임피던스 변환을 묻는 문제야.', 'a = N₁/N₂. 전압은 ÷a, 전류(2차 → 1차)는 ÷a, 임피던스는 ×a².', '전압과 전류를 같은 방향으로 계산하면 틀려. 전압 높은 쪽이 전류는 작아.');
+  P('mc-tr-eff', '변압기 효율', '철손·동손·부하율·역률을 주고 효율을 묻는 문제야.', '출력 = 부하율 × 용량 × 역률. 철손은 일정, 동손은 부하율². η = 출력 ÷ (출력 + 철손 + 동손).', '철손에 m²을 곱하거나 동손에 m만 곱하면 틀려.');
+  P('mc-tr-maxeff', '최대 효율 부하율', '철손과 동손으로 최대 효율이 나는 부하율을 묻는 문제야.', '철손 = 동손일 때 최대야. m = √(Pi/Pc).', '√를 빠뜨리거나 철손과 동손을 뒤집으면 틀려.');
+  P('s:st-mc-ironloss', '철손의 성질', '부하와 관계없이 일정한 변압기 손실을 묻는 이론 문제야.', '철손(무부하손)은 부하와 무관하게 일정해. 동손(부하손)은 전류의 제곱에 비례.', '무부하 시험은 철손, 단락 시험은 동손을 재.');
+  P('mc-tr-reg', '변압기 전압변동률', '%저항강하·%리액턴스강하·역률을 주고 전압변동률을 묻는 문제야.', 'ε ≈ p cosθ + q sinθ (지상). 진상이면 q sinθ를 빼.', 'p에는 cos, q에는 sin이야. 짝을 바꾸지 마.');
+  P('mc-im-slip', '슬립 구하기', '주파수·극수·회전수를 주고 슬립을 묻는 문제야.', 'Ns = 120f/P를 구하고 s = (Ns − N) ÷ Ns × 100.', '분모는 동기속도 Ns야. 실제 회전수로 나누면 틀려.');
+  P('mc-im-speed', '슬립으로 회전수', '주파수·극수·슬립을 주고 회전수를 묻는 문제야.', 'N = (1 − s) × 120f/P. 전동기는 동기속도보다 느려.', '120을 60으로 쓰거나 슬립을 더하면 틀려.');
+  P('s:st-mc-slip1', '슬립 1의 뜻', '슬립이 1일 때의 상태를 묻는 이론 문제야.', 's = 1은 정지(기동 순간), s = 0은 동기속도야.', '전동기 운전 범위는 0 < s < 1이야.');
+  P('mc-im-power', '2차 입력·동손·출력', '슬립과 한 전력을 주고 나머지 전력을 묻는 문제야.', 'P₂ : Pc₂ : Po = 1 : s : (1 − s). 비례식 하나로 세 값을 모두 구해.', '(1 − s)를 곱할지 나눌지 헷갈려. 입력이 가장 크다는 걸로 확인해.');
+  P('mc-im-torque-v', '토크와 전압', '공급 전압이 바뀔 때 토크가 몇 배가 되는지 묻는 문제야.', 'T ∝ V². 전압 배수를 제곱해.', '전압에 그냥 비례한다고 하면 틀려. 제곱이야.');
+  P('mc-sync-speed', '동기속도', '주파수와 극수를 주고 동기속도를 묻는 문제야.', 'Ns = 120f ÷ P. P는 극수.', '60을 쓰거나 극쌍수를 넣으면 틀려.');
+  P('mc-sync-power', '동기발전기 출력', '유기기전력·단자전압·동기리액턴스·부하각을 주고 3상 출력을 묻는 문제야.', 'P = 3 × E × V × sinδ ÷ Xs (상전압 기준). δ = 90°에서 최대.', '1상 출력만 구하거나 sin 대신 cos을 쓰면 틀려.');
+  P('mc-sync-scr', '단락비', '%동기임피던스나 계자전류로 단락비를 묻는 문제야.', 'Ks = 100 ÷ %Zs. 또는 무부하 정격전압 계자전류 ÷ 단락 정격전류 계자전류.', '분자와 분모를 뒤집으면 틀려. 단락비는 %로 쓰지 않아.');
+  P('mc-rect', '정류 평균전압', '정류 방식과 교류 실효값을 주고 직류 평균전압을 묻는 문제야.', '단상 반파 0.45E, 단상 전파 0.9E, 3상 반파 1.17E(상전압), 3상 전파 1.35E(선간전압).', '계수를 서로 바꾸거나 상전압·선간전압 기준을 헷갈려.');
+
+  // 조회 도우미
+  G.pointId = (q) => (q.templateId ? q.templateId : q.staticId ? 's:' + q.staticId : null);
+
+  // 개념의 포인트 목록(템플릿 → 이론형 순서)
+  G.pointsFor = function (conceptId) {
+    const list = [];
+    G.templatesFor(conceptId).forEach((t) => list.push(Object.assign({ kind: 'template', ref: t.id }, G.points[t.id])));
+    G.staticFor(conceptId).forEach((s) => {
+      if (s.concepts[0] === conceptId) list.push(Object.assign({ kind: 'static', ref: s.id }, G.points['s:' + s.id]));
+    });
+    return list;
+  };
+
+  // 포인트 하나로 새 문제 만들기
+  G.questionForPoint = function (point, seed) {
+    return point.kind === 'template' ? G.generate(point.ref, seed) : G.buildStatic(point.ref, seed);
+  };
+})(globalThis.GISA);
+
 /* ── app/progress.js ── */
 // 학습 기록 로직(순수 함수). 저장은 storage.js가 맡는다.
 (function (G) {
@@ -7566,6 +7796,7 @@ textarea {
   const UNLOCK_MIN_RATE = 0.6;
   const REVIEW_DAYS = [1, 3, 7]; // 틀림 → 1일 뒤 → (맞히면) 3일 뒤 → (맞히면) 7일 뒤 → (맞히면) 졸업
   const HISTORY_MAX = 500;
+  const MASTER_STREAK = 3; // 한 포인트에서 연속 3문제를 맞히면 "익숙해짐"
 
   function emptyState() {
     return {
@@ -7577,6 +7808,7 @@ textarea {
       reviews: {},
       history: [],
       lessons: {},
+      points: {},
     };
   }
 
@@ -7654,9 +7886,31 @@ textarea {
         reviewEvent = 'advanced';
       }
     }
+    // 포인트(문제 유형)별 기록: 연속 정답을 세어 "익숙해짐"을 판단
+    const pid = G.pointId ? G.pointId(q) : null;
+    if (pid) {
+      if (!state.points) state.points = {};
+      const ps = state.points[pid] || (state.points[pid] = { n: 0, c: 0, streak: 0 });
+      ps.n += 1;
+      if (ok) ps.c += 1;
+      ps.streak = ok ? ps.streak + 1 : 0;
+    }
     state.history.push({ k: q.key, cid: q.conceptId, ok: !!ok, t: Date.now() });
     if (state.history.length > HISTORY_MAX) state.history.splice(0, state.history.length - HISTORY_MAX);
     return reviewEvent;
+  }
+
+  function pointStat(state, pid) {
+    return (state.points && state.points[pid]) || { n: 0, c: 0, streak: 0 };
+  }
+  function pointMastered(state, pid) {
+    return pointStat(state, pid).streak >= MASTER_STREAK;
+  }
+  // 개념 안에서 익숙해진 포인트 수
+  function conceptPoints(state, cid) {
+    const list = G.pointsFor ? G.pointsFor(cid) : [];
+    const pid = (p) => (p.kind === 'static' ? 's:' + p.ref : p.ref);
+    return { total: list.length, mastered: list.filter((p) => pointMastered(state, pid(p))).length };
   }
 
   function dueReviews(state, day) {
@@ -7709,6 +7963,7 @@ textarea {
     if (raw.reviews && typeof raw.reviews === 'object') out.reviews = raw.reviews;
     if (Array.isArray(raw.history)) out.history = raw.history.slice(-HISTORY_MAX);
     if (raw.lessons && typeof raw.lessons === 'object') out.lessons = raw.lessons;
+    if (raw.points && typeof raw.points === 'object') out.points = raw.points;
     return out;
   }
 
@@ -7723,6 +7978,10 @@ textarea {
     conceptStat,
     prereqMet,
     isUnlocked,
+    MASTER_STREAK,
+    pointStat,
+    pointMastered,
+    conceptPoints,
     lessonRead,
     markLessonRead,
     unlockStatus,
@@ -8003,7 +8262,13 @@ textarea {
     lessonId: null,
     exampleKey: null,
     quiz: null,
+    drill: null, // { cid, pid|null } 포인트 반복 중
+    unitSubject: 'circuit',
+    unitCid: null,
+    exSeeds: {},
+    exOpen: {},
   };
+  const ptKey = (p) => (p.kind === 'static' ? 's:' + p.ref : p.ref);
 
   // ───────── 도우미 ─────────
   function h(tag, attrs) {
@@ -8100,6 +8365,20 @@ textarea {
       view.mode = 'normal';
       toast('오늘 복습 끝! 잘했어.');
     }
+    if (view.mode === 'drill' && view.drill) {
+      const pts = G.pointsFor(view.drill.cid);
+      let pt = view.drill.pid ? pts.find((p) => ptKey(p) === view.drill.pid) : null;
+      if (!pt && pts.length) {
+        const todo = pts.filter((p) => !P.pointMastered(S, ptKey(p)));
+        const pool = todo.length ? todo : pts;
+        pt = pool[Math.floor(Math.random() * pool.length)];
+      }
+      if (pt) {
+        view.q = G.questionForPoint(pt, G.rng.newSeed());
+        return;
+      }
+      view.mode = 'normal';
+    }
     let cid = null;
     if (view.mode === 'basics' && view.basics) cid = view.basics.focus;
     else if (S.settings.focus !== 'auto' && concept(S.settings.focus) && P.isUnlocked(S, S.settings.focus) && inSubject(concept(S.settings.focus)))
@@ -8123,7 +8402,10 @@ textarea {
     view.answered = true;
     view.chosen = i;
     const ok = view.q.choices[i].correct;
+    const pid = G.pointId ? G.pointId(view.q) : null;
+    const wasMastered = pid ? P.pointMastered(S, pid) : false;
     view.event = P.record(S, view.q, ok);
+    if (pid && !wasMastered && P.pointMastered(S, pid)) toast('이 포인트는 이제 익숙해졌어!');
     const after = unlockedSet();
     view.unlocked = after.filter((id) => before.indexOf(id) === -1);
     save();
@@ -8134,6 +8416,7 @@ textarea {
 
   function goTab(tab) {
     if (tab === 'learn' && view.tab === 'learn') view.lessonId = null;
+    if (tab === 'units' && view.tab === 'units') view.unitCid = null;
     view.tab = tab;
     view.resetArmed = false;
     render();
@@ -8145,6 +8428,7 @@ textarea {
     const due = P.dueReviews(S).length;
     const tabs = [
       ['learn', '배우기'],
+      ['units', '과목별'],
       ['practice', '연습'],
       ['review', '복습'],
       ['stats', '기록'],
@@ -8236,6 +8520,20 @@ textarea {
   }
 
   function modeBanner() {
+    if (view.mode === 'drill' && view.drill) {
+      const d = view.drill;
+      const pt = d.pid ? G.pointsFor(d.cid).find((p) => ptKey(p) === d.pid) : null;
+      const cp = P.conceptPoints(S, d.cid);
+      const label = pt
+        ? '포인트 반복: ' + pt.t + ' · 연속 정답 ' + P.pointStat(S, d.pid).streak + '/' + P.MASTER_STREAK + (P.pointMastered(S, d.pid) ? ' ✓ 익숙해졌어' : '')
+        : '단락 반복: ' + concept(d.cid).name + ' · 익숙한 포인트 ' + cp.mastered + '/' + cp.total;
+      return h(
+        'div',
+        { class: 'banner', id: 'drill-banner' },
+        label,
+        h('button', { class: 'btn small', id: 'drill-exit', onclick: () => { view.mode = 'normal'; view.drill = null; openUnit(d.cid); } }, '단락으로 돌아가기')
+      );
+    }
     if (view.mode === 'review') {
       return h(
         'div',
@@ -8365,7 +8663,7 @@ textarea {
     cards.push(notes);
     const actions = [
       h('button', { class: 'btn primary', id: 'next', onclick: () => { nextQuestion(); render(); window.scrollTo(0, 0); } }, '다음 문제'),
-      h('button', { class: 'btn', id: 'retry', onclick: () => { loadKey(q.key); render(); window.scrollTo(0, 0); } }, '같은 문제 다시'),
+      h('button', { class: 'btn', id: 'retry', onclick: () => { resetCard(); view.q = G.fromKey(q.key); render(); window.scrollTo(0, 0); } }, '같은 문제 다시'),
     ];
     if (!ok) {
       c.prereqs.forEach((pid) =>
@@ -8428,7 +8726,7 @@ textarea {
 
   // 잠긴 개념이 있으면 몇 개가 열렸는지와 "전부 열기"를 연습 화면에서 바로 보여 준다
   function lockBar() {
-    if (S.settings.skipOrder || !subjectReady()) return null;
+    if (S.settings.skipOrder || !subjectReady() || view.mode === 'drill') return null;
     const list = G.concepts.filter(inSubject);
     const open = list.filter((c) => P.isUnlocked(S, c.id)).length;
     if (open === list.length) return null;
@@ -8444,7 +8742,7 @@ textarea {
   }
 
   function renderPractice(root) {
-    root.appendChild(h('div', { class: 'panel' }, subjectChips(), lockBar(), subjectReady() && view.mode !== 'review' ? conceptPicker() : null));
+    root.appendChild(h('div', { class: 'panel' }, subjectChips(), lockBar(), subjectReady() && view.mode !== 'review' && view.mode !== 'drill' ? conceptPicker() : null));
     const b = modeBanner();
     if (b) root.appendChild(b);
     root.appendChild(questionCard());
@@ -8661,7 +8959,8 @@ textarea {
               },
               '이 개념 문제 풀기'
             )
-          : null
+          : null,
+        c ? h('button', { class: 'btn', id: 'lesson-units', onclick: () => { finishLesson(l); openUnit(c.id); } }, '포인트별로 반복하기') : null
       )
     );
     root.appendChild(art);
@@ -8671,6 +8970,203 @@ textarea {
     const l = view.lessonId ? G.lessonMap[view.lessonId] : null;
     if (l) renderLesson(root, l);
     else renderLearnList(root);
+  }
+
+  // ───────── 과목별(단원) 탭 ─────────
+  function openUnit(cid) {
+    view.unitSubject = concept(cid).subject;
+    view.unitCid = cid;
+    view.tab = 'units';
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  // 포인트 문제만 반복. 반복을 시작하면 개념을 읽은 것으로 쳐서 잠금도 풀어 준다.
+  function startDrill(cid, pid) {
+    const l = G.lessonFor(cid);
+    if (l) P.markLessonRead(S, l.id);
+    view.mode = 'drill';
+    view.drill = { cid, pid: pid || null };
+    save();
+    nextQuestion();
+    goTab('practice');
+  }
+
+  function pointStatus(pid) {
+    const st = P.pointStat(S, pid);
+    if (P.pointMastered(S, pid)) return { cls: 'open', text: '익숙해짐 ✓' };
+    if (st.n) return { cls: 'locked', text: '연속 ' + st.streak + '/' + P.MASTER_STREAK };
+    return { cls: 'locked', text: '아직 안 풀었어' };
+  }
+
+  function progressTile(label, mastered, total) {
+    return h(
+      'div',
+      { class: 'tile progress-tile' },
+      h('div', { class: 'stat-line' }, h('span', null, label), h('span', { class: 'nowrap' }, mastered + ' / ' + total)),
+      h('div', { class: 'bar' }, h('i', { style: 'width:' + (total ? Math.round((100 * mastered) / total) : 0) + '%' }))
+    );
+  }
+
+  function renderUnitList(root) {
+    const subs = G.subjects.filter((s) => s.ready || s.id === 'code');
+    if (!subs.some((s) => s.id === view.unitSubject)) view.unitSubject = 'circuit';
+    root.appendChild(
+      h(
+        'div',
+        { class: 'panel' },
+        h('h2', null, '과목별 단원'),
+        h('p', { class: 'muted small' }, '과목 → 단원 → 세부 단락 순서로 들어가. 단락마다 "문제 포인트 → 개념 설명 → 그 포인트 문제만 반복"으로 공부해. 한 포인트에서 연속 ' + P.MASTER_STREAK + '문제를 맞히면 익숙해진 걸로 쳐.'),
+        h(
+          'div',
+          { class: 'chips', role: 'group', 'aria-label': '과목' },
+          subs.map((s) =>
+            h('button', { class: 'chip', 'data-subject': s.id, 'aria-pressed': String(view.unitSubject === s.id), onclick: () => { view.unitSubject = s.id; render(); } }, s.short, s.ready ? null : h('span', { class: 'soon' }, '나중에'))
+          )
+        )
+      )
+    );
+    const sj = G.subjects.find((s) => s.id === view.unitSubject);
+    if (!sj.ready) {
+      root.appendChild(h('div', { class: 'empty' }, h('strong', null, sj.name), h('p', null, '최신 기준을 확인한 뒤에 따로 추가할 거야.')));
+      return;
+    }
+    let m = 0;
+    let t = 0;
+    G.concepts.filter((c) => c.subject === sj.id).forEach((c) => {
+      const cp = P.conceptPoints(S, c.id);
+      m += cp.mastered;
+      t += cp.total;
+    });
+    root.appendChild(progressTile('익숙해진 포인트', m, t));
+    groupsOf(sj.id).forEach((g) => {
+      root.appendChild(h('h3', { class: 'group-title eyebrow' }, g.name));
+      root.appendChild(
+        h(
+          'div',
+          { class: 'rows' },
+          G.concepts
+            .filter((c) => c.subject === g.subject && c.group === g.name)
+            .map((c) => {
+              const cp = P.conceptPoints(S, c.id);
+              const st = P.conceptStat(S, c.id);
+              return h(
+                'button',
+                { class: 'row lesson-row', 'data-unit': c.id, onclick: () => openUnit(c.id) },
+                h('span', { class: 'row-head' }, h('span', { class: 'name' }, c.name), h('span', { class: 'right' }, h('span', { class: 'state ' + (cp.total && cp.mastered === cp.total ? 'open' : 'locked') }, '포인트 ' + cp.mastered + '/' + cp.total))),
+                h('span', { class: 'bar' + (cp.mastered === 0 ? '' : '') }, h('i', { style: 'width:' + (cp.total ? Math.round((100 * cp.mastered) / cp.total) : 0) + '%' })),
+                h('span', { class: 'stat-line' }, h('span', null, st.n + '문제 풀이'), h('span', null, '정답률 ' + pct(st.c, st.n)))
+              );
+            })
+        )
+      );
+    });
+  }
+
+  // 포인트 카드 안의 예제(같은 숫자로 항상 같은 예제, "다른 숫자로"로 바꿀 수 있음)
+  function pointExample(p) {
+    const pid = ptKey(p);
+    let q;
+    try {
+      q = G.questionForPoint(p, view.exSeeds[pid] || 1);
+    } catch (e) {
+      return null;
+    }
+    const steps = q.explain.steps.map((s) => (s.indexOf('검산: ') === 0 ? h('li', { class: 'check' }, s) : h('li', null, s)));
+    return h(
+      'details',
+      { class: 'mini-example', open: !!view.exOpen[pid], ontoggle: (e) => { view.exOpen[pid] = e.target.open; } },
+      h('summary', null, '예제 풀이 보기'),
+      h(
+        'div',
+        { class: 'example' },
+        h('div', { class: 'example-head' }, h('span', { class: 'eyebrow' }, '예제'), h('span', { class: 'qid' }, q.key)),
+        h('p', { class: 'qtext' }, q.text),
+        q.svg ? h('div', { class: 'figure', html: q.svg }) : null,
+        h('ol', { class: 'choices' }, q.choices.map((c, i) => h('li', null, h('div', { class: 'choice' + (c.correct ? ' is-correct' : ' is-dim') }, h('span', { class: 'no' }, NUMS[i]), h('span', { class: 'lab' }, c.label))))),
+        h('h3', null, '풀이'),
+        h('ol', { class: 'steps' }, steps),
+        h('p', { class: 'lead' }, '답: ' + q.explain.conclusion),
+        h('button', { class: 'btn soft', 'data-another': pid, onclick: () => { view.exSeeds[pid] = G.rng.newSeed(); view.exOpen[pid] = true; render(); } }, '다른 숫자로 보기')
+      )
+    );
+  }
+
+  function renderUnitDetail(root, c) {
+    const l = G.lessonFor(c.id);
+    const points = G.pointsFor(c.id);
+    const cp = P.conceptPoints(S, c.id);
+    const sj = G.subjects.find((s) => s.id === c.subject);
+    const sameSubject = G.concepts.filter((x) => x.subject === c.subject);
+    const nextC = sameSubject[sameSubject.findIndex((x) => x.id === c.id) + 1] || null;
+
+    root.appendChild(h('button', { class: 'btn small back', id: 'unit-back', onclick: () => { view.unitCid = null; render(); window.scrollTo(0, 0); } }, '← ' + sj.short + ' 단원 목록'));
+    const kids = [
+      h('span', { class: 'eyebrow' }, sj.name + ' · ' + c.group),
+      h('h2', null, c.name),
+      l ? h('p', { class: 'goal' }, '이번 목표: ' + l.goal) : null,
+      progressTile('익숙해진 포인트', cp.mastered, cp.total),
+      h('div', { class: 'actions' }, h('button', { class: 'btn primary', id: 'drill-all', onclick: () => startDrill(c.id, null) }, '이 단락 전부 섞어서 반복')),
+
+      // 1) 문제 포인트 한눈에
+      h(
+        'section',
+        { class: 'lesson-sec' },
+        h('h3', null, '1. 이 단락에서 나오는 문제 포인트'),
+        h('p', { class: 'muted small' }, '시험에서 이 개념은 아래 ' + points.length + '가지 모양으로 나와. 먼저 훑어보고, 아래 개념 설명을 읽은 뒤 포인트별로 풀어 봐.'),
+        h('ol', { class: 'pt-list' }, points.map((p) => h('li', null, h('strong', null, p.t), h('span', { class: 'muted' }, ' — ' + p.ask))))
+      ),
+
+      // 2) 개념을 쉽고 자세하게
+      h(
+        'section',
+        { class: 'lesson-sec' },
+        h('h3', null, '2. 개념을 쉽게 이해하기'),
+        h('p', null, c.card)
+      ),
+      l
+        ? l.sections.map((sec) => h('section', { class: 'lesson-sec' }, h('h3', null, sec.h), (sec.p || []).map((t) => h('p', null, t)), sec.list ? h('ul', null, sec.list.map((t) => h('li', null, t))) : null))
+        : null,
+      h('div', { class: 'box analogy' }, h('span', { class: 'eyebrow' }, '비유로 보면'), h('p', null, c.analogy)),
+      h('div', { class: 'box formula-box' }, h('span', { class: 'eyebrow' }, '핵심 공식'), h('p', { class: 'formula' }, c.formula)),
+      l ? h('section', { class: 'lesson-sec' }, h('h3', null, '문제 푸는 순서'), h('ol', { class: 'how' }, l.how.map((t) => h('li', null, t)))) : null,
+
+      // 3) 포인트별로 풀어 보기
+      h('section', { class: 'lesson-sec' }, h('h3', null, '3. 포인트별로 풀어 보기'), h('p', { class: 'muted small' }, '포인트마다 풀이 핵심과 함정을 읽고, 예제를 본 다음, 그 모양의 문제만 계속 풀어서 익숙하게 만들어.')),
+      points.map((p, i) => {
+        const pid = ptKey(p);
+        const stt = pointStatus(pid);
+        const ps = P.pointStat(S, pid);
+        return h(
+          'section',
+          { class: 'point-card', 'data-point': pid },
+          h('div', { class: 'point-head' }, h('span', { class: 'lesson-no' }, i + 1), h('h3', null, p.t), h('span', { class: 'state ' + stt.cls }, stt.text)),
+          h('p', { class: 'point-ask' }, p.ask),
+          h('div', { class: 'box formula-box' }, h('span', { class: 'eyebrow' }, '풀이 핵심'), h('p', null, p.key)),
+          h('div', { class: 'box trap-box' }, h('span', { class: 'eyebrow' }, '자주 틀리는 곳'), h('p', null, p.trap)),
+          pointExample(p),
+          h(
+            'div',
+            { class: 'point-foot' },
+            h('button', { class: 'btn primary', 'data-drill': pid, onclick: () => startDrill(c.id, pid) }, '이 포인트 문제만 반복'),
+            h('span', { class: 'muted small' }, ps.n ? ps.n + '문제 풀이 · 정답 ' + ps.c + '개' : '아직 안 풀었어')
+          )
+        );
+      }),
+      h(
+        'div',
+        { class: 'actions' },
+        nextC ? h('button', { class: 'btn', id: 'unit-next', onclick: () => openUnit(nextC.id) }, '다음 단락: ' + nextC.name) : null,
+        h('button', { class: 'btn', onclick: () => { view.unitCid = null; render(); window.scrollTo(0, 0); } }, '단원 목록으로')
+      ),
+    ];
+    root.appendChild(h('article', { class: 'lesson unit' }, kids));
+  }
+
+  function renderUnits(root) {
+    const c = view.unitCid ? G.conceptMap[view.unitCid] : null;
+    if (c) renderUnitDetail(root, c);
+    else renderUnitList(root);
   }
 
   // ───────── 복습 탭 ─────────
@@ -8968,7 +9464,7 @@ textarea {
     renderBar();
     const root = document.getElementById('view');
     root.textContent = '';
-    const fn = { learn: renderLearn, practice: renderPractice, review: renderReview, stats: renderStats, settings: renderSettings }[view.tab];
+    const fn = { learn: renderLearn, units: renderUnits, practice: renderPractice, review: renderReview, stats: renderStats, settings: renderSettings }[view.tab];
     fn(root);
   }
 
@@ -9003,7 +9499,7 @@ textarea {
     view.tab = 'practice';
     render();
   }
-  G.ui = { start, _view: view, _state: () => S, _load, _answer: answer, _openLesson: openLesson };
+  G.ui = { start, _view: view, _state: () => S, _load, _answer: answer, _openLesson: openLesson, _openUnit: openUnit, _startDrill: startDrill };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })(globalThis.GISA);

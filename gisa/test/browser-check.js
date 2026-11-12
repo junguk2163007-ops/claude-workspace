@@ -144,6 +144,66 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.click('#lesson-practice');
     check((await page.evaluate(() => GISA.ui._view.q.conceptId)) === 'y-delta', '레슨에서 그 개념 문제 풀기');
 
+    // 과목별 탭: 과목 → 단락 → 포인트 → 그 포인트 문제만 반복
+    check(await page.evaluate(() => [...document.querySelectorAll('.tab')].every((t) => { const r = t.getBoundingClientRect(); return r.left >= 0 && r.right <= 390 && t.scrollWidth <= t.clientWidth + 1; })), '탭 6개가 아이폰 폭에 다 들어감');
+    await page.click('#tab-units');
+    check((await page.$$('.chip[data-subject]')).length === 6, '과목 칩 6개(기초 수학·회로·전기자기학·전력·전기기기·기술기준)');
+    check((await page.$$('.lesson-row[data-unit]')).length === (await page.evaluate(() => GISA.concepts.filter((c) => c.subject === 'circuit').length)), '회로 과목의 세부 단락 목록');
+    check(await noOverflow(page), '과목별 목록 가로 넘침');
+    await page.screenshot({ path: path.join(SHOTS, '05c-iphone-units-list.png'), fullPage: true });
+    await page.click('.chip[data-subject="em"]');
+    check((await page.$$('.lesson-row[data-unit]')).length === 8, '전기자기학 단락 8개');
+    await page.click('.chip[data-subject="code"]');
+    check(await page.isVisible('.empty'), '기술기준은 준비 중 안내');
+    await page.click('.chip[data-subject="circuit"]');
+    await page.click('.lesson-row[data-unit="ohm"]');
+    check((await page.$$('.point-card')).length === 3, '옴의 법칙 포인트 카드 3개');
+    check((await page.$$('.pt-list li')).length === 3, '포인트 한눈에 목록 3개');
+    check(await page.isVisible('.unit .box.analogy'), '개념 설명(비유) 표시');
+    check(await noOverflow(page), '단락 상세 가로 넘침');
+    await page.click('.point-card[data-point="ohm-current"] summary');
+    check(await page.isVisible('.point-card[data-point="ohm-current"] .mini-example .steps'), '포인트 예제 풀이 펼침');
+    const seedBefore = await page.evaluate(() => GISA.ui._view.exSeeds['ohm-current'] || 1);
+    await page.click('[data-another="ohm-current"]');
+    check((await page.evaluate(() => GISA.ui._view.exSeeds['ohm-current'])) !== seedBefore, '다른 숫자로 예제 보기');
+    check(await page.isVisible('.point-card[data-point="ohm-current"] .mini-example .steps'), '다른 숫자 뒤에도 예제가 열려 있음');
+    await page.screenshot({ path: path.join(SHOTS, '05d-iphone-units-detail.png'), fullPage: true });
+    await page.evaluate(() => { GISA.ui._state().points = {}; });
+    await page.click('[data-drill="ohm-current"]');
+    check(await page.isVisible('#drill-banner'), '포인트 반복 배너');
+    check((await page.evaluate(() => GISA.ui._view.q.templateId)) === 'ohm-current', '반복은 그 포인트 문제만');
+    check(!(await page.isVisible('#concept-select')), '반복 중엔 개념 선택이 숨겨짐');
+    for (let i = 0; i < 3; i++) {
+      const aa = await page.evaluate(() => GISA.ui._view.q.answerIndex);
+      await page.click('.choice[data-i="' + aa + '"]');
+      check((await page.evaluate(() => GISA.ui._view.q.templateId)) === 'ohm-current', '반복 ' + (i + 1) + '번째 문제도 같은 포인트');
+      if (i < 2) await page.click('#next');
+    }
+    check(await page.isVisible('#drill-banner:has-text("익숙해졌어")'), '3연속 정답 → 익숙해짐 표시');
+    await page.click('#next');
+    check((await page.evaluate(() => GISA.ui._view.q.templateId)) === 'ohm-current', '익숙해진 뒤에도 같은 포인트 반복 가능');
+    await page.screenshot({ path: path.join(SHOTS, '05e-iphone-drill.png'), fullPage: true });
+    await page.click('#drill-exit');
+    check((await page.evaluate(() => GISA.ui._view.unitCid)) === 'ohm', '단락으로 돌아가기');
+    check(await page.isVisible('.point-card[data-point="ohm-current"] .state.open'), '포인트 카드에 익숙해짐 표시');
+    await page.click('#drill-all');
+    const seenT = new Set();
+    for (let i = 0; i < 14; i++) {
+      seenT.add(await page.evaluate(() => GISA.ui._view.q.templateId));
+      const aa = await page.evaluate(() => GISA.ui._view.q.answerIndex);
+      await page.click('.choice[data-i="' + aa + '"]');
+      await page.click('#next');
+    }
+    check(seenT.size >= 2 && [...seenT].every((t) => ['ohm-current', 'ohm-voltage', 'ohm-resistance'].includes(t)), '단락 전체 반복은 그 단락 포인트만 섞어서: ' + [...seenT].join(','));
+    await page.click('#drill-exit');
+    await page.click('#unit-next');
+    check((await page.evaluate(() => GISA.ui._view.unitCid)) === 'series', '다음 단락으로 이동');
+    await page.evaluate(() => GISA.ui._openLesson('l-power'));
+    await page.click('#lesson-units');
+    check((await page.evaluate(() => GISA.ui._view.unitCid)) === 'power', '레슨에서 포인트별 반복으로 이동');
+    check(await page.evaluate(() => GISA.progress.isUnlocked(GISA.ui._state(), 'power')), '레슨을 읽으면 개념이 열림');
+    await page.click('#tab-practice');
+
     // 설정: 순서 건너뛰기 → 잠긴 개념 선택 → 틀리고 기초로 내려가기
     await page.click('#tab-settings');
     await page.check('#skip-order');

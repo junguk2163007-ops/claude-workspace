@@ -6,6 +6,7 @@
   const UNLOCK_MIN_RATE = 0.6;
   const REVIEW_DAYS = [1, 3, 7]; // 틀림 → 1일 뒤 → (맞히면) 3일 뒤 → (맞히면) 7일 뒤 → (맞히면) 졸업
   const HISTORY_MAX = 500;
+  const MASTER_STREAK = 3; // 한 포인트에서 연속 3문제를 맞히면 "익숙해짐"
 
   function emptyState() {
     return {
@@ -17,6 +18,7 @@
       reviews: {},
       history: [],
       lessons: {},
+      points: {},
     };
   }
 
@@ -94,9 +96,31 @@
         reviewEvent = 'advanced';
       }
     }
+    // 포인트(문제 유형)별 기록: 연속 정답을 세어 "익숙해짐"을 판단
+    const pid = G.pointId ? G.pointId(q) : null;
+    if (pid) {
+      if (!state.points) state.points = {};
+      const ps = state.points[pid] || (state.points[pid] = { n: 0, c: 0, streak: 0 });
+      ps.n += 1;
+      if (ok) ps.c += 1;
+      ps.streak = ok ? ps.streak + 1 : 0;
+    }
     state.history.push({ k: q.key, cid: q.conceptId, ok: !!ok, t: Date.now() });
     if (state.history.length > HISTORY_MAX) state.history.splice(0, state.history.length - HISTORY_MAX);
     return reviewEvent;
+  }
+
+  function pointStat(state, pid) {
+    return (state.points && state.points[pid]) || { n: 0, c: 0, streak: 0 };
+  }
+  function pointMastered(state, pid) {
+    return pointStat(state, pid).streak >= MASTER_STREAK;
+  }
+  // 개념 안에서 익숙해진 포인트 수
+  function conceptPoints(state, cid) {
+    const list = G.pointsFor ? G.pointsFor(cid) : [];
+    const pid = (p) => (p.kind === 'static' ? 's:' + p.ref : p.ref);
+    return { total: list.length, mastered: list.filter((p) => pointMastered(state, pid(p))).length };
   }
 
   function dueReviews(state, day) {
@@ -149,6 +173,7 @@
     if (raw.reviews && typeof raw.reviews === 'object') out.reviews = raw.reviews;
     if (Array.isArray(raw.history)) out.history = raw.history.slice(-HISTORY_MAX);
     if (raw.lessons && typeof raw.lessons === 'object') out.lessons = raw.lessons;
+    if (raw.points && typeof raw.points === 'object') out.points = raw.points;
     return out;
   }
 
@@ -163,6 +188,10 @@
     conceptStat,
     prereqMet,
     isUnlocked,
+    MASTER_STREAK,
+    pointStat,
+    pointMastered,
+    conceptPoints,
     lessonRead,
     markLessonRead,
     unlockStatus,

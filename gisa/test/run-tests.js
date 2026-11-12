@@ -180,6 +180,30 @@ G.lessons.forEach((l) => {
 });
 ok(G.lessons[0].part.indexOf('0.') === 0, 'lessons', '첫 레슨은 0단원(시작하기)이어야 함');
 
+// ───────── 3-3. 문제 포인트(과목별 단원) ─────────
+G.templateList.forEach((t) => ok(!!G.points[t.id], 'points', '템플릿에 포인트 설명이 없음: ' + t.id));
+G.staticBank.forEach((it) => ok(!!G.points['s:' + it.id], 'points', '이론형 문제에 포인트 설명이 없음: ' + it.id));
+Object.keys(G.points).forEach((id) => {
+  const p = G.points[id];
+  const w = 'point:' + id;
+  ok(id.indexOf('s:') === 0 ? !!G.staticMap[id.slice(2)] : !!G.templates[id], w, '포인트에 해당하는 문제가 없음');
+  ok(nonEmpty(p.t) && nonEmpty(p.ask) && nonEmpty(p.key) && nonEmpty(p.trap), w, '포인트 필드가 비어 있음');
+  ok(p.t.length <= 20, w, '포인트 이름이 너무 김: ' + p.t);
+  ok(!BAD_TEXT.test(JSON.stringify(p)), w, '글에 undefined/NaN');
+});
+G.concepts.forEach((c) => {
+  const pts = G.pointsFor(c.id);
+  ok(pts.length === G.templatesFor(c.id).length + G.staticFor(c.id).filter((x) => x.concepts[0] === c.id).length && pts.length > 0, 'points', '개념의 포인트 수 불일치: ' + c.id);
+  pts.forEach((pt) => {
+    for (let seed = 1; seed <= 5; seed++) {
+      const q = G.questionForPoint(pt, seed);
+      ok(q.conceptId === c.id, 'point:' + pt.id, '포인트 문제의 개념이 다름');
+      ok(G.pointId(q) === (pt.kind === 'static' ? 's:' + pt.ref : pt.ref), 'point:' + pt.id, 'pointId 불일치');
+    }
+  });
+});
+
+
 // ───────── 4. 학습 기록 로직 ─────────
 (function () {
   const P = G.progress;
@@ -224,6 +248,30 @@ ok(G.lessons[0].part.indexOf('0.') === 0, 'lessons', '첫 레슨은 0단원(시�
   P.record(st2, q, false, { day: '2026-04-03' });
   ok(st2.reviews[k].stage === 0 && st2.reviews[k].due === '2026-04-04', 'review', '복습 중 틀리면 1일로 리셋');
   ok(P.addDays('2026-12-31', 1) === '2027-01-01' && P.addDays('2028-02-28', 1) === '2028-02-29', 'review', '날짜 넘김');
+
+  // 포인트: 연속 3문제를 맞히면 익숙해짐, 틀리면 다시 0
+  (function () {
+    const stp = P.emptyState();
+    const pq = (id, n) => G.generate(id, n);
+    const fakeSt = P.emptyState();
+    P.record(fakeSt, pq('ohm-current', 1), true);
+    P.record(fakeSt, pq('ohm-current', 2), true);
+    ok(!P.pointMastered(fakeSt, 'ohm-current'), 'points', '2연속인데 익숙해짐으로 표시됨');
+    P.record(fakeSt, pq('ohm-current', 3), true);
+    ok(P.pointMastered(fakeSt, 'ohm-current'), 'points', '3연속인데 익숙해짐이 아님');
+    P.record(fakeSt, pq('ohm-current', 4), false);
+    ok(!P.pointMastered(fakeSt, 'ohm-current') && P.pointStat(fakeSt, 'ohm-current').streak === 0, 'points', '틀렸는데 연속이 안 끊김');
+    ok(P.pointStat(fakeSt, 'ohm-current').n === 4 && P.pointStat(fakeSt, 'ohm-current').c === 3, 'points', '포인트 풀이 수/정답 수');
+    ok(P.pointStat(fakeSt, 'ohm-voltage').n === 0, 'points', '다른 포인트에 섞여 기록됨');
+    for (let i = 1; i <= 3; i++) P.record(stp, G.buildStatic('st-base-ampere', i), true);
+    ok(P.pointMastered(stp, 's:st-base-ampere'), 'points', '이론형 포인트 기록');
+    const cp = P.conceptPoints(fakeSt, 'ohm');
+    ok(cp.total === 3 && cp.mastered === 0, 'points', '개념 포인트 집계: ' + JSON.stringify(cp));
+    for (let i = 5; i <= 7; i++) P.record(fakeSt, pq('ohm-current', i), true);
+    ok(P.conceptPoints(fakeSt, 'ohm').mastered === 1, 'points', '익숙한 포인트 집계');
+    ok(P.normalize(JSON.parse(JSON.stringify(fakeSt))).points['ohm-current'].streak === 3, 'storage', '포인트 기록이 저장·복원되지 않음');
+    ok(P.normalize({}).points && typeof P.normalize({}).points === 'object', 'storage', '예전 저장본에 포인트 필드 보충');
+  })();
 
   // 연속 정답
   const s2 = P.emptyState();

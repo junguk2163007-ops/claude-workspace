@@ -33,7 +33,13 @@
     lessonId: null,
     exampleKey: null,
     quiz: null,
+    drill: null, // { cid, pid|null } 포인트 반복 중
+    unitSubject: 'circuit',
+    unitCid: null,
+    exSeeds: {},
+    exOpen: {},
   };
+  const ptKey = (p) => (p.kind === 'static' ? 's:' + p.ref : p.ref);
 
   // ───────── 도우미 ─────────
   function h(tag, attrs) {
@@ -130,6 +136,20 @@
       view.mode = 'normal';
       toast('오늘 복습 끝! 잘했어.');
     }
+    if (view.mode === 'drill' && view.drill) {
+      const pts = G.pointsFor(view.drill.cid);
+      let pt = view.drill.pid ? pts.find((p) => ptKey(p) === view.drill.pid) : null;
+      if (!pt && pts.length) {
+        const todo = pts.filter((p) => !P.pointMastered(S, ptKey(p)));
+        const pool = todo.length ? todo : pts;
+        pt = pool[Math.floor(Math.random() * pool.length)];
+      }
+      if (pt) {
+        view.q = G.questionForPoint(pt, G.rng.newSeed());
+        return;
+      }
+      view.mode = 'normal';
+    }
     let cid = null;
     if (view.mode === 'basics' && view.basics) cid = view.basics.focus;
     else if (S.settings.focus !== 'auto' && concept(S.settings.focus) && P.isUnlocked(S, S.settings.focus) && inSubject(concept(S.settings.focus)))
@@ -153,7 +173,10 @@
     view.answered = true;
     view.chosen = i;
     const ok = view.q.choices[i].correct;
+    const pid = G.pointId ? G.pointId(view.q) : null;
+    const wasMastered = pid ? P.pointMastered(S, pid) : false;
     view.event = P.record(S, view.q, ok);
+    if (pid && !wasMastered && P.pointMastered(S, pid)) toast('이 포인트는 이제 익숙해졌어!');
     const after = unlockedSet();
     view.unlocked = after.filter((id) => before.indexOf(id) === -1);
     save();
@@ -164,6 +187,7 @@
 
   function goTab(tab) {
     if (tab === 'learn' && view.tab === 'learn') view.lessonId = null;
+    if (tab === 'units' && view.tab === 'units') view.unitCid = null;
     view.tab = tab;
     view.resetArmed = false;
     render();
@@ -175,6 +199,7 @@
     const due = P.dueReviews(S).length;
     const tabs = [
       ['learn', '배우기'],
+      ['units', '과목별'],
       ['practice', '연습'],
       ['review', '복습'],
       ['stats', '기록'],
@@ -266,6 +291,20 @@
   }
 
   function modeBanner() {
+    if (view.mode === 'drill' && view.drill) {
+      const d = view.drill;
+      const pt = d.pid ? G.pointsFor(d.cid).find((p) => ptKey(p) === d.pid) : null;
+      const cp = P.conceptPoints(S, d.cid);
+      const label = pt
+        ? '포인트 반복: ' + pt.t + ' · 연속 정답 ' + P.pointStat(S, d.pid).streak + '/' + P.MASTER_STREAK + (P.pointMastered(S, d.pid) ? ' ✓ 익숙해졌어' : '')
+        : '단락 반복: ' + concept(d.cid).name + ' · 익숙한 포인트 ' + cp.mastered + '/' + cp.total;
+      return h(
+        'div',
+        { class: 'banner', id: 'drill-banner' },
+        label,
+        h('button', { class: 'btn small', id: 'drill-exit', onclick: () => { view.mode = 'normal'; view.drill = null; openUnit(d.cid); } }, '단락으로 돌아가기')
+      );
+    }
     if (view.mode === 'review') {
       return h(
         'div',
@@ -395,7 +434,7 @@
     cards.push(notes);
     const actions = [
       h('button', { class: 'btn primary', id: 'next', onclick: () => { nextQuestion(); render(); window.scrollTo(0, 0); } }, '다음 문제'),
-      h('button', { class: 'btn', id: 'retry', onclick: () => { loadKey(q.key); render(); window.scrollTo(0, 0); } }, '같은 문제 다시'),
+      h('button', { class: 'btn', id: 'retry', onclick: () => { resetCard(); view.q = G.fromKey(q.key); render(); window.scrollTo(0, 0); } }, '같은 문제 다시'),
     ];
     if (!ok) {
       c.prereqs.forEach((pid) =>
@@ -458,7 +497,7 @@
 
   // 잠긴 개념이 있으면 몇 개가 열렸는지와 "전부 열기"를 연습 화면에서 바로 보여 준다
   function lockBar() {
-    if (S.settings.skipOrder || !subjectReady()) return null;
+    if (S.settings.skipOrder || !subjectReady() || view.mode === 'drill') return null;
     const list = G.concepts.filter(inSubject);
     const open = list.filter((c) => P.isUnlocked(S, c.id)).length;
     if (open === list.length) return null;
@@ -474,7 +513,7 @@
   }
 
   function renderPractice(root) {
-    root.appendChild(h('div', { class: 'panel' }, subjectChips(), lockBar(), subjectReady() && view.mode !== 'review' ? conceptPicker() : null));
+    root.appendChild(h('div', { class: 'panel' }, subjectChips(), lockBar(), subjectReady() && view.mode !== 'review' && view.mode !== 'drill' ? conceptPicker() : null));
     const b = modeBanner();
     if (b) root.appendChild(b);
     root.appendChild(questionCard());
@@ -691,7 +730,8 @@
               },
               '이 개념 문제 풀기'
             )
-          : null
+          : null,
+        c ? h('button', { class: 'btn', id: 'lesson-units', onclick: () => { finishLesson(l); openUnit(c.id); } }, '포인트별로 반복하기') : null
       )
     );
     root.appendChild(art);
@@ -701,6 +741,203 @@
     const l = view.lessonId ? G.lessonMap[view.lessonId] : null;
     if (l) renderLesson(root, l);
     else renderLearnList(root);
+  }
+
+  // ───────── 과목별(단원) 탭 ─────────
+  function openUnit(cid) {
+    view.unitSubject = concept(cid).subject;
+    view.unitCid = cid;
+    view.tab = 'units';
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  // 포인트 문제만 반복. 반복을 시작하면 개념을 읽은 것으로 쳐서 잠금도 풀어 준다.
+  function startDrill(cid, pid) {
+    const l = G.lessonFor(cid);
+    if (l) P.markLessonRead(S, l.id);
+    view.mode = 'drill';
+    view.drill = { cid, pid: pid || null };
+    save();
+    nextQuestion();
+    goTab('practice');
+  }
+
+  function pointStatus(pid) {
+    const st = P.pointStat(S, pid);
+    if (P.pointMastered(S, pid)) return { cls: 'open', text: '익숙해짐 ✓' };
+    if (st.n) return { cls: 'locked', text: '연속 ' + st.streak + '/' + P.MASTER_STREAK };
+    return { cls: 'locked', text: '아직 안 풀었어' };
+  }
+
+  function progressTile(label, mastered, total) {
+    return h(
+      'div',
+      { class: 'tile progress-tile' },
+      h('div', { class: 'stat-line' }, h('span', null, label), h('span', { class: 'nowrap' }, mastered + ' / ' + total)),
+      h('div', { class: 'bar' }, h('i', { style: 'width:' + (total ? Math.round((100 * mastered) / total) : 0) + '%' }))
+    );
+  }
+
+  function renderUnitList(root) {
+    const subs = G.subjects.filter((s) => s.ready || s.id === 'code');
+    if (!subs.some((s) => s.id === view.unitSubject)) view.unitSubject = 'circuit';
+    root.appendChild(
+      h(
+        'div',
+        { class: 'panel' },
+        h('h2', null, '과목별 단원'),
+        h('p', { class: 'muted small' }, '과목 → 단원 → 세부 단락 순서로 들어가. 단락마다 "문제 포인트 → 개념 설명 → 그 포인트 문제만 반복"으로 공부해. 한 포인트에서 연속 ' + P.MASTER_STREAK + '문제를 맞히면 익숙해진 걸로 쳐.'),
+        h(
+          'div',
+          { class: 'chips', role: 'group', 'aria-label': '과목' },
+          subs.map((s) =>
+            h('button', { class: 'chip', 'data-subject': s.id, 'aria-pressed': String(view.unitSubject === s.id), onclick: () => { view.unitSubject = s.id; render(); } }, s.short, s.ready ? null : h('span', { class: 'soon' }, '나중에'))
+          )
+        )
+      )
+    );
+    const sj = G.subjects.find((s) => s.id === view.unitSubject);
+    if (!sj.ready) {
+      root.appendChild(h('div', { class: 'empty' }, h('strong', null, sj.name), h('p', null, '최신 기준을 확인한 뒤에 따로 추가할 거야.')));
+      return;
+    }
+    let m = 0;
+    let t = 0;
+    G.concepts.filter((c) => c.subject === sj.id).forEach((c) => {
+      const cp = P.conceptPoints(S, c.id);
+      m += cp.mastered;
+      t += cp.total;
+    });
+    root.appendChild(progressTile('익숙해진 포인트', m, t));
+    groupsOf(sj.id).forEach((g) => {
+      root.appendChild(h('h3', { class: 'group-title eyebrow' }, g.name));
+      root.appendChild(
+        h(
+          'div',
+          { class: 'rows' },
+          G.concepts
+            .filter((c) => c.subject === g.subject && c.group === g.name)
+            .map((c) => {
+              const cp = P.conceptPoints(S, c.id);
+              const st = P.conceptStat(S, c.id);
+              return h(
+                'button',
+                { class: 'row lesson-row', 'data-unit': c.id, onclick: () => openUnit(c.id) },
+                h('span', { class: 'row-head' }, h('span', { class: 'name' }, c.name), h('span', { class: 'right' }, h('span', { class: 'state ' + (cp.total && cp.mastered === cp.total ? 'open' : 'locked') }, '포인트 ' + cp.mastered + '/' + cp.total))),
+                h('span', { class: 'bar' + (cp.mastered === 0 ? '' : '') }, h('i', { style: 'width:' + (cp.total ? Math.round((100 * cp.mastered) / cp.total) : 0) + '%' })),
+                h('span', { class: 'stat-line' }, h('span', null, st.n + '문제 풀이'), h('span', null, '정답률 ' + pct(st.c, st.n)))
+              );
+            })
+        )
+      );
+    });
+  }
+
+  // 포인트 카드 안의 예제(같은 숫자로 항상 같은 예제, "다른 숫자로"로 바꿀 수 있음)
+  function pointExample(p) {
+    const pid = ptKey(p);
+    let q;
+    try {
+      q = G.questionForPoint(p, view.exSeeds[pid] || 1);
+    } catch (e) {
+      return null;
+    }
+    const steps = q.explain.steps.map((s) => (s.indexOf('검산: ') === 0 ? h('li', { class: 'check' }, s) : h('li', null, s)));
+    return h(
+      'details',
+      { class: 'mini-example', open: !!view.exOpen[pid], ontoggle: (e) => { view.exOpen[pid] = e.target.open; } },
+      h('summary', null, '예제 풀이 보기'),
+      h(
+        'div',
+        { class: 'example' },
+        h('div', { class: 'example-head' }, h('span', { class: 'eyebrow' }, '예제'), h('span', { class: 'qid' }, q.key)),
+        h('p', { class: 'qtext' }, q.text),
+        q.svg ? h('div', { class: 'figure', html: q.svg }) : null,
+        h('ol', { class: 'choices' }, q.choices.map((c, i) => h('li', null, h('div', { class: 'choice' + (c.correct ? ' is-correct' : ' is-dim') }, h('span', { class: 'no' }, NUMS[i]), h('span', { class: 'lab' }, c.label))))),
+        h('h3', null, '풀이'),
+        h('ol', { class: 'steps' }, steps),
+        h('p', { class: 'lead' }, '답: ' + q.explain.conclusion),
+        h('button', { class: 'btn soft', 'data-another': pid, onclick: () => { view.exSeeds[pid] = G.rng.newSeed(); view.exOpen[pid] = true; render(); } }, '다른 숫자로 보기')
+      )
+    );
+  }
+
+  function renderUnitDetail(root, c) {
+    const l = G.lessonFor(c.id);
+    const points = G.pointsFor(c.id);
+    const cp = P.conceptPoints(S, c.id);
+    const sj = G.subjects.find((s) => s.id === c.subject);
+    const sameSubject = G.concepts.filter((x) => x.subject === c.subject);
+    const nextC = sameSubject[sameSubject.findIndex((x) => x.id === c.id) + 1] || null;
+
+    root.appendChild(h('button', { class: 'btn small back', id: 'unit-back', onclick: () => { view.unitCid = null; render(); window.scrollTo(0, 0); } }, '← ' + sj.short + ' 단원 목록'));
+    const kids = [
+      h('span', { class: 'eyebrow' }, sj.name + ' · ' + c.group),
+      h('h2', null, c.name),
+      l ? h('p', { class: 'goal' }, '이번 목표: ' + l.goal) : null,
+      progressTile('익숙해진 포인트', cp.mastered, cp.total),
+      h('div', { class: 'actions' }, h('button', { class: 'btn primary', id: 'drill-all', onclick: () => startDrill(c.id, null) }, '이 단락 전부 섞어서 반복')),
+
+      // 1) 문제 포인트 한눈에
+      h(
+        'section',
+        { class: 'lesson-sec' },
+        h('h3', null, '1. 이 단락에서 나오는 문제 포인트'),
+        h('p', { class: 'muted small' }, '시험에서 이 개념은 아래 ' + points.length + '가지 모양으로 나와. 먼저 훑어보고, 아래 개념 설명을 읽은 뒤 포인트별로 풀어 봐.'),
+        h('ol', { class: 'pt-list' }, points.map((p) => h('li', null, h('strong', null, p.t), h('span', { class: 'muted' }, ' — ' + p.ask))))
+      ),
+
+      // 2) 개념을 쉽고 자세하게
+      h(
+        'section',
+        { class: 'lesson-sec' },
+        h('h3', null, '2. 개념을 쉽게 이해하기'),
+        h('p', null, c.card)
+      ),
+      l
+        ? l.sections.map((sec) => h('section', { class: 'lesson-sec' }, h('h3', null, sec.h), (sec.p || []).map((t) => h('p', null, t)), sec.list ? h('ul', null, sec.list.map((t) => h('li', null, t))) : null))
+        : null,
+      h('div', { class: 'box analogy' }, h('span', { class: 'eyebrow' }, '비유로 보면'), h('p', null, c.analogy)),
+      h('div', { class: 'box formula-box' }, h('span', { class: 'eyebrow' }, '핵심 공식'), h('p', { class: 'formula' }, c.formula)),
+      l ? h('section', { class: 'lesson-sec' }, h('h3', null, '문제 푸는 순서'), h('ol', { class: 'how' }, l.how.map((t) => h('li', null, t)))) : null,
+
+      // 3) 포인트별로 풀어 보기
+      h('section', { class: 'lesson-sec' }, h('h3', null, '3. 포인트별로 풀어 보기'), h('p', { class: 'muted small' }, '포인트마다 풀이 핵심과 함정을 읽고, 예제를 본 다음, 그 모양의 문제만 계속 풀어서 익숙하게 만들어.')),
+      points.map((p, i) => {
+        const pid = ptKey(p);
+        const stt = pointStatus(pid);
+        const ps = P.pointStat(S, pid);
+        return h(
+          'section',
+          { class: 'point-card', 'data-point': pid },
+          h('div', { class: 'point-head' }, h('span', { class: 'lesson-no' }, i + 1), h('h3', null, p.t), h('span', { class: 'state ' + stt.cls }, stt.text)),
+          h('p', { class: 'point-ask' }, p.ask),
+          h('div', { class: 'box formula-box' }, h('span', { class: 'eyebrow' }, '풀이 핵심'), h('p', null, p.key)),
+          h('div', { class: 'box trap-box' }, h('span', { class: 'eyebrow' }, '자주 틀리는 곳'), h('p', null, p.trap)),
+          pointExample(p),
+          h(
+            'div',
+            { class: 'point-foot' },
+            h('button', { class: 'btn primary', 'data-drill': pid, onclick: () => startDrill(c.id, pid) }, '이 포인트 문제만 반복'),
+            h('span', { class: 'muted small' }, ps.n ? ps.n + '문제 풀이 · 정답 ' + ps.c + '개' : '아직 안 풀었어')
+          )
+        );
+      }),
+      h(
+        'div',
+        { class: 'actions' },
+        nextC ? h('button', { class: 'btn', id: 'unit-next', onclick: () => openUnit(nextC.id) }, '다음 단락: ' + nextC.name) : null,
+        h('button', { class: 'btn', onclick: () => { view.unitCid = null; render(); window.scrollTo(0, 0); } }, '단원 목록으로')
+      ),
+    ];
+    root.appendChild(h('article', { class: 'lesson unit' }, kids));
+  }
+
+  function renderUnits(root) {
+    const c = view.unitCid ? G.conceptMap[view.unitCid] : null;
+    if (c) renderUnitDetail(root, c);
+    else renderUnitList(root);
   }
 
   // ───────── 복습 탭 ─────────
@@ -998,7 +1235,7 @@
     renderBar();
     const root = document.getElementById('view');
     root.textContent = '';
-    const fn = { learn: renderLearn, practice: renderPractice, review: renderReview, stats: renderStats, settings: renderSettings }[view.tab];
+    const fn = { learn: renderLearn, units: renderUnits, practice: renderPractice, review: renderReview, stats: renderStats, settings: renderSettings }[view.tab];
     fn(root);
   }
 
@@ -1033,7 +1270,7 @@
     view.tab = 'practice';
     render();
   }
-  G.ui = { start, _view: view, _state: () => S, _load, _answer: answer, _openLesson: openLesson };
+  G.ui = { start, _view: view, _state: () => S, _load, _answer: answer, _openLesson: openLesson, _openUnit: openUnit, _startDrill: startDrill };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })(globalThis.GISA);

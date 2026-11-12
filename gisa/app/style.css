@@ -157,11 +157,11 @@ button:disabled {
 .tab {
   flex: 1;
   min-width: 0;
-  padding: 10px 4px 11px;
+  padding: 10px 2px 11px;
   border: 0;
   background: none;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   border-bottom: 3px solid transparent;
   white-space: nowrap;
@@ -1081,6 +1081,72 @@ textarea {
 }
 .example div.choice {
   cursor: default;
+}
+
+/* ── 과목별(단원) ── */
+.nowrap {
+  white-space: nowrap;
+}
+.pt-list {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 8px;
+}
+.pt-list li {
+  font-size: 15px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.point-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.point-head {
+  display: flex;
+  align-items: center;
+  gap: 8px 10px;
+  flex-wrap: wrap;
+}
+.point-head h3 {
+  flex: 1 1 140px;
+  min-width: 0;
+  font-size: 17px;
+}
+.point-ask {
+  font-size: 15px;
+  line-height: 1.7;
+}
+.box.trap-box {
+  background: var(--warn-soft);
+}
+.box.trap-box .eyebrow {
+  color: var(--warn);
+}
+.point-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.mini-example summary {
+  font-size: 14px;
+}
+.mini-example .example {
+  margin-top: 8px;
+  background: var(--surface-2);
+  border: 0;
+}
+.mini-example .example .choice {
+  background: var(--surface);
+}
+button.lesson-row .bar {
+  display: block;
 }
 
 @media (min-width: 560px) {
