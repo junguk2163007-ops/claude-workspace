@@ -635,6 +635,18 @@ select {
   }
 }
 
+/* ── 동기화 상태 ── */
+.syncdot {
+  font-size: 12px;
+  color: var(--muted);
+}
+.syncdot.ok {
+  color: var(--ok);
+}
+.syncdot.bad {
+  color: var(--bad);
+}
+
 /* ── 해설 ── */
 .verdict {
   padding: 12px 14px;

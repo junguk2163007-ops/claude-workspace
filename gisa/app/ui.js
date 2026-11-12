@@ -65,7 +65,23 @@
   }
   const pct = (c, n) => (n ? Math.round((100 * c) / n) + '%' : '–');
   const concept = (id) => G.conceptMap[id];
-  const save = () => G.store.save(S);
+  // 상단 바의 작은 동기화 표시(☁✓ 동기화됨, ☁… 진행 중, ☁! 문제)
+  function paintSyncDot() {
+    const dot = document.getElementById('sync-dot');
+    if (!dot || !G.sync) return;
+    const st = G.sync.status();
+    const m = { ok: ['ok', ' ☁✓', '동기화됨'], syncing: ['', ' ☁…', '동기화 중'], error: ['bad', ' ☁!', st.message], readonly: ['bad', ' ☁!', st.message] }[st.state];
+    dot.className = 'syncdot ' + (m ? m[0] : '');
+    dot.textContent = m ? m[1] : '';
+    dot.title = m ? m[2] : '';
+  }
+
+  // 기록이 바뀔 때마다: 변경 시각을 남기고(기기 간 합치기 기준), 로컬에 저장하고, 서버 동기화를 예약
+  const save = () => {
+    S.updatedAt = Math.max(Date.now(), S.updatedAt || 0);
+    G.store.save(S);
+    if (G.sync) G.sync.schedule();
+  };
 
   let toastTimer = null;
   function toast(text) {
@@ -227,7 +243,7 @@
           { class: 'brand' },
           h('span', { html: '<svg viewBox="0 0 30 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 9c3.5-9 6.5-9 10 0s6.5 9 10 0 4-6 6-6"/></svg>', 'aria-hidden': 'true' }),
           h('span', null, '전기기사 필기 ', h('small', null, '연습장')),
-          h('span', { class: 'streak', title: '현재 연속 정답' }, '연속 ' + S.streak.cur)
+          h('span', { class: 'streak', title: '현재 연속 정답' }, '연속 ' + S.streak.cur, h('span', { class: 'syncdot', id: 'sync-dot' }))
         ),
         h(
           'nav',
@@ -243,6 +259,7 @@
         )
       )
     );
+    paintSyncDot();
   }
 
   // ───────── 연습 탭 ─────────
@@ -1049,6 +1066,42 @@
     );
   }
 
+  // ───────── 기록 동기화(설정 화면) ─────────
+  function syncLabel(sy) {
+    const when = sy.at ? new Date(sy.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
+    return (
+      {
+        starting: '연결을 확인하는 중이야…',
+        unavailable: '이 화면에서는 쓸 수 없어. claude.ai에 로그인한 상태로 웹 주소(is.gd/gisa2026)를 열면 아이폰·맥 기록이 하나로 이어져. 지금은 이 브라우저에만 저장돼.',
+        syncing: '동기화하는 중…',
+        ok: 'claude.ai 계정에 연결돼 있어' + (when ? ' · 마지막 동기화 ' + when : ''),
+        readonly: sy.message,
+        error: sy.message,
+        off: '꺼져 있어. 기록은 이 브라우저에만 저장돼.',
+      }[sy.state] || ''
+    );
+  }
+
+  function renderSyncSettings(root, sw) {
+    const sy = G.sync ? G.sync.status() : { state: 'unavailable' };
+    const canUse = G.sync && G.sync.available();
+    root.appendChild(h('h3', { class: 'group-title eyebrow' }, '기록 동기화'));
+    root.appendChild(
+      h(
+        'div',
+        { class: 'rows' },
+        h(
+          'div',
+          { class: 'field' },
+          h('p', { class: 'small', id: 'sync-status' }, syncLabel(sy)),
+          h('p', { class: 'small muted' }, 'claude.ai 계정 기준으로 저장돼서 다른 사람과는 섞이지 않아. 두 기기에서 따로 풀었으면 문제를 더 많이 푼 쪽의 통계를 남기고, 읽은 레슨·풀이 기록·복습 일정은 합쳐.')
+        ),
+        canUse ? sw('sync-on', 'syncOn', '자동 동기화', '기록이 바뀌면 몇 초 뒤에 올리고, 앱을 열 때와 다시 돌아왔을 때 최신 기록을 받아 와.') : null,
+        canUse ? h('div', { class: 'field' }, h('div', { class: 'inline' }, h('button', { class: 'btn', id: 'sync-now', disabled: sy.state === 'syncing', onclick: () => { G.sync.syncNow(); } }, '지금 동기화'))) : null
+      )
+    );
+  }
+
   // ───────── 설정 탭 ─────────
   function renderSettings(root) {
     const m = view.msg;
@@ -1064,6 +1117,7 @@
             S.settings[key] = e.target.checked;
             save();
             if (key === 'skipOrder') nextQuestion();
+            if (key === 'syncOn' && G.sync) G.sync.setEnabled(e.target.checked);
             render();
           },
         }),
@@ -1097,6 +1151,7 @@
         h('div', { class: 'field' }, h('label', { for: 'theme-select' }, h('strong', null, '화면 테마')), themeSel)
       )
     );
+    renderSyncSettings(root, sw);
 
     const keyInput = h('input', { type: 'text', id: 'key-input', placeholder: '예: t:ohm-current#12345', autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false' });
     root.appendChild(h('h3', { class: 'group-title eyebrow' }, '문제 번호로 다시 풀기'));
@@ -1145,7 +1200,7 @@
         h(
           'div',
           { class: 'field' },
-          h('p', { class: 'small muted' }, '기록은 이 브라우저(localStorage)에만 저장돼. 아이폰과 맥은 따로 저장되니까, 옮기거나 지켜 두고 싶으면 백업 코드를 만들어 메모에 붙여 둬.'),
+          h('p', { class: 'small muted' }, '동기화를 쓸 수 없거나 꺼 두면 기록은 이 브라우저(localStorage)에만 저장돼. 지켜 두고 싶으면 백업 코드를 만들어 메모에 붙여 둬. 백업을 가져오면 동기화 중인 다른 기기의 기록도 그 백업으로 바뀌어.'),
           h(
             'div',
             { class: 'inline' },
@@ -1182,6 +1237,7 @@
                   const data = JSON.parse(pasteBox.value);
                   if (!data || data.v !== 1) throw new Error('형식이 달라');
                   S = P.normalize(data);
+                  P.replaceAll(S);
                   save();
                   applyTheme();
                   view.msg = { imp: '가져왔어. 푼 문제 ' + S.total.n + '개.' };
@@ -1208,7 +1264,7 @@
         h(
           'div',
           { class: 'field' },
-          h('p', { class: 'small muted' }, '푼 기록, 정답률, 복습 일정을 모두 지워. 되돌릴 수 없어.'),
+          h('p', { class: 'small muted' }, '푼 기록, 정답률, 복습 일정을 모두 지워. 되돌릴 수 없어. 동기화 중이면 다른 기기의 기록도 같이 지워져.'),
           view.resetArmed
             ? h(
                 'div',
@@ -1223,6 +1279,7 @@
                       G.store.clear();
                       S = P.emptyState();
                       S.settings.theme = theme;
+                      P.replaceAll(S);
                       save();
                       view.resetArmed = false;
                       view.mode = 'normal';
@@ -1310,6 +1367,23 @@
     applyTheme();
     nextQuestion();
     render();
+    if (G.sync) {
+      G.sync.init({
+        getState: () => S,
+        // 서버 기록과 합친 결과를 이 기기에 적용(로컬 저장만 하고, 다시 올리는 건 동기화가 알아서 함)
+        apply(merged, info) {
+          S = merged;
+          G.store.save(S);
+          applyTheme();
+          if (info && info.hadLocal && info.hadRemote) toast('다른 기기의 기록과 합쳤어');
+          render();
+        },
+        onStatus() {
+          paintSyncDot();
+          if (view.tab === 'settings') render();
+        },
+      });
+    }
     if (G.aiTutor) {
       G.aiTutor.mountSide(aiContext);
       G.aiTutor.onReady(() => render());

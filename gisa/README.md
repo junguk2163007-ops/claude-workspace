@@ -21,3 +21,9 @@
 2. `subjects/<과목>/*.js`에 `G.defineTemplate({...})`로 템플릿 작성
 3. `files.js`의 `content`에 파일 추가, `test/reference.js`에 검산기 추가
 4. `node test/run-tests.js` → `node build.js`
+
+## 기록 동기화
+- claude.ai 로그인 계정의 개인 저장소(`data/users/<id>/save`)에 기록을 올리고 내려받는다(`app/sync.js`). 별도 Google 로그인은 쓰지 않는다.
+- 올리기 전에 서버 기록을 읽어 와서 `progress.merge`로 합친다. 통계는 더 많이 푼 쪽, 레슨·풀이 기록·복습은 합집합, 초기화(`resetAt`) 이전 기록은 버린다.
+- 두 기기가 동기화 사이에 각자 푼 경우 더 적게 푼 쪽의 통계 일부가 빠질 수 있다(풀이 기록·복습·레슨은 합쳐져서 남는다).
+- 파일로 열면(`window.claude` 없음) 동기화는 꺼지고 localStorage만 쓴다.

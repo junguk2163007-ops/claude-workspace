@@ -647,6 +647,18 @@ select {
   }
 }
 
+/* ── 동기화 상태 ── */
+.syncdot {
+  font-size: 12px;
+  color: var(--muted);
+}
+.syncdot.ok {
+  color: var(--ok);
+}
+.syncdot.bad {
+  color: var(--bad);
+}
+
 /* ── 해설 ── */
 .verdict {
   padding: 12px 14px;
@@ -7888,11 +7900,14 @@ button.lesson-row .bar {
   const REVIEW_DAYS = [1, 3, 7]; // 틀림 → 1일 뒤 → (맞히면) 3일 뒤 → (맞히면) 7일 뒤 → (맞히면) 졸업
   const HISTORY_MAX = 500;
   const MASTER_STREAK = 3; // 한 포인트에서 연속 3문제를 맞히면 "익숙해짐"
+  // 기기를 넘나들며 합치는 설정. 나머지(화면 테마, 과목 필터, 동기화 켜기)는 기기마다 따로 둔다.
+  const SYNC_SETTINGS = ['skipOrder', 'mixStatic'];
+  const DONE_MAX = 500;
 
   function emptyState() {
     return {
       v: 1,
-      settings: { skipOrder: false, mixStatic: true, subject: 'all', focus: 'auto', theme: 'system', allSubjects: true },
+      settings: { skipOrder: false, mixStatic: true, subject: 'all', focus: 'auto', theme: 'system', allSubjects: true, syncOn: true },
       concepts: {},
       streak: { cur: 0, best: 0 },
       total: { n: 0, c: 0 },
@@ -7900,6 +7915,9 @@ button.lesson-row .bar {
       history: [],
       lessons: {},
       points: {},
+      reviewDone: {}, // 졸업한 복습 {문제 번호: 시각} — 다른 기기에서 되살아나지 않게
+      updatedAt: 0, // 기록이 마지막으로 바뀐 시각(ms)
+      resetAt: 0, // 기록을 초기화한 시각(ms)
     };
   }
 
@@ -7964,15 +7982,19 @@ button.lesson-row .bar {
     const rv = state.reviews[q.key];
     let reviewEvent = null;
     if (!ok) {
-      state.reviews[q.key] = { k: q.key, cid: q.conceptId, stage: 0, due: addDays(day, REVIEW_DAYS[0]) };
+      state.reviews[q.key] = { k: q.key, cid: q.conceptId, stage: 0, due: addDays(day, REVIEW_DAYS[0]), u: Date.now() };
+      if (state.reviewDone) delete state.reviewDone[q.key];
       reviewEvent = rv ? 'reset' : 'added';
     } else if (rv && rv.due <= day) {
       const next = rv.stage + 1;
       if (next >= REVIEW_DAYS.length) {
         delete state.reviews[q.key];
+        if (!state.reviewDone) state.reviewDone = {};
+        state.reviewDone[q.key] = Date.now();
         reviewEvent = 'graduated';
       } else {
         rv.stage = next;
+        rv.u = Date.now();
         rv.due = addDays(day, REVIEW_DAYS[next]);
         reviewEvent = 'advanced';
       }
@@ -8055,7 +8077,112 @@ button.lesson-row .bar {
     if (Array.isArray(raw.history)) out.history = raw.history.slice(-HISTORY_MAX);
     if (raw.lessons && typeof raw.lessons === 'object') out.lessons = raw.lessons;
     if (raw.points && typeof raw.points === 'object') out.points = raw.points;
+    if (raw.reviewDone && typeof raw.reviewDone === 'object') out.reviewDone = raw.reviewDone;
+    out.updatedAt = Number(raw.updatedAt) || 0;
+    out.resetAt = Number(raw.resetAt) || 0;
     return out;
+  }
+
+  // ───────── 기기 간 합치기 ─────────
+  // 목적: 아이폰과 맥의 기록을 한 계정으로 이어 쓰기. 원칙은 "잃지 않기".
+  //  - 개념·포인트 통계: 문제를 더 많이 푼 쪽(n이 큰 쪽)을 채택
+  //  - 읽은 레슨: 합집합, 풀이 기록: 합집합(최근 500개)
+  //  - 복습: 합집합. 같은 문제는 더 나중에 바뀐 쪽, 졸업했으면 졸업이 우선
+  //  - 초기화(resetAt) 이후 아무 활동이 없는 쪽 기록은 버림
+  // local의 기기별 설정(테마 등)은 그대로 두고, 공유 설정은 더 최근 쪽을 따른다.
+  function pickBigger(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    if (b.n > a.n || (b.n === a.n && b.c > a.c)) return b;
+    return a;
+  }
+
+  function merge(local, remote) {
+    const resetAt = Math.max(local.resetAt || 0, remote.resetAt || 0);
+    const parts = [local, remote].filter((s) => !resetAt || (s.updatedAt || 0) > resetAt);
+    const newest = parts.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    const out = emptyState();
+    out.settings = Object.assign({}, local.settings);
+    out.resetAt = resetAt;
+    out.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0, resetAt);
+    if (!parts.length) return out;
+
+    SYNC_SETTINGS.forEach((k) => {
+      if (newest.settings && newest.settings[k] !== undefined) out.settings[k] = newest.settings[k];
+    });
+    ['concepts', 'points'].forEach((f) => {
+      parts.forEach((s) => {
+        Object.keys(s[f] || {}).forEach((id) => (out[f][id] = pickBigger(out[f][id], s[f][id])));
+      });
+    });
+    out.total = parts.reduce((best, s) => pickBigger(best, s.total), null) || out.total;
+    out.streak = { cur: newest.streak.cur, best: Math.max.apply(null, parts.map((s) => s.streak.best)) };
+    parts.forEach((s) => {
+      Object.keys(s.lessons || {}).forEach((id) => {
+        const cur = out.lessons[id];
+        if (!cur || (s.lessons[id].t || 0) < (cur.t || 0)) out.lessons[id] = s.lessons[id];
+      });
+    });
+    const seen = {};
+    const hist = [];
+    parts.forEach((s) =>
+      s.history.forEach((e) => {
+        const key = e.k + '@' + e.t;
+        if (!seen[key]) {
+          seen[key] = 1;
+          hist.push(e);
+        }
+      })
+    );
+    hist.sort((a, b) => a.t - b.t);
+    out.history = hist.slice(-HISTORY_MAX);
+
+    // 복습: 키마다 "가장 나중 사건"이 이긴다(졸업 기록 t, 복습 항목 u)
+    const keys = {};
+    parts.forEach((s) => {
+      Object.keys(s.reviews || {}).forEach((k) => (keys[k] = 1));
+      Object.keys(s.reviewDone || {}).forEach((k) => (keys[k] = 1));
+    });
+    Object.keys(keys).forEach((k) => {
+      let rv = null;
+      let done = 0;
+      parts.forEach((s) => {
+        const r = s.reviews && s.reviews[k];
+        if (r && (!rv || (r.u || 0) > (rv.u || 0) || ((r.u || 0) === (rv.u || 0) && r.stage > rv.stage))) rv = r;
+        if (s.reviewDone && s.reviewDone[k] > done) done = s.reviewDone[k];
+      });
+      if (done && (!rv || done >= (rv.u || 0))) out.reviewDone[k] = done;
+      else if (rv) out.reviews[k] = rv;
+    });
+    const doneKeys = Object.keys(out.reviewDone).sort((a, b) => out.reviewDone[b] - out.reviewDone[a]);
+    doneKeys.slice(DONE_MAX).forEach((k) => delete out.reviewDone[k]);
+    return out;
+  }
+
+  // 기록을 통째로 바꿀 때(초기화·백업 가져오기): 다른 기기의 예전 기록이 되살아나지 않게 초기화 시각을 남긴다
+  function replaceAll(state, now) {
+    const t = now || Date.now();
+    state.resetAt = t;
+    state.updatedAt = t + 1;
+    return state;
+  }
+
+  // 키 순서와 무관한 문자열(같은 내용이면 항상 같은 글). 동기화에서 "바뀌었나?"를 비교할 때 쓴다.
+  function canon(v) {
+    if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}';
+    }
+    return JSON.stringify(v);
+  }
+
+  // 서버에 올릴 모양(기기별 설정은 뺀다)
+  function syncView(state) {
+    const copy = JSON.parse(JSON.stringify(state));
+    const keep = {};
+    SYNC_SETTINGS.forEach((k) => (keep[k] = copy.settings[k]));
+    copy.settings = keep;
+    return copy;
   }
 
   G.progress = {
@@ -8068,6 +8195,11 @@ button.lesson-row .bar {
     addDays,
     conceptStat,
     prereqMet,
+    merge,
+    canon,
+    replaceAll,
+    syncView,
+    SYNC_SETTINGS,
     isUnlocked,
     MASTER_STREAK,
     pointStat,
@@ -8120,6 +8252,146 @@ button.lesson-row .bar {
   }
 
   G.store = { KEY, load, save, clear, isAvailable: () => available };
+})(globalThis.GISA);
+
+/* ── app/sync.js ── */
+// 기록 동기화: claude.ai 계정의 개인 저장소(db의 data/users/<내 id>/save)에 기록을 올리고 내려받는다.
+//  - 이 계정으로 로그인해서 연 모든 기기(아이폰·맥)가 같은 기록을 이어 쓴다. 다른 사람과는 섞이지 않는다.
+//  - 그냥 파일로 열었거나(window.claude 없음) 로그인이 안 돼 있으면 쓸 수 없고, 기록은 이 브라우저에만 저장된다.
+//  - 올리기 전에 항상 서버 기록을 읽어 와 합친다(P.merge). 그래서 한 기기가 다른 기기 기록을 덮어쓰지 않는다.
+(function (G) {
+  'use strict';
+  const P = G.progress;
+  const DEBOUNCE_MS = 3000;
+  const MAX_JSON = 220000; // 문서 한도(256 KiB) 아래로 유지
+
+  let hooks = null; // { getState(), apply(merged, info), onStatus() }
+  let ref = null;
+  let timer = null;
+  let chain = Promise.resolve(); // 동시에 두 번 돌지 않게 한 줄로 세움
+  const status = { state: 'starting', at: 0, message: '' };
+  // starting | unavailable | syncing | ok | readonly | error | off
+
+  function set(state, message) {
+    status.state = state;
+    status.message = message || '';
+    if (state === 'ok') status.at = Date.now();
+    if (hooks && hooks.onStatus) hooks.onStatus(status);
+  }
+
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function withRetry(fn) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (e && e.code === 'unavailable') {
+        await wait(400 + Math.random() * 600);
+        return fn();
+      }
+      throw e;
+    }
+  }
+
+  function encode(state) {
+    let json = P.canon(P.syncView(state));
+    if (json.length > MAX_JSON) {
+      const slim = P.syncView(state);
+      slim.history = slim.history.slice(-150);
+      json = P.canon(slim);
+    }
+    return json;
+  }
+
+  function enabled() {
+    const st = hooks && hooks.getState();
+    return !!st && st.settings.syncOn !== false;
+  }
+
+  // 한 번의 동기화: 서버 읽기 → 합치기 → (바뀌었으면) 이 기기 적용 → (서버와 다르면) 올리기
+  async function runOnce() {
+    if (!ref || !enabled()) return;
+    set('syncing');
+    try {
+      const snap = await withRetry(() => ref.get());
+      const local = hooks.getState();
+      let remote = null;
+      let remoteJson = '';
+      if (snap.exists) {
+        const body = snap.data() || {};
+        remoteJson = typeof body.json === 'string' ? body.json : '';
+        try {
+          remote = P.normalize(JSON.parse(remoteJson));
+        } catch (e) {
+          remote = null; // 깨진 서버 기록은 이 기기 기록으로 덮어쓴다
+        }
+      }
+      const merged = remote ? P.merge(local, remote) : local;
+      const localJson = P.canon(P.syncView(local));
+      const mergedJson = P.canon(P.syncView(merged));
+      const changedHere = mergedJson !== localJson;
+      if (changedHere) hooks.apply(merged, { hadLocal: local.total.n > 0, hadRemote: !!remote });
+      const out = changedHere ? merged : local;
+      const outJson = encode(out);
+      if (!remote || outJson !== remoteJson) {
+        await withRetry(() => ref.set({ json: outJson, t: Date.now() }));
+      }
+      set('ok');
+    } catch (e) {
+      const code = (e && e.code) || '';
+      if (code === 'invalid_argument') set('readonly', '이 계정은 기록을 저장할 권한이 없어(보기 전용으로 열었을 수 있어).');
+      else if (code === 'quota_exceeded') set('error', '저장 공간이 가득 찼어.');
+      else if (code === 'revoked') set('error', '접근 권한이 바뀌었어. 페이지를 새로 열어 줘.');
+      else set('error', '서버와 연결이 잠깐 끊겼어. 기록은 이 기기에 저장돼 있어.');
+    }
+  }
+
+  function syncNow() {
+    chain = chain.then(runOnce, runOnce);
+    return chain;
+  }
+
+  // 기록이 바뀔 때마다 부르면, 잠깐 모았다가 한 번만 동기화한다
+  function schedule() {
+    if (!ref || !enabled()) return;
+    clearTimeout(timer);
+    timer = setTimeout(syncNow, DEBOUNCE_MS);
+  }
+
+  async function init(h) {
+    hooks = h;
+    try {
+      if (typeof window === 'undefined' || !window.claude || typeof window.claude.use !== 'function') return set('unavailable');
+      const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+      if (!db || !user) return set('unavailable');
+      const id = await user.id();
+      if (!id) return set('unavailable');
+      ref = db.doc('data/users/' + id + '/save');
+    } catch (e) {
+      return set('unavailable');
+    }
+    if (!enabled()) {
+      set('off');
+    } else {
+      await syncNow();
+    }
+    // 다른 기기에서 쓰다 돌아왔을 때 최신 기록을 받아 온다
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && enabled()) syncNow();
+      else if (document.visibilityState === 'hidden' && timer) {
+        clearTimeout(timer);
+        syncNow(); // 탭을 떠나기 전에 밀린 기록을 올린다
+      }
+    });
+  }
+
+  // 설정에서 켜고 끌 때
+  function setEnabled(on) {
+    if (!ref) return;
+    if (on) syncNow();
+    else set('off');
+  }
+
+  G.sync = { init, schedule, syncNow, setEnabled, status: () => status, available: () => !!ref };
 })(globalThis.GISA);
 
 /* ── app/ai.js ── */
@@ -8522,7 +8794,23 @@ button.lesson-row .bar {
   }
   const pct = (c, n) => (n ? Math.round((100 * c) / n) + '%' : '–');
   const concept = (id) => G.conceptMap[id];
-  const save = () => G.store.save(S);
+  // 상단 바의 작은 동기화 표시(☁✓ 동기화됨, ☁… 진행 중, ☁! 문제)
+  function paintSyncDot() {
+    const dot = document.getElementById('sync-dot');
+    if (!dot || !G.sync) return;
+    const st = G.sync.status();
+    const m = { ok: ['ok', ' ☁✓', '동기화됨'], syncing: ['', ' ☁…', '동기화 중'], error: ['bad', ' ☁!', st.message], readonly: ['bad', ' ☁!', st.message] }[st.state];
+    dot.className = 'syncdot ' + (m ? m[0] : '');
+    dot.textContent = m ? m[1] : '';
+    dot.title = m ? m[2] : '';
+  }
+
+  // 기록이 바뀔 때마다: 변경 시각을 남기고(기기 간 합치기 기준), 로컬에 저장하고, 서버 동기화를 예약
+  const save = () => {
+    S.updatedAt = Math.max(Date.now(), S.updatedAt || 0);
+    G.store.save(S);
+    if (G.sync) G.sync.schedule();
+  };
 
   let toastTimer = null;
   function toast(text) {
@@ -8684,7 +8972,7 @@ button.lesson-row .bar {
           { class: 'brand' },
           h('span', { html: '<svg viewBox="0 0 30 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 9c3.5-9 6.5-9 10 0s6.5 9 10 0 4-6 6-6"/></svg>', 'aria-hidden': 'true' }),
           h('span', null, '전기기사 필기 ', h('small', null, '연습장')),
-          h('span', { class: 'streak', title: '현재 연속 정답' }, '연속 ' + S.streak.cur)
+          h('span', { class: 'streak', title: '현재 연속 정답' }, '연속 ' + S.streak.cur, h('span', { class: 'syncdot', id: 'sync-dot' }))
         ),
         h(
           'nav',
@@ -8700,6 +8988,7 @@ button.lesson-row .bar {
         )
       )
     );
+    paintSyncDot();
   }
 
   // ───────── 연습 탭 ─────────
@@ -9506,6 +9795,42 @@ button.lesson-row .bar {
     );
   }
 
+  // ───────── 기록 동기화(설정 화면) ─────────
+  function syncLabel(sy) {
+    const when = sy.at ? new Date(sy.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
+    return (
+      {
+        starting: '연결을 확인하는 중이야…',
+        unavailable: '이 화면에서는 쓸 수 없어. claude.ai에 로그인한 상태로 웹 주소(is.gd/gisa2026)를 열면 아이폰·맥 기록이 하나로 이어져. 지금은 이 브라우저에만 저장돼.',
+        syncing: '동기화하는 중…',
+        ok: 'claude.ai 계정에 연결돼 있어' + (when ? ' · 마지막 동기화 ' + when : ''),
+        readonly: sy.message,
+        error: sy.message,
+        off: '꺼져 있어. 기록은 이 브라우저에만 저장돼.',
+      }[sy.state] || ''
+    );
+  }
+
+  function renderSyncSettings(root, sw) {
+    const sy = G.sync ? G.sync.status() : { state: 'unavailable' };
+    const canUse = G.sync && G.sync.available();
+    root.appendChild(h('h3', { class: 'group-title eyebrow' }, '기록 동기화'));
+    root.appendChild(
+      h(
+        'div',
+        { class: 'rows' },
+        h(
+          'div',
+          { class: 'field' },
+          h('p', { class: 'small', id: 'sync-status' }, syncLabel(sy)),
+          h('p', { class: 'small muted' }, 'claude.ai 계정 기준으로 저장돼서 다른 사람과는 섞이지 않아. 두 기기에서 따로 풀었으면 문제를 더 많이 푼 쪽의 통계를 남기고, 읽은 레슨·풀이 기록·복습 일정은 합쳐.')
+        ),
+        canUse ? sw('sync-on', 'syncOn', '자동 동기화', '기록이 바뀌면 몇 초 뒤에 올리고, 앱을 열 때와 다시 돌아왔을 때 최신 기록을 받아 와.') : null,
+        canUse ? h('div', { class: 'field' }, h('div', { class: 'inline' }, h('button', { class: 'btn', id: 'sync-now', disabled: sy.state === 'syncing', onclick: () => { G.sync.syncNow(); } }, '지금 동기화'))) : null
+      )
+    );
+  }
+
   // ───────── 설정 탭 ─────────
   function renderSettings(root) {
     const m = view.msg;
@@ -9521,6 +9846,7 @@ button.lesson-row .bar {
             S.settings[key] = e.target.checked;
             save();
             if (key === 'skipOrder') nextQuestion();
+            if (key === 'syncOn' && G.sync) G.sync.setEnabled(e.target.checked);
             render();
           },
         }),
@@ -9554,6 +9880,7 @@ button.lesson-row .bar {
         h('div', { class: 'field' }, h('label', { for: 'theme-select' }, h('strong', null, '화면 테마')), themeSel)
       )
     );
+    renderSyncSettings(root, sw);
 
     const keyInput = h('input', { type: 'text', id: 'key-input', placeholder: '예: t:ohm-current#12345', autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false' });
     root.appendChild(h('h3', { class: 'group-title eyebrow' }, '문제 번호로 다시 풀기'));
@@ -9602,7 +9929,7 @@ button.lesson-row .bar {
         h(
           'div',
           { class: 'field' },
-          h('p', { class: 'small muted' }, '기록은 이 브라우저(localStorage)에만 저장돼. 아이폰과 맥은 따로 저장되니까, 옮기거나 지켜 두고 싶으면 백업 코드를 만들어 메모에 붙여 둬.'),
+          h('p', { class: 'small muted' }, '동기화를 쓸 수 없거나 꺼 두면 기록은 이 브라우저(localStorage)에만 저장돼. 지켜 두고 싶으면 백업 코드를 만들어 메모에 붙여 둬. 백업을 가져오면 동기화 중인 다른 기기의 기록도 그 백업으로 바뀌어.'),
           h(
             'div',
             { class: 'inline' },
@@ -9639,6 +9966,7 @@ button.lesson-row .bar {
                   const data = JSON.parse(pasteBox.value);
                   if (!data || data.v !== 1) throw new Error('형식이 달라');
                   S = P.normalize(data);
+                  P.replaceAll(S);
                   save();
                   applyTheme();
                   view.msg = { imp: '가져왔어. 푼 문제 ' + S.total.n + '개.' };
@@ -9665,7 +9993,7 @@ button.lesson-row .bar {
         h(
           'div',
           { class: 'field' },
-          h('p', { class: 'small muted' }, '푼 기록, 정답률, 복습 일정을 모두 지워. 되돌릴 수 없어.'),
+          h('p', { class: 'small muted' }, '푼 기록, 정답률, 복습 일정을 모두 지워. 되돌릴 수 없어. 동기화 중이면 다른 기기의 기록도 같이 지워져.'),
           view.resetArmed
             ? h(
                 'div',
@@ -9680,6 +10008,7 @@ button.lesson-row .bar {
                       G.store.clear();
                       S = P.emptyState();
                       S.settings.theme = theme;
+                      P.replaceAll(S);
                       save();
                       view.resetArmed = false;
                       view.mode = 'normal';
@@ -9767,6 +10096,23 @@ button.lesson-row .bar {
     applyTheme();
     nextQuestion();
     render();
+    if (G.sync) {
+      G.sync.init({
+        getState: () => S,
+        // 서버 기록과 합친 결과를 이 기기에 적용(로컬 저장만 하고, 다시 올리는 건 동기화가 알아서 함)
+        apply(merged, info) {
+          S = merged;
+          G.store.save(S);
+          applyTheme();
+          if (info && info.hadLocal && info.hadRemote) toast('다른 기기의 기록과 합쳤어');
+          render();
+        },
+        onStatus() {
+          paintSyncDot();
+          if (view.tab === 'settings') render();
+        },
+      });
+    }
     if (G.aiTutor) {
       G.aiTutor.mountSide(aiContext);
       G.aiTutor.onReady(() => render());

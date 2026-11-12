@@ -459,6 +459,154 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-4. 기기 간 기록 동기화 (가짜 서버 저장소를 두 기기가 같이 씀) ──
+  {
+    const server = new Map(); // 경로 → 문서. 계정(id)이 경로에 들어 있어 다른 계정과 섞이지 않는지도 같이 확인
+    const device = async (uid, opts) => {
+      const ctx = await browser.newContext(Object.assign({ colorScheme: 'light' }, iphone)); // 새 컨텍스트 = 새 기기(localStorage 따로)
+      await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+      await ctx.exposeFunction('__dbGet', async (path) => (server.has(path) ? JSON.parse(JSON.stringify(server.get(path))) : null));
+      await ctx.exposeFunction('__dbSet', async (path, data) => {
+        server.set(path, data);
+      });
+      await ctx.addInitScript((cfg) => {
+        const db = {
+          doc: (path) => ({
+            get: async () => {
+              const v = await window.__dbGet(path);
+              return { exists: v !== null, data: () => v || undefined };
+            },
+            set: async (d) => {
+              if (cfg.readonly) throw { code: 'invalid_argument', message: 'read only' };
+              await window.__dbSet(path, JSON.parse(JSON.stringify(d)));
+            },
+          }),
+        };
+        window.claude = { use: async (n) => (n === 'db' ? db : n === 'user' ? { id: async () => cfg.uid } : null) };
+      }, { uid, readonly: !!(opts && opts.readonly) });
+      const page = await ctx.newPage();
+      page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto(FILE);
+      await page.waitForSelector('#bar .tab');
+      await page.waitForFunction(() => GISA.sync.status().state !== 'starting' && GISA.sync.status().state !== 'syncing');
+      return { ctx, page };
+    };
+    const errors = [];
+    const answer = async (page, key, correct) => {
+      await page.evaluate((k) => GISA.ui._load(k), key);
+      const a = await page.evaluate(() => GISA.ui._view.q.answerIndex);
+      await page.click('.choice[data-i="' + (correct ? a : (a + 1) % 4) + '"]');
+    };
+    const st = (page) => page.evaluate(() => JSON.parse(JSON.stringify(GISA.ui._state())));
+    const doc = (uid) => server.get('data/users/' + uid + '/save');
+    const stored = (uid) => (doc(uid) ? JSON.parse(doc(uid).json) : null);
+    const sync = (page) => page.evaluate(() => GISA.sync.syncNow().then(() => GISA.sync.status().state));
+
+    // 기기 A: 처음 열면 연결되고, 푼 기록이 서버로 올라감
+    const A = await device('u-test');
+    check((await A.page.evaluate(() => GISA.sync.status().state)) === 'ok', '로그인한 상태로 열면 동기화 연결됨');
+    check((await A.page.textContent('#sync-dot')).includes('☁✓'), '상단에 동기화됨 표시');
+    for (let i = 1; i <= 3; i++) await answer(A.page, 't:ohm-current#' + i, true);
+    check((await sync(A.page)) === 'ok', 'A 동기화 성공');
+    check(stored('u-test') && stored('u-test').total.n === 3 && stored('u-test').concepts.ohm.n === 3, '푼 기록이 서버에 올라감');
+    check(!JSON.stringify(stored('u-test').settings).includes('theme'), '기기별 설정(테마)은 서버에 안 올라감');
+
+    // 기기 B: 새 기기에서 열면 A의 기록을 받아 옴
+    const B = await device('u-test');
+    check((await st(B.page)).total.n === 3, '새 기기에서 열면 기록을 받아 옴');
+    check((await st(B.page)).points['ohm-current'].streak === 3, '포인트 기록(익숙해짐)도 받아 옴');
+    check(await B.page.isVisible('#sync-dot'), 'B 상단 표시');
+    // B에서 이어서 풀고 올림
+    await answer(B.page, 't:ohm-voltage#1', true);
+    await answer(B.page, 't:ohm-voltage#2', true);
+    await sync(B.page);
+    check(stored('u-test').total.n === 5, 'B가 이어 푼 기록이 서버에 반영');
+    // A가 돌아오면(앱을 다시 열거나 화면으로 복귀) 최신 기록을 받음 + 합쳤다는 알림
+    await sync(A.page);
+    check((await st(A.page)).total.n === 5 && (await st(A.page)).concepts.ohm.n === 5, 'A가 B의 기록을 받아 옴');
+    check(await A.page.isVisible('.toast:has-text("합쳤어")'), '다른 기기 기록과 합쳤다는 알림');
+
+    // 각자 따로 틀린 문제: 복습 일정이 양쪽에서 합쳐짐
+    await answer(A.page, 't:ohm-current#50', false);
+    await answer(B.page, 't:ohm-voltage#60', false);
+    const keyA = 't:ohm-current#50';
+    const keyB = 't:ohm-voltage#60';
+    await sync(B.page);
+    await sync(A.page);
+    await sync(B.page);
+    const ra = Object.keys((await st(A.page)).reviews);
+    const rb = Object.keys((await st(B.page)).reviews);
+    check(ra.includes(keyA) && ra.includes(keyB) && rb.includes(keyA) && rb.includes(keyB), '따로 틀린 복습 문제가 두 기기에 모두 남음');
+    check((await st(A.page)).total.n === (await st(B.page)).total.n && (await st(A.page)).total.n >= 6, '두 기기 총계가 같아짐');
+
+    // 변경이 없으면 다시 올리지 않음(쓰기 최소화)
+    const before = JSON.stringify(doc('u-test'));
+    await sync(A.page);
+    check(JSON.stringify(doc('u-test')) === before, '바뀐 게 없으면 서버에 다시 쓰지 않음');
+
+    // 자동 동기화: 푼 뒤 몇 초 지나면 알아서 올라감
+    await answer(A.page, 't:ohm-current#70', true);
+    for (let i = 0; i < 40 && stored('u-test').total.n < 7; i++) await new Promise((r) => setTimeout(r, 250));
+    check(stored('u-test').total.n >= 7, '푼 뒤 몇 초 안에 자동으로 서버에 올라감');
+
+    // 다른 계정은 섞이지 않음
+    const C = await device('u-other');
+    check((await st(C.page)).total.n === 0, '다른 계정은 기록이 비어 있음');
+    await answer(C.page, 't:ohm-current#1', true);
+    await sync(C.page);
+    check(stored('u-other').total.n === 1 && stored('u-test').total.n >= 7, '계정별로 따로 저장됨');
+    await C.ctx.close();
+
+    // 설정 화면: 상태·켜고 끄기
+    await B.page.click('#tab-settings');
+    check((await B.page.textContent('#sync-status')).includes('연결돼 있어'), '설정에 연결 상태 표시');
+    check(await B.page.isVisible('#sync-now'), '지금 동기화 버튼');
+    await B.page.screenshot({ path: path.join(SHOTS, '15-iphone-sync-settings.png'), fullPage: true });
+    await sync(B.page); // 먼저 최신으로 맞춘 뒤
+    await B.page.uncheck('#sync-on');
+    check((await B.page.evaluate(() => GISA.sync.status().state)) === 'off', '자동 동기화 끄기');
+    const nBefore = stored('u-test').total.n;
+    await answer(B.page, 't:ohm-voltage#90', true);
+    await sync(B.page);
+    check(stored('u-test').total.n === nBefore, '끄면 서버에 올리지 않음');
+    await B.page.click('#tab-settings');
+    await B.page.check('#sync-on');
+    check((await sync(B.page)) === 'ok' && stored('u-test').total.n > nBefore, '다시 켜면 밀린 기록이 올라감');
+
+    // 초기화: 서버와 다른 기기에서도 지워지고, 예전 기록이 되살아나지 않음
+    await B.page.click('#tab-settings');
+    await B.page.click('#reset');
+    await B.page.click('#reset-confirm');
+    await sync(B.page);
+    check(stored('u-test').total.n === 0 && stored('u-test').resetAt > 0, '초기화가 서버에 반영');
+    await sync(A.page);
+    check((await st(A.page)).total.n === 0 && Object.keys((await st(A.page)).reviews).length === 0, '다른 기기에서도 초기화됨(예전 기록이 되살아나지 않음)');
+    await sync(B.page);
+    check((await st(B.page)).total.n === 0, '초기화 뒤 다시 동기화해도 0 유지');
+    await A.ctx.close();
+    await B.ctx.close();
+
+    // 보기 전용 계정: 저장 권한이 없으면 안내만 하고 앱은 정상 동작
+    const R = await device('u-viewer', { readonly: true });
+    check((await R.page.evaluate(() => GISA.sync.status().state)) === 'readonly', '권한 없으면 읽기 전용 상태');
+    await answer(R.page, 't:ohm-current#1', true);
+    check((await st(R.page)).total.n === 1, '권한이 없어도 기록은 이 기기에 저장됨');
+    await R.page.click('#tab-settings');
+    check((await R.page.textContent('#sync-status')).includes('권한'), '권한 안내 표시');
+    await R.ctx.close();
+    check(errors.length === 0, '동기화 오류: ' + errors.join(' | '));
+  }
+
+  // 파일로 열었을 때(claude 없음): 동기화 설명만 보이고 정상 동작
+  {
+    const { ctx, page, errors } = await newPage(browser, Object.assign({ colorScheme: 'light' }, iphone));
+    await page.click('#tab-settings');
+    check((await page.textContent('#sync-status')).includes('쓸 수 없어'), '파일로 열면 동기화 안내');
+    check(!(await page.isVisible('#sync-on')), '파일로 열면 동기화 스위치 숨김');
+    check(errors.length === 0, '파일 모드 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });

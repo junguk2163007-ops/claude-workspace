@@ -273,6 +273,80 @@ G.concepts.forEach((c) => {
     ok(P.normalize({}).points && typeof P.normalize({}).points === 'object', 'storage', '예전 저장본에 포인트 필드 보충');
   })();
 
+  // 기기 간 합치기(동기화): 기록을 잃지 않는 게 원칙
+  (function () {
+    const mk = (over) => Object.assign(P.emptyState(), over);
+    const view = (st) => P.canon(P.syncView(st));
+    const A = mk({
+      updatedAt: 1000,
+      concepts: { ohm: { n: 5, c: 4 }, series: { n: 2, c: 2 } },
+      points: { 'ohm-current': { n: 5, c: 4, streak: 3 } },
+      total: { n: 7, c: 6 },
+      streak: { cur: 3, best: 6 },
+      lessons: { 'l-ohm': { t: 500 } },
+      history: [{ k: 'a', cid: 'ohm', ok: true, t: 1 }, { k: 'b', cid: 'ohm', ok: true, t: 2 }],
+      reviews: { k1: { k: 'k1', cid: 'ohm', stage: 0, due: '2026-01-02', u: 100 } },
+    });
+    const B = mk({
+      updatedAt: 2000,
+      concepts: { ohm: { n: 3, c: 3 }, parallel: { n: 4, c: 1 } },
+      points: { 'ohm-current': { n: 3, c: 3, streak: 3 }, 'parallel-two': { n: 4, c: 1, streak: 0 } },
+      total: { n: 7, c: 4 },
+      streak: { cur: 1, best: 2 },
+      lessons: { 'l-ohm': { t: 300 }, 'l-series': { t: 900 } },
+      history: [{ k: 'b', cid: 'ohm', ok: true, t: 2 }, { k: 'c', cid: 'ohm', ok: false, t: 3 }],
+      reviews: { k1: { k: 'k1', cid: 'ohm', stage: 1, due: '2026-01-05', u: 200 }, k2: { k: 'k2', cid: 'parallel', stage: 0, due: '2026-01-03', u: 150 } },
+      settings: Object.assign(P.emptyState().settings, { skipOrder: true, theme: 'dark' }),
+    });
+    A.settings.theme = 'light';
+    const M = P.merge(A, B);
+    ok(M.concepts.ohm.n === 5 && M.concepts.ohm.c === 4, 'merge', '더 많이 푼 쪽의 개념 통계를 남겨야 함');
+    ok(M.concepts.series.n === 2 && M.concepts.parallel.n === 4, 'merge', '한쪽에만 있는 개념도 남아야 함');
+    ok(M.points['ohm-current'].n === 5 && M.points['parallel-two'].n === 4, 'merge', '포인트 통계 합치기');
+    ok(M.total.n === 7 && M.total.c === 6, 'merge', '총계는 더 많이 푼 쪽(동률이면 더 많이 맞힌 쪽)');
+    ok(M.streak.cur === 1 && M.streak.best === 6, 'merge', '연속 정답은 최근 쪽, 최고 기록은 최댓값');
+    ok(M.lessons['l-ohm'].t === 300 && !!M.lessons['l-series'], 'merge', '읽은 레슨은 합집합(먼저 읽은 시각)');
+    ok(M.history.length === 3 && M.history.map((e) => e.k).join('') === 'abc', 'merge', '풀이 기록은 중복 없이 합집합·시간순: ' + JSON.stringify(M.history));
+    ok(M.reviews.k1.stage === 1 && !!M.reviews.k2, 'merge', '복습은 합집합이고 더 나중에 바뀐 쪽이 이김');
+    ok(M.settings.theme === 'light' && M.settings.skipOrder === true, 'merge', '테마는 이 기기 것, 공유 설정은 더 최근 쪽');
+    ok(view(P.merge(A, B)) === view(P.merge(B, A)), 'merge', '합치는 순서와 무관해야 함(공유 부분)');
+    ok(view(P.merge(M, A)) === view(M) && view(P.merge(M, B)) === view(M) && view(P.merge(M, M)) === view(M), 'merge', '다시 합쳐도 결과가 그대로여야 함(멱등)');
+
+    // 졸업(복습 완료)은 예전 복습 항목을 되살리지 않고, 나중에 다시 틀리면 되살아남
+    const gradA = mk({ updatedAt: 3000, reviewDone: { k1: 300 } });
+    ok(!P.merge(gradA, B).reviews.k1 && P.merge(gradA, B).reviewDone.k1 === 300, 'merge', '졸업한 복습이 되살아남');
+    const reAdd = mk({ updatedAt: 4000, reviews: { k1: { k: 'k1', cid: 'ohm', stage: 0, due: '2026-02-01', u: 400 } } });
+    ok(!!P.merge(gradA, reAdd).reviews.k1 && !P.merge(gradA, reAdd).reviewDone.k1, 'merge', '졸업 뒤 다시 틀린 복습이 사라짐');
+
+    // 초기화: 초기화 이후 활동 없는 기기 기록은 버리고, 이후에 푼 기록은 남김
+    const reset = P.replaceAll(P.emptyState(), 5000);
+    const stale = mk({ updatedAt: 4500, total: { n: 9, c: 9 }, concepts: { ohm: { n: 9, c: 9 } } });
+    const fresh = mk({ updatedAt: 6000, total: { n: 2, c: 2 }, concepts: { ohm: { n: 2, c: 2 } } });
+    ok(P.merge(reset, stale).total.n === 0 && P.merge(stale, reset).total.n === 0, 'merge', '초기화 이전 기록이 되살아남');
+    ok(P.merge(reset, fresh).total.n === 2 && P.merge(fresh, reset).resetAt === 5000, 'merge', '초기화 이후에 푼 기록이 사라짐');
+    ok(reset.updatedAt > reset.resetAt, 'merge', '초기화한 기기 자신의 기록은 살아 있어야 함');
+    const imported = P.replaceAll(mk({ total: { n: 4, c: 3 }, concepts: { ohm: { n: 4, c: 3 } } }), 7000);
+    ok(P.merge(imported, stale).total.n === 4 && P.merge(imported, stale).concepts.ohm.n === 4, 'merge', '백업 가져오기 뒤 예전 기록이 섞임');
+
+    // 예전 저장본(동기화 필드 없음)도 읽혀야 함
+    const legacy = P.normalize({ v: 1, concepts: { ohm: { n: 1, c: 1 } }, total: { n: 1, c: 1 }, history: [{ k: 'x', cid: 'ohm', ok: true, t: 9 }] });
+    ok(legacy.updatedAt === 0 && legacy.resetAt === 0 && typeof legacy.reviewDone === 'object', 'merge', '예전 저장본 보충');
+    ok(P.merge(legacy, B).concepts.ohm.n === 3, 'merge', '예전 저장본과 합치기');
+    ok(Object.keys(P.syncView(B).settings).sort().join() === 'mixStatic,skipOrder', 'merge', '서버에는 공유 설정만 올라감');
+    const big = mk({ history: Array.from({ length: 400 }, (_, i) => ({ k: 'h' + i, cid: 'ohm', ok: true, t: i })) });
+    const big2 = mk({ history: Array.from({ length: 400 }, (_, i) => ({ k: 'g' + i, cid: 'ohm', ok: true, t: 1000 + i })) });
+    ok(P.merge(big, big2).history.length === 500, 'merge', '풀이 기록은 최근 500개까지만');
+    // 실제 record()로 만든 복습·졸업이 기록되는지
+    const rs = P.emptyState();
+    const q = G.generate('ohm-current', 11);
+    P.record(rs, q, false, { day: '2026-03-10' });
+    ok(rs.reviews[q.key] && rs.reviews[q.key].u > 0, 'merge', '복습 항목에 변경 시각이 남아야 함');
+    P.record(rs, q, true, { day: '2026-03-11' });
+    P.record(rs, q, true, { day: '2026-03-14' });
+    P.record(rs, q, true, { day: '2026-03-21' });
+    ok(!rs.reviews[q.key] && rs.reviewDone[q.key] > 0, 'merge', '졸업하면 졸업 기록이 남아야 함');
+  })();
+
   // 연속 정답
   const s2 = P.emptyState();
   [true, true, true, false, true].forEach((x) => P.record(s2, fake('ohm'), x, { day: '2026-01-01' }));
