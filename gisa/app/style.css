@@ -2436,3 +2436,19 @@ a.term:focus-visible {
 .calc-hint {
   display: none;
 }
+
+.pad-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+}
+.pad-ring[hidden] {
+  display: none;
+}
+.pad-canvas {
+  cursor: crosshair;
+}

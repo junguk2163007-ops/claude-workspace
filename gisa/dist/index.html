@@ -2449,6 +2449,22 @@ a.term:focus-visible {
   display: none;
 }
 
+.pad-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+}
+.pad-ring[hidden] {
+  display: none;
+}
+.pad-canvas {
+  cursor: crosshair;
+}
+
 </style>
 </head>
 <body>
@@ -15647,13 +15663,23 @@ a.term:focus-visible {
     paintButtons();
   }
 
-  // 커서: 샤프심 끝처럼 작은 점(지우개는 지우는 크기의 동그라미)
+  // 커서: 어떤 화면·브라우저에서도 확실히 보이는 기본 십자 커서를 쓰고,
+  // 지우개일 때는 지워지는 크기만큼의 동그라미를 마우스 따라 보여 준다.
+  let ring = null;
   function setCursor() {
     if (!cv) return;
-    const d = tool === 'erase' ? ERASE_W : 6;
-    const r = d / 2 - 0.5;
-    const body = tool === 'erase' ? '<circle cx="' + d / 2 + '" cy="' + d / 2 + '" r="' + r + '" fill="none" stroke="%23666" stroke-width="1"/>' : '<circle cx="3" cy="3" r="1.6" fill="%23444"/>';
-    cv.style.cursor = 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'' + d + '\' height=\'' + d + '\'>' + body.replace(/"/g, "'") + '</svg>") ' + d / 2 + ' ' + d / 2 + ', crosshair';
+    cv.style.cursor = 'crosshair';
+    if (!tool || tool !== 'erase') hideRing();
+  }
+  function showRing(e) {
+    if (tool !== 'erase' || !ring || e.pointerType === 'touch') return;
+    const r = cv.getBoundingClientRect();
+    ring.style.width = ring.style.height = ERASE_W + 'px';
+    ring.style.transform = 'translate(' + (e.clientX - r.left - ERASE_W / 2) + 'px,' + (e.clientY - r.top - ERASE_W / 2) + 'px)';
+    ring.hidden = false;
+  }
+  function hideRing() {
+    if (ring) ring.hidden = true;
   }
 
   // ───────── 화면 ─────────
@@ -15728,7 +15754,13 @@ a.term:focus-visible {
     cv.addEventListener('pointercancel', up);
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     const wrap = h('div', 'pad-wrap');
-    wrap.appendChild(cv);
+    ring = h('div', 'pad-ring');
+    ring.hidden = true;
+    ring.setAttribute('aria-hidden', 'true');
+    wrap.append(cv, ring);
+    cv.addEventListener('pointermove', showRing);
+    cv.addEventListener('pointerenter', showRing);
+    cv.addEventListener('pointerleave', hideRing);
     root.append(top, bar, wrap);
 
     const hint = host.querySelector('.calc-hint');
