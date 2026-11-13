@@ -959,6 +959,42 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-10. 수식: 분수는 위아래로 ──
+  {
+    for (const dev of ['pc', 'phone']) {
+      const opts = dev === 'phone' ? Object.assign({ colorScheme: 'light' }, iphone) : { viewport: { width: 1440, height: 900 }, colorScheme: 'light' };
+      const { ctx, page, errors } = await newPage(browser, opts);
+      const tag = '수식(' + dev + '): ';
+      // 레슨의 공식이 위아래 분수로
+      await page.evaluate(() => GISA.ui._openLesson(GISA.lessonFor('resonance').id));
+      check((await page.$$('#view .mf')).length >= 4, tag + '레슨 글 속 분수가 위아래로 그려짐 (' + (await page.$$('#view .mf')).length + '개)');
+      check((await page.$$('#view .mf-r')).length >= 1, tag + '제곱근 윗줄');
+      const fr = await page.evaluate(() => { const f = document.querySelector('#view .mf'); const n = f.querySelector('.mf-n').getBoundingClientRect(); const d = f.querySelector('.mf-d').getBoundingClientRect(); return { above: n.bottom <= d.top + 1, aria: f.getAttribute('aria-label') }; });
+      check(fr.above && /나누기/.test(fr.aria), tag + '분자가 분모 위에 있고 접근성 이름이 있음 (' + fr.aria + ')');
+      check(await noOverflow(page), tag + '레슨 가로 넘침 없음');
+      // 진행 표시("16/44")·카운터는 분수로 바꾸지 않음
+      const eyebrow = await page.evaluate(() => document.querySelector('#view .eyebrow') ? document.querySelector('#view .eyebrow').textContent : '');
+      check(/\d+\/\d+/.test(eyebrow) && !(await page.evaluate(() => !!document.querySelector('#view .eyebrow .mf'))), tag + '레슨 번호 표시는 그대로: ' + eyebrow);
+      await page.click('#tab-learn');
+      check((await page.$$('#view .stat-line .mf')).length === 0 && (await page.$$('#view .tag .mf')).length === 0, tag + '진행 현황 숫자는 분수로 안 바뀜');
+      // 문제의 공식 힌트와 해설
+      await page.evaluate(() => GISA.ui._load('t:res-f0#3'));
+      await page.click('#hint1');
+      await page.click('#hint2');
+      check((await page.$$('.hint-body .mf')).length >= 1, tag + '공식 힌트가 분수로');
+      await page.evaluate(() => { GISA.ui._answer(GISA.ui._view.q.answerIndex); });
+      check((await page.$$('.explain .mf, .qcard .mf')).length >= 2, tag + '해설에도 분수');
+      check(await noOverflow(page), tag + '해설 가로 넘침 없음');
+      // 용어 해설 창
+      await page.evaluate(() => GISA.wikiUi.open('voltage-divider'));
+      check((await page.$$('#wiki .wiki-formula .mf')).length >= 1, tag + '용어 해설의 공식도 분수');
+      check(await noOverflow(page), tag + '용어 해설 가로 넘침 없음');
+      if (dev === 'pc') await page.screenshot({ path: path.join(SHOTS, '24-math-wiki.png') });
+      check(errors.length === 0, tag + '콘솔 오류: ' + errors.join(' | '));
+      await ctx.close();
+    }
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });

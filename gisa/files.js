@@ -11,6 +11,7 @@ module.exports = {
     'engine/calc.js',
     'engine/calc-guide.js',
     'engine/glossary.js',
+    'engine/typeset.js',
     'engine/search.js',
     'engine/choices.js',
     'engine/explain.js',
@@ -51,6 +52,6 @@ module.exports = {
     'calc-guides/power-machine.js',
   ],
   logic: ['app/progress.js'],
-  app: ['app/storage.js', 'app/sync.js', 'app/ai.js', 'app/calcui.js', 'app/pad.js', 'app/calcdemo.js', 'app/wikiui.js', 'app/celebrate.js', 'app/ui.js'],
+  app: ['app/storage.js', 'app/sync.js', 'app/ai.js', 'app/calcui.js', 'app/pad.js', 'app/calcdemo.js', 'app/mathui.js', 'app/wikiui.js', 'app/celebrate.js', 'app/ui.js'],
   style: 'app/style.css',
 };

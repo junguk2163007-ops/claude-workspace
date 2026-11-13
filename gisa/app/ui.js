@@ -734,6 +734,7 @@
         );
       });
     }
+    if (G.mathUi) G.mathUi.typeset(box);
     if (G.wikiUi) G.wikiUi.link(box);
   }
 
@@ -1513,6 +1514,7 @@
     root.textContent = '';
     const fn = { learn: renderLearn, units: renderUnits, practice: renderPractice, review: renderReview, stats: renderStats, settings: renderSettings }[view.tab];
     fn(root);
+    if (G.mathUi) G.mathUi.typeset(root);
     if (G.wikiUi) G.wikiUi.link(root);
     if (G.aiTutor) G.aiTutor.updateSide();
   }
