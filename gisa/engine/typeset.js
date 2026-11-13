@@ -321,12 +321,146 @@
     return unwrapFractionParens(fractions(radicalsAndPowers(tokens)));
   }
 
+  // ───────── 수식 구간: 변수는 기울이고(I, V, ω₀), 함수·단위·숫자는 바로 세운다 ─────────
+  const FUNC_RE = /^(?:sin|cos|tan|log|ln|exp|lim|max|min)/;
+  const VAR_LETTER = /[A-Za-zα-ωµ]/; // 소문자 그리스(π 제외)와 라틴 문자만 기울인다
+  // 문자열 → 노드(tx, v). afterNum: 바로 앞이 숫자(→ 단위 가능), afterSlash: 바로 앞이 단위 나눗셈 슬래시
+  function styleText(str, afterNum, afterSlash) {
+    const out = [];
+    let plain = '';
+    const flush = () => {
+      if (plain) out.push({ t: 'tx', s: plain });
+      plain = '';
+    };
+    let i = 0;
+    while (i < str.length) {
+      const c = str[i];
+      if (/[A-Za-zΑ-Ωα-ωµ]/.test(c)) {
+        let j = i;
+        while (j < str.length && /[A-Za-zΑ-Ωα-ωµ]/.test(str[j])) j++;
+        const word = str.slice(i, j);
+        // 숫자 뒤나 단위 슬래시 뒤의 단위 낱말은 세워 쓴다(12 V, 5 mH, C/s)
+        const isUnit = (afterNum || afterSlash) && i === 0 && isUnitWord(word);
+        if (isUnit) plain += word;
+        else {
+          let k = 0;
+          while (k < word.length) {
+            const f = FUNC_RE.exec(word.slice(k));
+            if (f) {
+              plain += f[0];
+              k += f[0].length;
+            } else if (VAR_LETTER.test(word[k]) && word[k] !== 'π') {
+              flush();
+              out.push({ t: 'v', s: word[k] });
+              k++;
+            } else {
+              plain += word[k];
+              k++;
+            }
+          }
+        }
+        i = j;
+      } else {
+        plain += c;
+        i++;
+      }
+    }
+    flush();
+    return out;
+  }
+
+  // 노드 안의 글자 스타일 적용(분수·루트·위첨자 속까지)
+  function styleNodes(nodes) {
+    const out = [];
+    nodes.forEach((n) => {
+      if (n.t === 'tx') {
+        const numBefore = out.length ? /[0-9][0-9.,\s×·]*$/.test(plainOf(out)) : false;
+        styleText(n.s, numBefore, false).forEach((x) => out.push(x));
+      } else if (n.t === 'frac') out.push({ t: 'frac', n: styleNodes(n.n), d: styleNodes(n.d) });
+      else if (n.t === 'sqrt') out.push({ t: 'sqrt', b: styleNodes(n.b), i: n.i });
+      else if (n.t === 'sup') out.push({ t: 'sup', b: styleNodes(n.b) });
+      else out.push(n);
+    });
+    return out;
+  }
+  const plainOf = (ns) =>
+    ns
+      .map((n) => (n.t === 'tx' || n.t === 'v' ? n.s : ''))
+      .join('');
+
+  const REGION_KINDS = new Set(['w', 'op', 'sp', '(', ')', '[', ']', '/', 'node', '√', '∛', '^']);
+  const BREAK_OPS = new Set([',', ';', ':']);
+
+  function regionNodes(ts) {
+    // 대괄호 [ ] 안은 단위 표시라서 스타일 없이 그대로 둔다
+    const out = [];
+    let bracket = 0;
+    let prev = null;
+    ts.forEach((t) => {
+      if (t.k === '[') bracket++;
+      if (t.k === 'node') {
+        out.push(...styleNodes([t.node]));
+      } else if (t.k === 'w' && bracket === 0) {
+        const afterNum = !!prev && prev.k === 'sp' && prev.afterNum;
+        const afterSlash = !!prev && prev.k === '/';
+        styleText(t.s, afterNum, afterSlash).forEach((x) => out.push(x));
+      } else out.push({ t: 'tx', s: t.s });
+      if (t.k === ']') bracket = Math.max(0, bracket - 1);
+      prev = t;
+    });
+    return out;
+  }
+
+  // 숫자 바로 뒤(공백 하나 포함)에 오는 낱말인지 표시해 둔다
+  function markNumbers(tokens) {
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (t.k === 'sp' && tokens[i - 1] && tokens[i - 1].k === 'w' && /[0-9]$/.test(tokens[i - 1].s)) t.afterNum = true;
+    }
+  }
+
+  function styleRegions(tokens) {
+    markNumbers(tokens);
+    const out = [];
+    let i = 0;
+    let changed = false;
+    while (i < tokens.length) {
+      const t = tokens[i];
+      const ok = (x) => REGION_KINDS.has(x.k) && !(x.k === 'op' && BREAK_OPS.has(x.s));
+      if (!ok(t)) {
+        out.push(t);
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j < tokens.length && ok(tokens[j])) j++;
+      let a = i;
+      let b = j;
+      while (a < b && tokens[a].k === 'sp') a++;
+      while (b > a && (tokens[b - 1].k === 'sp' || tokens[b - 1].k === '(')) b--;
+      const run = tokens.slice(a, b);
+      const hasEq = run.some((x) => x.k === 'op' && /[=≈∝]/.test(x.s));
+      const hasNode = run.some((x) => x.k === 'node');
+      const hasLetter = run.some((x) => (x.k === 'w' && /[A-Za-zΑ-Ωα-ω]/.test(x.s)) || x.k === 'node');
+      for (let q = i; q < a; q++) out.push(tokens[q]);
+      if (run.length && (hasEq || hasNode) && hasLetter) {
+        out.push({ k: 'node', node: { t: 'math', b: regionNodes(run) } });
+        changed = true;
+      } else for (let q = a; q < b; q++) out.push(tokens[q]);
+      for (let q = b; q < j; q++) out.push(tokens[q]);
+      i = j;
+    }
+    return { tokens: out, changed };
+  }
+
   function typeset(text) {
     const s = String(text);
-    if (!/[/√∛^]/.test(s)) return null;
-    const tokens = process(tokenize(s));
-    if (!tokens.some((t) => t.k === 'node')) return null;
-    return toNodes(tokens.map((t) => (t.k === 'sp' ? { k: 'sp', s: ' ' } : t)));
+    if (!/[/√∛^=≈∝]/.test(s)) return null;
+    const processed = process(tokenize(s));
+    const hasNode = processed.some((t) => t.k === 'node');
+    const styled = styleRegions(processed.map((t) => (t.k === 'sp' ? Object.assign({}, t, { s: ' ' }) : t)));
+    if (!hasNode && !styled.changed) return null;
+    return toNodes(styled.tokens);
   }
 
   // 시험·확인용 문자열: 분수는 ⟦분자|분모⟧, 제곱근은 √⟦…⟧, 위첨자는 ^⟦…⟧
@@ -335,7 +469,8 @@
     const d = (ns) =>
       ns
         .map((n) => {
-          if (n.t === 'tx') return n.s;
+          if (n.t === 'tx' || n.t === 'v') return n.s;
+          if (n.t === 'math') return d(n.b);
           if (n.t === 'frac') return '⟦' + d(n.n) + '|' + d(n.d) + '⟧';
           if (n.t === 'sqrt') return (n.i ? '∛' : '√') + '⟦' + d(n.b) + '⟧';
           return '^⟦' + d(n.b) + '⟧';

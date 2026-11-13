@@ -13,7 +13,8 @@
   const plain = (nodes) =>
     nodes
       .map((n) => {
-        if (n.t === 'tx') return n.s;
+        if (n.t === 'tx' || n.t === 'v') return n.s;
+        if (n.t === 'math') return plain(n.b);
         if (n.t === 'frac') return plain(n.n) + ' 나누기 ' + plain(n.d);
         if (n.t === 'sqrt') return (n.i ? '세제곱근 ' : '루트 ') + plain(n.b);
         return ' 제곱 ' + plain(n.b);
@@ -32,6 +33,16 @@
   }
   function one(n) {
     if (n.t === 'tx') return document.createTextNode(n.s);
+    if (n.t === 'v') {
+      const i = el('i', 'mv');
+      i.textContent = n.s;
+      return i;
+    }
+    if (n.t === 'math') {
+      const m = el('span', 'mx');
+      m.appendChild(build(n.b));
+      return m;
+    }
     if (n.t === 'frac') {
       const s = el('span', 'mf');
       s.setAttribute('role', 'math');
@@ -44,7 +55,7 @@
       return s;
     }
     if (n.t === 'sqrt') {
-      const s = el('span', 'mf-r');
+      const s = el('span', 'mf-r' + (n.b.some((x) => x.t === 'frac') ? ' tall' : ''));
       s.setAttribute('role', 'math');
       s.setAttribute('aria-label', plain([n]));
       if (n.i) {
@@ -71,7 +82,7 @@
     let n;
     while ((n = walker.nextNode())) {
       const v = n.nodeValue;
-      if (!v || !/[/√∛^]/.test(v)) continue;
+      if (!v || !/[/√∛^=≈∝]/.test(v)) continue;
       const p = n.parentElement;
       if (!p || p.closest(SKIP)) continue;
       targets.push(n);

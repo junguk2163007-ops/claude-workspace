@@ -1,6 +1,6 @@
 <title>통전⚡기사 전기기사 필기</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400;1,600&display=swap">
 <style>
 /* 레이아웃: 680px 한 기둥, 위에 붙는 탭 바, 문제만 카드로 띄우고 나머지는 평면 */
 :root {
@@ -2441,56 +2441,88 @@ a.term:focus-visible {
   display: none;
 }
 
-/* ── 수식: 분수는 분자 위·분모 아래, 제곱근은 윗줄 ── */
+/* ── 수식: 교과서 모양 (분수는 분자 위·분모 아래, 제곱근은 윗줄, 변수는 기울임) ── */
+.mx {
+  font-family: "STIX Two Text", "STIXGeneral", "Cambria Math", "Times New Roman", Times, serif;
+  font-size: 1.08em;
+  letter-spacing: 0.01em;
+  word-spacing: 0.08em;
+  overflow-wrap: anywhere; /* 폰에서 긴 식이 화면 밖으로 나가지 않게 줄바꿈 허용 */
+}
+.mx .mv {
+  font-style: italic;
+  padding-right: 0.03em;
+}
 .mf {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   vertical-align: middle;
-  margin: 0 0.18em;
-  font-size: 0.94em;
-  line-height: 1.3;
+  margin: 0 0.2em;
+  line-height: 1.25;
   text-align: center;
-  white-space: nowrap;
+  max-width: 100%;
 }
 .mf-n {
   display: block;
-  padding: 0 0.28em 0.08em;
-  border-bottom: 0.075em solid currentColor;
+  padding: 0 0.3em 0.1em;
+  border-bottom: 0.07em solid currentColor;
 }
 .mf-d {
   display: block;
-  padding: 0.08em 0.28em 0;
+  padding: 0.1em 0.3em 0;
 }
 .mf .mf {
-  font-size: 0.88em;
+  font-size: 0.9em;
 }
+/* 제곱근: 윗줄이 글자 높이에 딱 붙도록 인라인 블록으로 */
 .mf-r {
-  display: inline-flex;
-  align-items: stretch;
+  display: inline;
   white-space: nowrap;
 }
 .mf-rs {
-  line-height: 1;
-  padding-right: 0.04em;
+  display: inline;
+  margin-right: -0.04em;
 }
 .mf-rb {
-  border-top: 0.075em solid currentColor;
-  padding: 0 0.06em 0 0.04em;
-  margin-top: 0.12em;
+  display: inline-block;
+  border-top: 0.07em solid currentColor;
+  padding: 0 0.1em 0 0.06em;
+  line-height: 1.08;
+  vertical-align: baseline;
+}
+/* 분수가 들어 있는 제곱근은 부호를 키운다 */
+.mf-r.tall {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.mf-r.tall .mf-rs {
+  font-size: 2.2em;
+  line-height: 1;
+  font-weight: 300;
+}
+.mf-r.tall .mf-rb {
+  display: block;
+  line-height: 1.2;
+  padding-top: 0.12em;
 }
 .mf-ri {
-  align-self: flex-start;
-  font-size: 0.6em;
-  margin-right: -0.2em;
+  font-size: 0.62em;
+  vertical-align: 0.5em;
+  margin-right: -0.15em;
 }
 .mf-sup {
-  font-size: 0.7em;
+  font-size: 0.72em;
   line-height: 0;
+  vertical-align: 0.55em;
 }
-.wiki-formula code .mf,
-.formula .mf {
-  font-size: 1em;
+.wiki-formula code .mx,
+.formula .mx {
+  font-size: 1.12em;
+}
+.wiki-formula code {
+  font-family: inherit;
 }
 
 </style>
@@ -6627,12 +6659,146 @@ a.term:focus-visible {
     return unwrapFractionParens(fractions(radicalsAndPowers(tokens)));
   }
 
+  // ───────── 수식 구간: 변수는 기울이고(I, V, ω₀), 함수·단위·숫자는 바로 세운다 ─────────
+  const FUNC_RE = /^(?:sin|cos|tan|log|ln|exp|lim|max|min)/;
+  const VAR_LETTER = /[A-Za-zα-ωµ]/; // 소문자 그리스(π 제외)와 라틴 문자만 기울인다
+  // 문자열 → 노드(tx, v). afterNum: 바로 앞이 숫자(→ 단위 가능), afterSlash: 바로 앞이 단위 나눗셈 슬래시
+  function styleText(str, afterNum, afterSlash) {
+    const out = [];
+    let plain = '';
+    const flush = () => {
+      if (plain) out.push({ t: 'tx', s: plain });
+      plain = '';
+    };
+    let i = 0;
+    while (i < str.length) {
+      const c = str[i];
+      if (/[A-Za-zΑ-Ωα-ωµ]/.test(c)) {
+        let j = i;
+        while (j < str.length && /[A-Za-zΑ-Ωα-ωµ]/.test(str[j])) j++;
+        const word = str.slice(i, j);
+        // 숫자 뒤나 단위 슬래시 뒤의 단위 낱말은 세워 쓴다(12 V, 5 mH, C/s)
+        const isUnit = (afterNum || afterSlash) && i === 0 && isUnitWord(word);
+        if (isUnit) plain += word;
+        else {
+          let k = 0;
+          while (k < word.length) {
+            const f = FUNC_RE.exec(word.slice(k));
+            if (f) {
+              plain += f[0];
+              k += f[0].length;
+            } else if (VAR_LETTER.test(word[k]) && word[k] !== 'π') {
+              flush();
+              out.push({ t: 'v', s: word[k] });
+              k++;
+            } else {
+              plain += word[k];
+              k++;
+            }
+          }
+        }
+        i = j;
+      } else {
+        plain += c;
+        i++;
+      }
+    }
+    flush();
+    return out;
+  }
+
+  // 노드 안의 글자 스타일 적용(분수·루트·위첨자 속까지)
+  function styleNodes(nodes) {
+    const out = [];
+    nodes.forEach((n) => {
+      if (n.t === 'tx') {
+        const numBefore = out.length ? /[0-9][0-9.,\s×·]*$/.test(plainOf(out)) : false;
+        styleText(n.s, numBefore, false).forEach((x) => out.push(x));
+      } else if (n.t === 'frac') out.push({ t: 'frac', n: styleNodes(n.n), d: styleNodes(n.d) });
+      else if (n.t === 'sqrt') out.push({ t: 'sqrt', b: styleNodes(n.b), i: n.i });
+      else if (n.t === 'sup') out.push({ t: 'sup', b: styleNodes(n.b) });
+      else out.push(n);
+    });
+    return out;
+  }
+  const plainOf = (ns) =>
+    ns
+      .map((n) => (n.t === 'tx' || n.t === 'v' ? n.s : ''))
+      .join('');
+
+  const REGION_KINDS = new Set(['w', 'op', 'sp', '(', ')', '[', ']', '/', 'node', '√', '∛', '^']);
+  const BREAK_OPS = new Set([',', ';', ':']);
+
+  function regionNodes(ts) {
+    // 대괄호 [ ] 안은 단위 표시라서 스타일 없이 그대로 둔다
+    const out = [];
+    let bracket = 0;
+    let prev = null;
+    ts.forEach((t) => {
+      if (t.k === '[') bracket++;
+      if (t.k === 'node') {
+        out.push(...styleNodes([t.node]));
+      } else if (t.k === 'w' && bracket === 0) {
+        const afterNum = !!prev && prev.k === 'sp' && prev.afterNum;
+        const afterSlash = !!prev && prev.k === '/';
+        styleText(t.s, afterNum, afterSlash).forEach((x) => out.push(x));
+      } else out.push({ t: 'tx', s: t.s });
+      if (t.k === ']') bracket = Math.max(0, bracket - 1);
+      prev = t;
+    });
+    return out;
+  }
+
+  // 숫자 바로 뒤(공백 하나 포함)에 오는 낱말인지 표시해 둔다
+  function markNumbers(tokens) {
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (t.k === 'sp' && tokens[i - 1] && tokens[i - 1].k === 'w' && /[0-9]$/.test(tokens[i - 1].s)) t.afterNum = true;
+    }
+  }
+
+  function styleRegions(tokens) {
+    markNumbers(tokens);
+    const out = [];
+    let i = 0;
+    let changed = false;
+    while (i < tokens.length) {
+      const t = tokens[i];
+      const ok = (x) => REGION_KINDS.has(x.k) && !(x.k === 'op' && BREAK_OPS.has(x.s));
+      if (!ok(t)) {
+        out.push(t);
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j < tokens.length && ok(tokens[j])) j++;
+      let a = i;
+      let b = j;
+      while (a < b && tokens[a].k === 'sp') a++;
+      while (b > a && (tokens[b - 1].k === 'sp' || tokens[b - 1].k === '(')) b--;
+      const run = tokens.slice(a, b);
+      const hasEq = run.some((x) => x.k === 'op' && /[=≈∝]/.test(x.s));
+      const hasNode = run.some((x) => x.k === 'node');
+      const hasLetter = run.some((x) => (x.k === 'w' && /[A-Za-zΑ-Ωα-ω]/.test(x.s)) || x.k === 'node');
+      for (let q = i; q < a; q++) out.push(tokens[q]);
+      if (run.length && (hasEq || hasNode) && hasLetter) {
+        out.push({ k: 'node', node: { t: 'math', b: regionNodes(run) } });
+        changed = true;
+      } else for (let q = a; q < b; q++) out.push(tokens[q]);
+      for (let q = b; q < j; q++) out.push(tokens[q]);
+      i = j;
+    }
+    return { tokens: out, changed };
+  }
+
   function typeset(text) {
     const s = String(text);
-    if (!/[/√∛^]/.test(s)) return null;
-    const tokens = process(tokenize(s));
-    if (!tokens.some((t) => t.k === 'node')) return null;
-    return toNodes(tokens.map((t) => (t.k === 'sp' ? { k: 'sp', s: ' ' } : t)));
+    if (!/[/√∛^=≈∝]/.test(s)) return null;
+    const processed = process(tokenize(s));
+    const hasNode = processed.some((t) => t.k === 'node');
+    const styled = styleRegions(processed.map((t) => (t.k === 'sp' ? Object.assign({}, t, { s: ' ' }) : t)));
+    if (!hasNode && !styled.changed) return null;
+    return toNodes(styled.tokens);
   }
 
   // 시험·확인용 문자열: 분수는 ⟦분자|분모⟧, 제곱근은 √⟦…⟧, 위첨자는 ^⟦…⟧
@@ -6641,7 +6807,8 @@ a.term:focus-visible {
     const d = (ns) =>
       ns
         .map((n) => {
-          if (n.t === 'tx') return n.s;
+          if (n.t === 'tx' || n.t === 'v') return n.s;
+          if (n.t === 'math') return d(n.b);
           if (n.t === 'frac') return '⟦' + d(n.n) + '|' + d(n.d) + '⟧';
           if (n.t === 'sqrt') return (n.i ? '∛' : '√') + '⟦' + d(n.b) + '⟧';
           return '^⟦' + d(n.b) + '⟧';
@@ -16486,7 +16653,8 @@ a.term:focus-visible {
   const plain = (nodes) =>
     nodes
       .map((n) => {
-        if (n.t === 'tx') return n.s;
+        if (n.t === 'tx' || n.t === 'v') return n.s;
+        if (n.t === 'math') return plain(n.b);
         if (n.t === 'frac') return plain(n.n) + ' 나누기 ' + plain(n.d);
         if (n.t === 'sqrt') return (n.i ? '세제곱근 ' : '루트 ') + plain(n.b);
         return ' 제곱 ' + plain(n.b);
@@ -16505,6 +16673,16 @@ a.term:focus-visible {
   }
   function one(n) {
     if (n.t === 'tx') return document.createTextNode(n.s);
+    if (n.t === 'v') {
+      const i = el('i', 'mv');
+      i.textContent = n.s;
+      return i;
+    }
+    if (n.t === 'math') {
+      const m = el('span', 'mx');
+      m.appendChild(build(n.b));
+      return m;
+    }
     if (n.t === 'frac') {
       const s = el('span', 'mf');
       s.setAttribute('role', 'math');
@@ -16517,7 +16695,7 @@ a.term:focus-visible {
       return s;
     }
     if (n.t === 'sqrt') {
-      const s = el('span', 'mf-r');
+      const s = el('span', 'mf-r' + (n.b.some((x) => x.t === 'frac') ? ' tall' : ''));
       s.setAttribute('role', 'math');
       s.setAttribute('aria-label', plain([n]));
       if (n.i) {
@@ -16544,7 +16722,7 @@ a.term:focus-visible {
     let n;
     while ((n = walker.nextNode())) {
       const v = n.nodeValue;
-      if (!v || !/[/√∛^]/.test(v)) continue;
+      if (!v || !/[/√∛^=≈∝]/.test(v)) continue;
       const p = n.parentElement;
       if (!p || p.closest(SKIP)) continue;
       targets.push(n);
@@ -16568,7 +16746,7 @@ a.term:focus-visible {
 
   const GL = G.glossary;
   // 링크를 걸지 않는 자리
-  const SKIP = 'a,button,input,textarea,select,option,svg,script,style,h1,h2,h3,h4,.choices,.tabs,.qmeta,.tag,.chip,.eyebrow,.term,.ai-box,.demo,.qid,.syncdot,.streak,.formula,.formula-box,.wiki-formula,.mf,.mf-r,.toast,.cele';
+  const SKIP = 'a,button,input,textarea,select,option,svg,script,style,h1,h2,h3,h4,.choices,.tabs,.qmeta,.tag,.chip,.eyebrow,.term,.ai-box,.demo,.qid,.syncdot,.streak,.formula,.formula-box,.wiki-formula,.mx,.mf,.mf-r,.toast,.cele';
   const SCOPE = '.qcard,.point-card,.lesson-sec,.wiki-sec,.panel,.tile,.box,article,section';
 
   let panel = null;

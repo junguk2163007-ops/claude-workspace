@@ -7,7 +7,7 @@
 
   const GL = G.glossary;
   // 링크를 걸지 않는 자리
-  const SKIP = 'a,button,input,textarea,select,option,svg,script,style,h1,h2,h3,h4,.choices,.tabs,.qmeta,.tag,.chip,.eyebrow,.term,.ai-box,.demo,.qid,.syncdot,.streak,.formula,.formula-box,.wiki-formula,.mf,.mf-r,.toast,.cele';
+  const SKIP = 'a,button,input,textarea,select,option,svg,script,style,h1,h2,h3,h4,.choices,.tabs,.qmeta,.tag,.chip,.eyebrow,.term,.ai-box,.demo,.qid,.syncdot,.streak,.formula,.formula-box,.wiki-formula,.mx,.mf,.mf-r,.toast,.cele';
   const SCOPE = '.qcard,.point-card,.lesson-sec,.wiki-sec,.panel,.tile,.box,article,section';
 
   let panel = null;

@@ -12,7 +12,7 @@ const TITLE = '통전⚡기사 전기기사 필기';
 const FONTS =
   '<link rel="preconnect" href="https://fonts.googleapis.com">' +
   '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
-  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">';
+  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400;1,600&display=swap">';
 
 const jsFiles = [...FILES.engine, ...FILES.content, ...FILES.logic, ...FILES.app];
 const js = jsFiles
