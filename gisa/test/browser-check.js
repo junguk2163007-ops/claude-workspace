@@ -919,10 +919,10 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(s2.length === 2 && s2[1].c === 'red' && s2[1].w > s2[0].w, '메모판: 빨간 굵은 펜');
     // 지우개
     const inkBefore = await page.evaluate(() => GISA.pad.ink());
-    check((await page.evaluate(() => getComputedStyle(document.getElementById('pad-canvas')).cursor)) === 'crosshair', '메모판: 마우스 커서(십자)가 보임');
+    check((await page.evaluate(() => getComputedStyle(document.getElementById('pad-canvas')).cursor)).includes('data:image/svg+xml'), '메모판: 펜일 때 마우스 커서가 샤프 모양 이미지');
     await page.click('#pad-erase');
     await page.mouse.move(box.x + 60, box.y + 20);
-    check((await page.isVisible('.pad-ring')) && (await page.evaluate(() => getComputedStyle(document.getElementById('pad-canvas')).cursor)) === 'crosshair', '메모판: 지우개는 지우는 크기 동그라미 + 십자 커서');
+    check((await page.evaluate(() => getComputedStyle(document.getElementById('pad-canvas')).cursor)).includes('circle'), '메모판: 지우개일 때는 지우는 크기 동그라미 커서');
     await page.mouse.down();
     await page.mouse.move(box.x + 60, box.y + 120, { steps: 10 });
     await page.mouse.up();

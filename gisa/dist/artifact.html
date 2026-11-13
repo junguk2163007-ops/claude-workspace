@@ -2441,22 +2441,6 @@ a.term:focus-visible {
   display: none;
 }
 
-.pad-ring {
-  position: absolute;
-  left: 0;
-  top: 0;
-  border: 1.5px solid var(--muted);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.25);
-  pointer-events: none;
-}
-.pad-ring[hidden] {
-  display: none;
-}
-.pad-canvas {
-  cursor: crosshair;
-}
-
 </style>
 <header class="appbar" id="bar"></header>
 <main><div class="wrap" id="view"></div></main>
@@ -15653,23 +15637,38 @@ a.term:focus-visible {
     paintButtons();
   }
 
-  // 커서: 어떤 화면·브라우저에서도 확실히 보이는 기본 십자 커서를 쓰고,
-  // 지우개일 때는 지워지는 크기만큼의 동그라미를 마우스 따라 보여 준다.
-  let ring = null;
+  // 커서: 펜을 고르면 마우스 끝이 고급 샤프 모양(심 끝이 닿는 자리가 클릭 위치)이 되고,
+  // 지우개를 고르면 지워지는 크기의 동그라미가 된다. 이미지 커서가 안 먹는 환경에선 십자 커서로 대신한다.
+  function pencilSvg(bodyColor) {
+    // 세로로 선 샤프(끝이 원점)를 그린 뒤 오른쪽으로 눕혀서 끝을 (4, 28)에 둔다. 흰 테두리를 먼저 깔아 어두운 종이에서도 보인다.
+    const shapes =
+      '<path d="M0 0V-4"/>' +
+      '<path d="M0-4 -2.1-9.5h4.2z"/>' +
+      '<rect x="-2.7" y="-15.5" width="5.4" height="6"/>' +
+      '<rect x="-2.7" y="-27" width="5.4" height="11.5" rx="0.6"/>' +
+      '<rect x="-1.4" y="-30" width="2.8" height="3"/>';
+    const fills =
+      '<path d="M0 0V-4" stroke="#222" stroke-width="1.1" fill="none"/>' +
+      '<path d="M0-4 -2.1-9.5h4.2z" fill="#aeb6bf"/>' +
+      '<rect x="-2.7" y="-15.5" width="5.4" height="6" fill="#3b4048"/>' +
+      '<path d="M-2.7-13.4h5.4M-2.7-11.5h5.4" stroke="#7b838d" stroke-width="0.6"/>' +
+      '<rect x="-2.7" y="-27" width="5.4" height="11.5" rx="0.6" fill="' + bodyColor + '"/>' +
+      '<rect x="-1.4" y="-30" width="2.8" height="3" fill="#aeb6bf"/>';
+    const halo = '<g stroke="#fff" stroke-width="3" stroke-linejoin="round" fill="#fff">' + shapes + '</g>';
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g transform="translate(4 28) rotate(32)">' + halo + fills + '</g></svg>';
+  }
+  function eraserSvg() {
+    const d = ERASE_W + 4;
+    const c = d / 2;
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + d + '" height="' + d + '" viewBox="0 0 ' + d + ' ' + d + '"><circle cx="' + c + '" cy="' + c + '" r="' + ERASE_W / 2 + '" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="3"/><circle cx="' + c + '" cy="' + c + '" r="' + ERASE_W / 2 + '" fill="none" stroke="#333" stroke-width="1.3"/></svg>';
+  }
+  const uri = (svgText) => 'url("data:image/svg+xml,' + encodeURIComponent(svgText) + '")';
+  function cursorCss() {
+    if (tool === 'erase') return uri(eraserSvg()) + ' ' + (ERASE_W + 4) / 2 + ' ' + (ERASE_W + 4) / 2 + ', crosshair';
+    return uri(pencilSvg(cssOf(color))) + ' 4 28, crosshair';
+  }
   function setCursor() {
-    if (!cv) return;
-    cv.style.cursor = 'crosshair';
-    if (!tool || tool !== 'erase') hideRing();
-  }
-  function showRing(e) {
-    if (tool !== 'erase' || !ring || e.pointerType === 'touch') return;
-    const r = cv.getBoundingClientRect();
-    ring.style.width = ring.style.height = ERASE_W + 'px';
-    ring.style.transform = 'translate(' + (e.clientX - r.left - ERASE_W / 2) + 'px,' + (e.clientY - r.top - ERASE_W / 2) + 'px)';
-    ring.hidden = false;
-  }
-  function hideRing() {
-    if (ring) ring.hidden = true;
+    if (cv) cv.style.cursor = cursorCss();
   }
 
   // ───────── 화면 ─────────
@@ -15744,13 +15743,7 @@ a.term:focus-visible {
     cv.addEventListener('pointercancel', up);
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     const wrap = h('div', 'pad-wrap');
-    ring = h('div', 'pad-ring');
-    ring.hidden = true;
-    ring.setAttribute('aria-hidden', 'true');
-    wrap.append(cv, ring);
-    cv.addEventListener('pointermove', showRing);
-    cv.addEventListener('pointerenter', showRing);
-    cv.addEventListener('pointerleave', hideRing);
+    wrap.appendChild(cv);
     root.append(top, bar, wrap);
 
     const hint = host.querySelector('.calc-hint');
@@ -15769,6 +15762,8 @@ a.term:focus-visible {
   }
 
   G.pad = {
+    cursor: () => (cv ? cv.style.cursor : ''),
+    _pencilSvg: pencilSvg,
     strokes: () => strokes.map((s) => ({ c: s.c, w: s.w, n: s.p.length })),
     undo,
     clear: clearAll,
