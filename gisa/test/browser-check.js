@@ -896,6 +896,67 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-9. 계산기 아래 메모판 ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
+    check(await page.isVisible('#pad-canvas'), '메모판: 계산기 아래에 표시');
+    const box = await page.evaluate(() => { const c = document.getElementById('pad-canvas').getBoundingClientRect(); const k = document.querySelector('#calc .keys').getBoundingClientRect(); const p = document.getElementById('calc').getBoundingClientRect(); return { x: c.x, y: c.y, w: c.width, h: c.height, keysBottom: k.bottom, panelBottom: p.bottom }; });
+    check(box.y >= box.keysBottom - 1 && box.w > 250 && box.h >= 150, '메모판: 키패드 아래, 충분한 크기 (' + Math.round(box.w) + '×' + Math.round(box.h) + ')');
+    check(box.y + box.h <= box.panelBottom + 1, '메모판: 900px 높이에서 화면 안에 다 들어옴');
+    const stroke = async (dx, dy) => {
+      await page.mouse.move(box.x + dx, box.y + dy);
+      await page.mouse.down();
+      for (let i = 1; i <= 20; i++) await page.mouse.move(box.x + dx + i * 8, box.y + dy + Math.sin(i / 2) * 14);
+      await page.mouse.up();
+    };
+    await stroke(20, 40);
+    check((await page.evaluate(() => GISA.pad.strokes().length)) === 1 && (await page.evaluate(() => GISA.pad.ink())) > 200, '메모판: 마우스로 그림이 그려짐');
+    // 색·굵기
+    await page.click('#pad-color-red');
+    await page.click('#pad-thick');
+    await stroke(20, 90);
+    const s2 = await page.evaluate(() => GISA.pad.strokes());
+    check(s2.length === 2 && s2[1].c === 'red' && s2[1].w > s2[0].w, '메모판: 빨간 굵은 펜');
+    // 지우개
+    const inkBefore = await page.evaluate(() => GISA.pad.ink());
+    await page.click('#pad-erase');
+    await page.mouse.move(box.x + 60, box.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 60, box.y + 120, { steps: 10 });
+    await page.mouse.up();
+    check((await page.evaluate(() => GISA.pad.ink())) < inkBefore, '메모판: 지우개로 지워짐');
+    // 되돌리기
+    await page.click('#pad-undo');
+    check((await page.evaluate(() => GISA.pad.strokes().length)) === 2 && (await page.evaluate(() => GISA.pad.ink())) >= inkBefore - 5, '메모판: 되돌리기');
+    // 새로고침해도 남음
+    await page.reload();
+    await page.waitForSelector('#pad-canvas');
+    check((await page.evaluate(() => GISA.pad.strokes().length)) === 2 && (await page.evaluate(() => GISA.pad.ink())) > 200, '메모판: 새로고침해도 그림이 남음');
+    // 초기화 → 되돌리기로 복구
+    await page.click('#pad-clear');
+    check((await page.evaluate(() => GISA.pad.strokes().length)) === 0 && (await page.evaluate(() => GISA.pad.ink())) === 0, '메모판: 초기화하면 전부 지워짐');
+    check(await page.evaluate(() => document.getElementById('pad-clear').disabled), '메모판: 빈 판에서는 초기화 버튼이 눌리지 않음');
+    await page.click('#pad-undo');
+    check((await page.evaluate(() => GISA.pad.strokes().length)) === 2, '메모판: 실수로 초기화해도 되돌리기로 복구');
+    // 계산기와 같이 쓰기: 메모판에 쓰는 동안 계산기 입력이 안 흐트러짐
+    await page.click('#calc [data-key="7"]');
+    await stroke(20, 60);
+    check((await page.evaluate(() => GISA.calcUi.calc.text())) === '7', '메모판: 그려도 계산기 입력은 그대로');
+    // 계산기로 풀기 시연 중에도 메모판은 보임
+    await page.evaluate(() => GISA.ui._load('t:ohm-current#3'));
+    await page.evaluate(() => { const q = GISA.ui._view.q; GISA.ui._answer(q.answerIndex); });
+    await page.click('#calc-solve');
+    check(await page.isVisible('#pad-canvas'), '메모판: 계산기 시연 중에도 표시');
+    await page.click('#demo-close');
+    await page.screenshot({ path: path.join(SHOTS, '23-memo-pad.png') });
+    // 좁은 화면: 폰에서는 계산기와 함께 숨김
+    const ph = await newPage(browser, Object.assign({ colorScheme: 'light' }, iphone));
+    check(!(await ph.page.isVisible('#pad-canvas')) && (await noOverflow(ph.page)), '메모판: 폰에서는 숨김 · 가로 넘침 없음');
+    await ph.ctx.close();
+    check(errors.length === 0, '메모판 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });
