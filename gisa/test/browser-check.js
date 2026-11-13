@@ -913,7 +913,7 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check((await page.evaluate(() => GISA.pad.strokes().length)) === 1 && (await page.evaluate(() => GISA.pad.ink())) > 200, '메모판: 마우스로 그림이 그려짐');
     // 색·굵기
     await page.click('#pad-color-red');
-    await page.click('#pad-thick');
+    await page.click('#pad-lead-09');
     await stroke(20, 90);
     const s2 = await page.evaluate(() => GISA.pad.strokes());
     check(s2.length === 2 && s2[1].c === 'red' && s2[1].w > s2[0].w, '메모판: 빨간 굵은 펜');
