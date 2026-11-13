@@ -44,7 +44,7 @@
 - `glossary/*.js`: 용어마다 `G.term(id, 이름, { aliases, brief, easy, formulas, units, exam, pitfalls, example, related, concept })`. 글 속에서 이름·별칭이 보이면 자동으로 밑줄 링크가 걸리고(`app/wikiui.js`), 누르면 오른쪽(폰은 전체 화면)에 해설 창이 열린다. 해설 안의 용어도 링크라서 계속 타고 들어갈 수 있다.
 - 링크 규칙(`engine/glossary.js`): 한 카드 안에서 용어마다 첫 한 번만, 더 긴 낱말(예: 선간전압) 안의 짧은 용어(전압)는 걸지 않음, 보기·제목·공식·버튼에는 걸지 않음.
 - 새 용어를 넣으면 `node test/wiki-tests.js`가 형식, 관련 용어 연결, 별칭 충돌, 예제 계산(`example.expr`를 실제 계산기에 눌러서 `ans`와 비교)을 확인한다.
-- 머리글의 책 아이콘 = 전체 목록 + 검색.
+- 머리글의 돋보기 아이콘 = 용어 전체 목록 + 검색.
 
 ## 처음 화면 · 검색
 - 머리글의 🏠 버튼 = 처음 화면(배우기 첫 화면). 맨 위 검색창에 말을 치면 용어 해설 / 개념(레슨 읽기·단락 보기·문제 풀기) / 그 개념의 문제 유형 버튼이 나온다(`engine/search.js`, `node test/search-tests.js`).
