@@ -56,7 +56,6 @@ function checkQuestion(q, where) {
   ok(Array.isArray(e.traps) && e.traps.length >= 1 && e.traps.every(nonEmpty), where, '함정/기억할 점 없음');
   ok(!BAD_TEXT.test(allText(q)), where, '글에 undefined/NaN/Infinity: ' + (allText(q).match(BAD_TEXT) || [''])[0]);
   ok(!!G.conceptMap[q.conceptId], where, '모르는 개념 태그');
-  ok(q.subject !== 'code', where, '전기설비기술기준 문제가 들어 있음');
 }
 
 // ───────── 1. 템플릿 ─────────
@@ -118,7 +117,6 @@ G.concepts.forEach((c) => {
   const w = 'concept:' + c.id;
   ok(nonEmpty(c.name) && nonEmpty(c.card) && nonEmpty(c.analogy) && nonEmpty(c.formula), w, '필수 필드 비어 있음');
   ok(G.subjects.some((s) => s.id === c.subject), w, '모르는 과목');
-  ok(c.subject !== 'code', w, '전기설비기술기준 개념은 이번 단계에서 만들지 않음');
   c.prereqs.forEach((p) => ok(ids.has(p), w, '없는 선행 개념 ' + p));
   ok(G.templatesFor(c.id).length > 0, w, '계산 템플릿 없음');
   ok((perConcept[c.id] || 0) >= 3000, w, '생성 문제 수 3000 미만: ' + (perConcept[c.id] || 0));

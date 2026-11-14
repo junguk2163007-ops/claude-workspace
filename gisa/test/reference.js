@@ -368,3 +368,4 @@ module.exports = {
     return p.mode === 'v' ? v / 1e8 : v / (p.f * 1e6);
   },
 };
+Object.assign(module.exports, require('./reference-code'));

@@ -154,7 +154,8 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.click('.chip[data-subject="em"]');
     check((await page.$$('.lesson-row[data-unit]')).length === 9, '전기자기학 단락 9개');
     await page.click('.chip[data-subject="code"]');
-    check(await page.isVisible('.empty'), '기술기준은 준비 중 안내');
+    check((await page.$$('.lesson-row[data-unit]')).length === 10, '기술기준 단락 10개');
+    check(!(await page.isVisible('.empty')), '기술기준은 더 이상 준비 중이 아님');
     await page.click('.chip[data-subject="circuit"]');
     await page.click('.lesson-row[data-unit="ohm"]');
     check((await page.$$('.point-card')).length === 3, '옴의 법칙 포인트 카드 3개');
@@ -269,9 +270,11 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(await page.isVisible('.figure svg.circuit'), '직렬 회로도 표시');
     await page.screenshot({ path: path.join(SHOTS, '07-iphone-light-circuit.png'), fullPage: true });
 
-    // 과목 칩: 준비 중 과목
+    // 과목 칩: 기술기준
     await page.click('.chip:has-text("기술기준")');
-    check(await page.isVisible('.empty'), '기술기준 과목 안내(아직 없음)');
+    const cdSubj = await page.evaluate(() => GISA.conceptMap[GISA.ui._view.q.conceptId].subject);
+    check(cdSubj === 'code', '기술기준 칩 → 기술기준 문제 (' + cdSubj + ')');
+    check(!(await page.isVisible('.empty')), '기술기준 과목 문제가 나옴');
     await page.click('.chip:has-text("전기기기")');
     const mcSubj = await page.evaluate(() => GISA.conceptMap[GISA.ui._view.q.conceptId].subject);
     check(mcSubj === 'machine', '전기기기 칩 → 전기기기 문제 (' + mcSubj + ')');
