@@ -2525,6 +2525,32 @@ a.term:focus-visible {
   font-family: inherit;
 }
 
+/* ── 기출 CBT 반복 · 내 기출 보관함 ── */
+.kg-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.kg-filters select {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.kg-entry,
+.kg-hint {
+  margin-top: 10px;
+}
+.kg-bank {
+  display: grid;
+  gap: 10px;
+}
+.kg-bank p {
+  margin: 0;
+}
+
 </style>
 <header class="appbar" id="bar"></header>
 <main><div class="wrap" id="view"></div></main>
@@ -17127,6 +17153,236 @@ a.term:focus-visible {
   G.celebrate = { play, clear, active: () => !!layer };
 })(globalThis.GISA);
 
+/* ── app/kigeum.js ── */
+// 내 기출 보관함: 사용자가 가진 기출·CBT 문제 파일(JSON)을 이 브라우저에 가져와서 반복해 푼다.
+//  - 문제는 사이트 코드나 서버에 올라가지 않고, 가져온 사람의 브라우저(IndexedDB)에만 저장된다. (공유 링크로 새지 않음)
+//  - 문제 형식: { id, exam:'2019-08-04', s:1~4(과목), n:번호, q:'문제', c:['보기1',…4], a:정답(1~4), p:정답률(선택), f:출제 횟수(선택) }
+//  - 가져올 때 글 속의 용어(용어 사전)로 우리 개념에 자동으로 이어 붙인다(개념별 "기출 반복"에 쓰임).
+(function (G) {
+  'use strict';
+
+  const DB = 'gisa-kigeum';
+  const STORE = 'q';
+  const STAT_KEY = 'gisa-kigeum-stats';
+  const SUBJECTS = { 1: '전기자기학', 2: '전력공학', 3: '전기기기', 4: '회로이론 및 제어공학' };
+  const SUBJECT_KEY = { 1: 'em', 2: 'power', 3: 'machine', 4: 'circuit' };
+
+  let items = []; // 불러온 문제
+  let byId = {};
+  let stats = {};
+  let loaded = false;
+
+  try {
+    stats = JSON.parse(localStorage.getItem(STAT_KEY) || '{}') || {};
+  } catch (e) {
+    stats = {};
+  }
+  const saveStats = () => {
+    try {
+      localStorage.setItem(STAT_KEY, JSON.stringify(stats));
+    } catch (e) {
+      /* 못 저장해도 풀 수는 있음 */
+    }
+  };
+
+  // ───────── 저장소(IndexedDB) ─────────
+  function open() {
+    return new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') return reject(new Error('이 브라우저는 저장소를 쓸 수 없어'));
+      const rq = indexedDB.open(DB, 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore(STORE, { keyPath: 'id' });
+      rq.onsuccess = () => resolve(rq.result);
+      rq.onerror = () => reject(rq.error || new Error('저장소를 열지 못했어'));
+    });
+  }
+  const tx = (db, mode) => db.transaction(STORE, mode).objectStore(STORE);
+  const wrap = (rq) =>
+    new Promise((resolve, reject) => {
+      rq.onsuccess = () => resolve(rq.result);
+      rq.onerror = () => reject(rq.error);
+    });
+
+  function index() {
+    byId = {};
+    items.forEach((x) => (byId[x.id] = x));
+  }
+
+  // ───────── 개념 이어 붙이기 ─────────
+  // 문제·보기 글에서 용어 사전의 용어를 찾고, 그 용어가 속한 개념에 표를 준다. 과목 안의 개념만 인정한다.
+  function classify(x) {
+    const text = x.q + ' ' + x.c.join(' ');
+    const votes = {};
+    if (G.glossary) {
+      G.glossary.find(text).forEach((m) => {
+        const t = G.glossary.byId[m.id];
+        if (!t || !t.concept) return;
+        const c = G.concepts.find((k) => k.id === t.concept);
+        if (!c || c.subject === 'base') return;
+        if (SUBJECT_KEY[x.s] && c.subject !== SUBJECT_KEY[x.s]) return;
+        votes[c.id] = (votes[c.id] || 0) + 1;
+      });
+    }
+    return Object.keys(votes)
+      .sort((a, b) => votes[b] - votes[a])
+      .slice(0, 2);
+  }
+
+  function valid(x) {
+    return (
+      x &&
+      typeof x.id === 'string' &&
+      SUBJECTS[x.s] &&
+      typeof x.q === 'string' &&
+      x.q.length >= 4 &&
+      x.q.length < 2000 &&
+      Array.isArray(x.c) &&
+      x.c.length === 4 &&
+      x.c.every((c) => typeof c === 'string' && c.length > 0 && c.length < 600) &&
+      Number.isInteger(x.a) &&
+      x.a >= 1 &&
+      x.a <= 4 &&
+      !/⟦그림⟧/.test(x.q + x.c.join(''))
+    );
+  }
+
+  // ───────── 가져오기 / 지우기 ─────────
+  async function load() {
+    try {
+      const db = await open();
+      items = await wrap(tx(db, 'readonly').getAll());
+      db.close();
+    } catch (e) {
+      items = [];
+    }
+    index();
+    loaded = true;
+    return items.length;
+  }
+
+  async function importText(text) {
+    let arr;
+    try {
+      arr = JSON.parse(text);
+    } catch (e) {
+      throw new Error('JSON 파일이 아니야. 내가 만들어 준 기출 파일을 골라 줘.');
+    }
+    if (!Array.isArray(arr)) throw new Error('문제 목록이 아니야.');
+    const good = [];
+    let skipped = 0;
+    arr.forEach((x) => {
+      if (valid(x)) good.push({ id: x.id, exam: String(x.exam || ''), s: x.s, n: x.n | 0, q: x.q, c: x.c.slice(), a: x.a, p: Number.isFinite(x.p) ? x.p : null, f: Number.isInteger(x.f) && x.f > 1 ? x.f : 1, cids: classify(x) });
+      else skipped++;
+    });
+    if (!good.length) throw new Error('쓸 수 있는 문제가 하나도 없어(' + arr.length + '개 중). 파일을 확인해 줘.');
+    const db = await open();
+    await new Promise((resolve, reject) => {
+      const t = db.transaction(STORE, 'readwrite');
+      const st = t.objectStore(STORE);
+      good.forEach((g) => st.put(g));
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
+    db.close();
+    await load();
+    return { added: good.length, skipped };
+  }
+
+  async function clear() {
+    const db = await open();
+    await wrap(tx(db, 'readwrite').clear());
+    db.close();
+    items = [];
+    index();
+    stats = {};
+    saveStats();
+  }
+
+  // 용어 사전이 늘었을 때 개념 연결을 다시 계산
+  async function reclassify() {
+    items.forEach((x) => (x.cids = classify(x)));
+    const db = await open();
+    await new Promise((resolve, reject) => {
+      const t = db.transaction(STORE, 'readwrite');
+      const st = t.objectStore(STORE);
+      items.forEach((x) => st.put(x));
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
+    db.close();
+  }
+
+  // ───────── 문제 고르기 ─────────
+  const year = (x) => Number(String(x.exam).slice(0, 4)) || 0;
+  // filter: { s: 과목(1~4, 0/없음=전체), cid: 개념, from: 이 연도 이후 }
+  function pool(f) {
+    const o = f || {};
+    return items.filter((x) => (!o.s || x.s === o.s) && (!o.cid || x.cids.indexOf(o.cid) >= 0) && (!o.from || year(x) >= o.from));
+  }
+  // 안 푼 문제 → 틀린 문제 → 맞힌 문제 순으로 우선, 같은 묶음 안에서는 무작위
+  function pick(f, rnd, avoidId) {
+    const list = pool(f).filter((x) => x.id !== avoidId);
+    if (!list.length) return null;
+    const r = rnd || Math.random;
+    const rank = (x) => {
+      const st = stats[x.id];
+      if (!st || !st.n) return 0;
+      return st.last ? 2 : 1;
+    };
+    const best = Math.min.apply(null, list.map(rank));
+    const top = list.filter((x) => rank(x) === best);
+    return top[Math.floor(r() * top.length)];
+  }
+
+  function record(id, ok) {
+    const st = stats[id] || { n: 0, c: 0, last: false };
+    st.n++;
+    if (ok) st.c++;
+    st.last = !!ok;
+    stats[id] = st;
+    saveStats();
+  }
+  function summary(f) {
+    const list = pool(f);
+    let tried = 0;
+    let right = 0;
+    list.forEach((x) => {
+      const st = stats[x.id];
+      if (st && st.n) {
+        tried++;
+        if (st.last) right++;
+      }
+    });
+    return { total: list.length, tried, right };
+  }
+
+  G.kigeum = {
+    SUBJECTS,
+    load,
+    importText,
+    clear,
+    reclassify,
+    pool,
+    pick,
+    record,
+    summary,
+    get: (id) => byId[id] || null,
+    count: () => items.length,
+    isLoaded: () => loaded,
+    conceptCount: (cid) => pool({ cid }).length,
+    stat: (id) => stats[id] || null,
+    years: () => {
+      const ys = items.map(year).filter(Boolean);
+      return ys.length ? { min: Math.min.apply(null, ys), max: Math.max.apply(null, ys) } : null;
+    },
+    _classify: classify,
+    _setItems: (arr) => {
+      items = arr;
+      index();
+      loaded = true;
+    },
+  };
+})(globalThis.GISA);
+
 /* ── app/ui.js ── */
 // 화면. 상태가 바뀌면 현재 탭을 통째로 다시 그린다(작은 앱이라 이게 제일 단순하고 안전함).
 (function (G) {
@@ -17164,6 +17420,7 @@ a.term:focus-visible {
     exampleKey: null,
     quiz: null,
     drill: null, // { cid, pid|null } 포인트 반복 중
+    kg: null, // 기출 반복 중: { filter, q, answered, chosen }
     unitSubject: 'circuit',
     unitCid: null,
     exSeeds: {},
@@ -17762,8 +18019,178 @@ a.term:focus-visible {
     );
   }
 
+  // ───────── 기출 CBT 반복 (내 기출 보관함) ─────────
+  const KG = () => G.kigeum;
+  function startKigeum(filter) {
+    view.mode = 'kigeum';
+    view.kg = { filter: Object.assign({ s: 0, cid: null, from: 0 }, filter || {}), q: null, answered: false, chosen: -1 };
+    kigeumNext();
+    goTab('practice');
+  }
+  function exitKigeum() {
+    view.mode = 'normal';
+    view.kg = null;
+    nextQuestion();
+    render();
+    window.scrollTo(0, 0);
+  }
+  function kigeumNext() {
+    const k = view.kg;
+    k.q = KG().pick(k.filter, null, k.q && k.q.id);
+    k.answered = false;
+    k.chosen = -1;
+  }
+  function kigeumAnswer(i) {
+    const k = view.kg;
+    if (!k || !k.q || k.answered) return;
+    k.answered = true;
+    k.chosen = i;
+    KG().record(k.q.id, i + 1 === k.q.a);
+    render();
+    const v = document.querySelector('.verdict');
+    if (v && v.scrollIntoView) v.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  function kgFilterLabel(f) {
+    const parts = [];
+    if (f.cid) parts.push(concept(f.cid).name);
+    if (f.s) parts.push(KG().SUBJECTS[f.s]);
+    if (f.from) parts.push(f.from + '년 이후');
+    return parts.length ? parts.join(' · ') : '전체 기출';
+  }
+
+  function renderKigeum(root) {
+    const k = view.kg;
+    const f = k.filter;
+    const sum = KG().summary(f);
+    const subjSel = h(
+      'select',
+      { id: 'kg-subject', 'aria-label': '기출 과목', onchange: (e) => { f.s = Number(e.target.value); f.cid = null; kigeumNext(); render(); } },
+      h('option', { value: '0' }, '전체 과목'),
+      Object.keys(KG().SUBJECTS).map((n) => h('option', { value: n }, KG().SUBJECTS[n]))
+    );
+    subjSel.value = String(f.s);
+    const yr = KG().years();
+    const yearSel = h(
+      'select',
+      { id: 'kg-year', 'aria-label': '기출 연도', onchange: (e) => { f.from = Number(e.target.value); kigeumNext(); render(); } },
+      h('option', { value: '0' }, '모든 연도'),
+      [2010, 2015, 2018, 2020].filter((y) => yr && yr.max >= y).map((y) => h('option', { value: String(y) }, y + '년 이후'))
+    );
+    yearSel.value = String(f.from);
+    root.appendChild(
+      h(
+        'div',
+        { class: 'panel' },
+        h('h2', null, '기출 CBT 반복'),
+        h('p', { class: 'muted small' }, kgFilterLabel(f) + ' · 풀 수 있는 문제 ' + sum.total + '개 · 푼 문제 ' + sum.tried + '개 중 마지막에 맞힌 것 ' + sum.right + '개. 안 푼 문제 → 틀린 문제 순으로 먼저 나와.'),
+        h('div', { class: 'field kg-filters' }, subjSel, yearSel),
+        f.cid ? h('div', { class: 'chips' }, h('button', { class: 'chip', id: 'kg-clear-cid', onclick: () => { f.cid = null; kigeumNext(); render(); } }, concept(f.cid).name + ' ✕')) : null,
+        h('div', { class: 'actions' }, h('button', { class: 'btn', id: 'kg-exit', onclick: exitKigeum }, '← 연습으로 돌아가기'))
+      )
+    );
+    const q = k.q;
+    if (!q) {
+      root.appendChild(h('div', { class: 'empty', id: 'kg-empty' }, '이 조건에 맞는 기출 문제가 없어. 과목이나 연도를 바꿔 봐.'));
+      return;
+    }
+    const ok = k.answered && k.chosen + 1 === q.a;
+    const st = KG().stat(q.id);
+    root.appendChild(
+      h(
+        'article',
+        { class: 'qcard kg-card', 'aria-live': 'polite', 'data-kg': q.id },
+        h(
+          'div',
+          { class: 'qmeta' },
+          h('span', { class: 'tag' }, KG().SUBJECTS[q.s]),
+          h('span', { class: 'tag plain' }, '기출 ' + q.exam + ' · ' + q.n + '번'),
+          q.p !== null ? h('span', { class: 'tag plain' }, '정답률 ' + q.p + '%') : null,
+          q.f > 1 ? h('span', { class: 'tag plain' }, q.f + '회 출제') : null,
+          st && !k.answered ? h('span', { class: 'tag review' }, st.last ? '전에 맞힘' : '전에 틀림') : null
+        ),
+        h('p', { class: 'qtext' }, q.q),
+        h(
+          'ol',
+          { class: 'choices' },
+          q.c.map((label, i) => {
+            let cls = 'choice';
+            if (k.answered) cls += i + 1 === q.a ? ' is-correct' : i === k.chosen ? ' is-wrong' : ' is-dim';
+            return h('li', null, h('button', { class: cls, disabled: k.answered, onclick: () => kigeumAnswer(i), 'data-i': i }, h('span', { class: 'no' }, NUMS[i]), h('span', { class: 'lab' }, label)));
+          })
+        ),
+        k.answered
+          ? h(
+              'div',
+              null,
+              h('div', { class: 'verdict ' + (ok ? 'ok' : 'bad'), role: 'status' }, ok ? '정답!' : '아쉽다, 오답이야', h('small', null, '정답은 ' + NUMS[q.a - 1] + '번 · ' + q.c[q.a - 1])),
+              h('p', { class: 'note' }, '기출 원문에는 공식 해설이 없어서 정답만 보여 줘. 모르는 용어는 눌러서 해설을 보고, 헷갈리면 AI에게 물어봐.'),
+              q.cids.length
+                ? h(
+                    'div',
+                    { class: 'actions' },
+                    q.cids.map((cid) => h('button', { class: 'btn small soft', 'data-unit': cid, onclick: () => { view.mode = 'normal'; view.kg = null; openUnit(cid); } }, '이 개념 공부: ' + concept(cid).name))
+                  )
+                : null,
+              h('div', { class: 'actions' }, h('button', { class: 'btn primary', id: 'kg-next', onclick: () => { kigeumNext(); render(); window.scrollTo(0, 0); } }, '다음 기출'))
+            )
+          : null
+      )
+    );
+  }
+
+  // 연습 화면 맨 위의 기출 입구
+  function kigeumEntry() {
+    if (!KG()) return null;
+    const n = KG().count();
+    if (!n) {
+      return h('p', { class: 'muted small kg-hint', id: 'kg-hint' }, '내가 가진 기출·CBT 문제 파일이 있으면 ', h('button', { class: 'btn small', onclick: () => goTab('settings') }, '설정 → 내 기출 보관함'), '에서 가져와서 여기서 반복해 풀 수 있어.');
+    }
+    return h('div', { class: 'actions kg-entry' }, h('button', { class: 'btn', id: 'kg-open', onclick: () => startKigeum({}) }, '기출 CBT 풀기 (' + n + '문제)'));
+  }
+
+  // 설정: 내 기출 보관함
+  function kigeumSettings() {
+    const n = KG().count();
+    const yr = KG().years();
+    const m = view.kgMsg;
+    const file = h('input', {
+      type: 'file',
+      id: 'kg-file',
+      accept: 'application/json,.json',
+      onchange: async (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        try {
+          const text = await f.text();
+          const r = await KG().importText(text);
+          view.kgMsg = { ok: true, text: r.added + '문제를 보관함에 넣었어' + (r.skipped ? ' (쓸 수 없는 ' + r.skipped + '개는 건너뜀)' : '') + '.' };
+        } catch (err) {
+          view.kgMsg = { ok: false, text: err.message || String(err) };
+        }
+        render();
+      },
+    });
+    return h(
+      'div',
+      { class: 'panel kg-bank' },
+      h('p', { class: 'muted small' }, '기출·CBT 문제 파일(JSON)을 가져오면 이 브라우저에만 저장돼. 사이트나 서버에는 올라가지 않고, 공유 링크로도 새지 않아. 다른 기기에서 쓰려면 거기서도 가져와야 해.'),
+      h('p', null, n ? h('strong', null, '보관함 ' + n + '문제' + (yr ? ' · ' + yr.min + '~' + yr.max + '년' : '')) : '보관함이 비어 있어.'),
+      h('div', { class: 'field' }, h('label', { for: 'kg-file' }, '기출 문제 파일 가져오기'), file),
+      m && m.text ? h('p', { class: 'msg ' + (m.ok ? 'ok' : 'err'), id: 'kg-msg', role: 'status' }, m.text) : null,
+      n
+        ? h(
+            'div',
+            { class: 'actions' },
+            h('button', { class: 'btn', id: 'kg-reclass', onclick: async () => { await KG().reclassify(); view.kgMsg = { ok: true, text: '개념 연결을 다시 계산했어.' }; render(); } }, '개념 연결 다시 계산'),
+            h('button', { class: 'btn', id: 'kg-clear', onclick: async () => { await KG().clear(); view.kgMsg = { ok: true, text: '보관함을 비웠어.' }; render(); } }, '보관함 비우기')
+          )
+        : null
+    );
+  }
+
   function renderPractice(root) {
-    root.appendChild(h('div', { class: 'panel' }, subjectChips(), lockBar(), subjectReady() && view.mode !== 'review' && view.mode !== 'drill' ? conceptPicker() : null));
+    if (view.mode === 'kigeum' && view.kg) return renderKigeum(root);
+    root.appendChild(h('div', { class: 'panel' }, subjectChips(), lockBar(), subjectReady() && view.mode !== 'review' && view.mode !== 'drill' ? conceptPicker() : null, view.mode === 'normal' ? kigeumEntry() : null));
     const b = modeBanner();
     if (b) root.appendChild(b);
     root.appendChild(questionCard());
@@ -18092,6 +18519,16 @@ a.term:focus-visible {
     goTab('practice');
   }
 
+  // "이 포인트 문제만 반복" 옆: 이 개념에 이어진 기출 문제 반복(기출은 개념 단위로 이어 붙임)
+  function kigeumPointButton(cid) {
+    if (!KG()) return null;
+    const total = KG().count();
+    if (!total) return h('button', { class: 'btn', id: 'kg-point-' + cid, 'data-kg-point': cid, onclick: () => goTab('settings') }, '기출 CBT 반복 (가져오기 필요)');
+    const n = KG().conceptCount(cid);
+    if (!n) return h('button', { class: 'btn', disabled: true, 'data-kg-point': cid }, '기출 CBT 반복 (이어진 기출 없음)');
+    return h('button', { class: 'btn', 'data-kg-point': cid, onclick: () => startKigeum({ cid }) }, '기출 CBT 반복 (' + n + '문제)');
+  }
+
   function pointStatus(pid) {
     const st = P.pointStat(S, pid);
     if (P.pointMastered(S, pid)) return { cls: 'open', text: '익숙해짐 ✓' };
@@ -18249,6 +18686,7 @@ a.term:focus-visible {
             'div',
             { class: 'point-foot' },
             h('button', { class: 'btn primary', 'data-drill': pid, onclick: () => startDrill(c.id, pid) }, '이 포인트 문제만 반복'),
+            kigeumPointButton(c.id),
             h('span', { class: 'muted small' }, ps.n ? ps.n + '문제 풀이 · 정답 ' + ps.c + '개' : '아직 안 풀었어')
           )
         );
@@ -18454,6 +18892,10 @@ a.term:focus-visible {
     renderSyncSettings(root, sw);
 
     const keyInput = h('input', { type: 'text', id: 'key-input', placeholder: '예: t:ohm-current#12345', autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false' });
+    if (KG()) {
+      root.appendChild(h('h3', { class: 'group-title eyebrow' }, '내 기출 보관함'));
+      root.appendChild(kigeumSettings());
+    }
     root.appendChild(h('h3', { class: 'group-title eyebrow' }, '문제 번호로 다시 풀기'));
     root.appendChild(
       h(
@@ -18615,6 +19057,7 @@ a.term:focus-visible {
   }
 
   function aiContext() {
+    if (view.tab === 'practice' && view.mode === 'kigeum') return { kind: 'general', label: '기출 CBT 반복', stats: statsSummary() };
     if (view.tab === 'practice' && view.q) {
       return { kind: 'question', q: view.q, answered: view.answered, chosen: view.chosen, label: '문제 · ' + concept(view.q.conceptId).name };
     }
@@ -18651,6 +19094,20 @@ a.term:focus-visible {
 
   // 맥 키보드: 1~4 고르기, Enter/N 다음 문제
   document.addEventListener('keydown', (e) => {
+    if (view.tab === 'practice' && view.mode === 'kigeum' && view.kg && view.kg.q && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const tg = (e.target && e.target.tagName) || '';
+      if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT' || (e.target && e.target.closest && e.target.closest('#calc'))) return;
+      if (!view.kg.answered && /^[1-4]$/.test(e.key)) {
+        kigeumAnswer(Number(e.key) - 1);
+        e.preventDefault();
+      } else if (view.kg.answered && (e.key === 'Enter' || e.key === 'n' || e.key === 'N')) {
+        kigeumNext();
+        render();
+        window.scrollTo(0, 0);
+        e.preventDefault();
+      }
+      return;
+    }
     if (view.tab !== 'practice' || !view.q || e.metaKey || e.ctrlKey || e.altKey) return;
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -18667,6 +19124,7 @@ a.term:focus-visible {
   });
 
   function start() {
+    if (G.kigeum) G.kigeum.load().then(() => render());
     if (!S.settings.theme) S.settings.theme = 'system';
     if (S.total.n === 0 && !Object.keys(S.lessons || {}).length) view.tab = 'learn';
     applyTheme();
@@ -18702,7 +19160,7 @@ a.term:focus-visible {
     view.tab = 'practice';
     render();
   }
-  G.ui = { openLesson, openUnit, start, _view: view, _state: () => S, _load, _answer: answer, _openLesson: openLesson, _openUnit: openUnit, _startDrill: startDrill };
+  G.ui = { startKigeum, openLesson, openUnit, start, _view: view, _state: () => S, _load, _answer: answer, _openLesson: openLesson, _openUnit: openUnit, _startDrill: startDrill };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })(globalThis.GISA);

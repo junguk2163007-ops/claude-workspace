@@ -2520,3 +2520,29 @@ a.term:focus-visible {
 .wiki-formula code {
   font-family: inherit;
 }
+
+/* ── 기출 CBT 반복 · 내 기출 보관함 ── */
+.kg-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.kg-filters select {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.kg-entry,
+.kg-hint {
+  margin-top: 10px;
+}
+.kg-bank {
+  display: grid;
+  gap: 10px;
+}
+.kg-bank p {
+  margin: 0;
+}

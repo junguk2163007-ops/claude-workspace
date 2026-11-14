@@ -995,6 +995,84 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     }
   }
 
+  // ── 2-11. 내 기출 보관함 / 기출 CBT 반복 ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });
+    // 시험용 가짜 문제(실제 기출이 아님)
+    const fake = [
+      { id: 't-1', exam: '2019-08-04', s: 4, n: 61, q: '시험용 문제: 역률이 0.8일 때 무효율 sinθ는?', c: ['0.4', '0.6', '0.8', '1.0'], a: 2, p: 70, f: 2 },
+      { id: 't-2', exam: '2020-06-06', s: 4, n: 62, q: '시험용 문제: 직렬 공진 회로에서 임피던스가 최소가 되는 조건은?', c: ['XL = XC', 'XL > XC', 'XL < XC', 'R = 0'], a: 1, p: 55 },
+      { id: 't-3', exam: '2012-03-04', s: 3, n: 41, q: '시험용 문제: 유도전동기의 슬립이 0.03이고 2차 입력이 20 kW일 때 기계적 출력은?', c: ['19.4 kW', '20 kW', '0.6 kW', '21 kW'], a: 1, p: 60 },
+      { id: 't-4', exam: '2021-03-07', s: 1, n: 5, q: '시험용 문제: 쿨롱의 법칙에서 거리가 2배가 되면 힘은?', c: ['2배', '1/2배', '4배', '1/4배'], a: 4, p: 80 },
+      { id: 't-5', exam: '2018-04-28', s: 2, n: 25, q: '시험용 문제: 송전 전압을 2배로 올리면 전력손실은?', c: ['1/2', '1/4', '2배', '4배'], a: 2, p: 65 },
+      { id: 'bad', s: 9, q: 'x', c: [], a: 7 },
+    ];
+    // 보관함이 비었을 때 안내
+    await page.click('#tab-practice');
+    check(await page.isVisible('#kg-hint'), '기출: 보관함이 비어 있으면 연습 화면에 가져오기 안내');
+    await page.evaluate(() => GISA.ui._openUnit('ac-power'));
+    check(await page.isVisible('[data-kg-point="ac-power"]') && (await page.textContent('[data-kg-point="ac-power"]')).includes('가져오기 필요'), '기출: 포인트 카드 옆 "기출 CBT 반복" 버튼(가져오기 필요 표시)');
+    // 설정에서 가져오기
+    await page.click('#tab-settings');
+    check(await page.isVisible('#kg-file'), '기출: 설정에 내 기출 보관함');
+    await page.setInputFiles('#kg-file', { name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('이건 JSON이 아니야') });
+    await page.waitForSelector('#kg-msg');
+    check((await page.textContent('#kg-msg')).includes('JSON'), '기출: 잘못된 파일은 안내');
+    await page.setInputFiles('#kg-file', { name: 'bank.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fake)) });
+    await page.waitForFunction(() => document.getElementById('kg-msg') && /5문제/.test(document.getElementById('kg-msg').textContent));
+    check((await page.textContent('#kg-msg')).includes('쓸 수 없는 1개'), '기출: 5문제 가져오고 이상한 1개는 건너뜀');
+    check((await page.evaluate(() => GISA.kigeum.count())) === 5, '기출: 보관함 5문제');
+    // 개념 연결
+    const cids = await page.evaluate(() => GISA.kigeum.get('t-1').cids);
+    check(cids.includes('ac-power'), '기출: 글 속 용어로 개념에 이어 붙임 (' + cids.join(',') + ')');
+    // 연습 화면 입구
+    await page.click('#tab-practice');
+    check((await page.textContent('#kg-open')).includes('5문제'), '기출: 연습 화면에 "기출 CBT 풀기 (5문제)"');
+    await page.click('#kg-open');
+    check((await page.$$('.kg-card')).length === 1 && (await page.isVisible('.kg-card .choices')), '기출: 기출 문제 카드');
+    check((await page.textContent('.kg-card .qmeta')).includes('기출 '), '기출: 회차·번호 표시');
+    // 과목 필터
+    await page.selectOption('#kg-subject', '4');
+    const ids4 = new Set();
+    for (let i = 0; i < 8; i++) {
+      ids4.add(await page.getAttribute('.kg-card', 'data-kg'));
+      await page.click('.kg-card .choice[data-i="0"]');
+      await page.click('#kg-next');
+    }
+    check([...ids4].every((x) => x === 't-1' || x === 't-2') && ids4.size === 2, '기출: 과목 필터(회로·제어)에 맞는 문제만: ' + [...ids4].join(','));
+    // 정답/오답 표시
+    await page.selectOption('#kg-subject', '1');
+    const id = await page.getAttribute('.kg-card', 'data-kg');
+    check(id === 't-4', '기출: 전기자기학 필터');
+    await page.click('.kg-card .choice[data-i="0"]');
+    check((await page.isVisible('.verdict.bad')) && (await page.$$('.kg-card .choice.is-correct')).length === 1 && (await page.$$('.kg-card .choice.is-wrong')).length === 1, '기출: 오답 표시와 정답 표시');
+    check((await page.textContent('.verdict')).includes('4번'), '기출: 정답 번호 안내');
+    check(await page.isVisible('.kg-card [data-unit]'), '기출: 이어진 개념 공부 버튼');
+    // 맞힌 뒤: 키보드
+    await page.keyboard.press('n');
+    await page.selectOption('#kg-subject', '0');
+    // 포인트 카드 옆 버튼
+    await page.click('#kg-exit');
+    await page.evaluate(() => GISA.ui._openUnit('ac-power'));
+    const label = await page.textContent('[data-kg-point="ac-power"]');
+    check(/기출 CBT 반복 \(\d+문제\)/.test(label), '기출: 포인트 카드 옆 버튼에 이어진 문제 수: ' + label);
+    await page.click('[data-kg-point="ac-power"]');
+    check((await page.evaluate(() => GISA.ui._view.mode)) === 'kigeum' && (await page.getAttribute('.kg-card', 'data-kg')) === 't-1', '기출: 개념 기출 반복은 그 개념에 이어진 문제');
+    check(await noOverflow(page), '기출: 가로 넘침 없음');
+    await page.screenshot({ path: path.join(SHOTS, '25-kigeum.png') });
+    // 새로고침해도 남음
+    await page.reload();
+    await page.waitForFunction(() => GISA.kigeum.count() === 5);
+    check(true, '기출: 새로고침해도 보관함 유지');
+    // 비우기
+    await page.click('#tab-settings');
+    await page.click('#kg-clear');
+    await page.waitForFunction(() => GISA.kigeum.count() === 0);
+    check((await page.evaluate(() => GISA.kigeum.count())) === 0, '기출: 보관함 비우기');
+    check(errors.length === 0, '기출 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });

@@ -52,6 +52,6 @@ module.exports = {
     'calc-guides/power-machine.js',
   ],
   logic: ['app/progress.js'],
-  app: ['app/storage.js', 'app/sync.js', 'app/ai.js', 'app/calcui.js', 'app/pad.js', 'app/calcdemo.js', 'app/mathui.js', 'app/wikiui.js', 'app/celebrate.js', 'app/ui.js'],
+  app: ['app/storage.js', 'app/sync.js', 'app/ai.js', 'app/calcui.js', 'app/pad.js', 'app/calcdemo.js', 'app/mathui.js', 'app/wikiui.js', 'app/celebrate.js', 'app/kigeum.js', 'app/ui.js'],
   style: 'app/style.css',
 };
