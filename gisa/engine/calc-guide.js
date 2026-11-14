@@ -18,6 +18,7 @@
     atan: { keys: ['SHIFT', 'tan'], close: ')' },
     log: { keys: ['log'], close: ')' },
     ln: { keys: ['ln'], close: ')' },
+    exp: { keys: ['SHIFT', 'ln'], close: 'RIGHT' },
   };
 
   // 숫자 → 키. 아주 작거나 0이 많이 붙은 큰 수는 시험에서처럼 ×10ˣ 키로 입력한다.

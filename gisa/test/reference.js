@@ -12,6 +12,37 @@ const fact = (k) => {
   return x;
 };
 
+
+// 다항식의 근(Durand-Kerner). coefs = [최고차 계수, …, 상수항], 돌려주는 값은 [[실수부, 허수부], …]
+function roots(c) {
+  const n = c.length - 1;
+  const lead = c[0];
+  const co = c.map((x) => x / lead);
+  let z = [];
+  for (let i = 0; i < n; i++) z.push([Math.cos((2 * PI * i) / n + 0.4) * 1.3, Math.sin((2 * PI * i) / n + 0.4) * 1.3]);
+  const mul = (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+  const div = (a, b) => {
+    const d = b[0] * b[0] + b[1] * b[1];
+    return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d];
+  };
+  const evalP = (x) => {
+    let r = [1, 0];
+    for (let i = 1; i <= n; i++) r = [mul(r, x)[0] + co[i], mul(r, x)[1]];
+    return r;
+  };
+  for (let it = 0; it < 500; it++) {
+    const next = z.map((zi, i) => {
+      let den = [1, 0];
+      for (let j = 0; j < n; j++) if (j !== i) den = mul(den, sub(zi, z[j]));
+      return sub(zi, div(evalP(zi), den));
+    });
+    z = next;
+  }
+  return z;
+}
+const countRHP = (c) => roots(c).filter((r) => r[0] > 1e-7).length;
+
 module.exports = {
   'ohm-current': (p) => p.V / p.R,
   'ohm-voltage': (p) => p.I * p.R,
@@ -216,5 +247,124 @@ module.exports = {
       sum += v;
     }
     return sum / N;
+  },
+
+  // ───────── 기출 빈출 보강 1차 (독립 검산기) ─────────
+  'pw-breaker-current': (p) => p.Ps / (SQ3 * p.V),
+  'pw-breaker-capacity': (p) => SQ3 * p.V * p.I,
+  // 소호리액터: 병렬공진 조건 ωL = 1/(3ωC) 에서 L
+  'pw-petersen': (p) => {
+    const w = 2 * PI * p.f;
+    const Xc3 = 1 / (w * 3 * p.C * 1e-6); // 세 선 정전용량 합의 리액턴스
+    return Xc3 / w;
+  },
+  // 1선 지락(a상): 건전상 b, c의 대지전압은 a상과의 전위차(선간전압), 각 충전전류 I = jωC·v 를 벡터로 더한다
+  'pw-ground-current': (p) => {
+    const wC = 2 * PI * p.f * p.C * 1e-6;
+    const E = (p.V * 1000) / SQ3;
+    const ph = (ang) => [E * Math.cos(ang), E * Math.sin(ang)];
+    const Va = ph(0);
+    const Vb = ph((-2 * PI) / 3);
+    const Vc = ph((2 * PI) / 3);
+    const vb = [Vb[0] - Va[0], Vb[1] - Va[1]];
+    const vc = [Vc[0] - Va[0], Vc[1] - Va[1]];
+    const I = [-wC * (vb[1] + vc[1]), wC * (vb[0] + vc[0])];
+    return Math.hypot(I[0], I[1]);
+  },
+  // 송전 전력: 페이저로 I = (Es − Er)/(jX), P = 3·Re(Er·conj(I))
+  'pw-power-transfer': (p) => {
+    const d = (p.d * PI) / 180;
+    const Esr = (p.Vs / SQ3) * Math.cos(d);
+    const Esi = (p.Vs / SQ3) * Math.sin(d);
+    const Er = p.Vr / SQ3;
+    const a = Esr - Er;
+    const b = Esi;
+    const Ir = b / p.X;
+    return 3 * Er * Ir; // Er는 실수라서 Re(Er·conj(I)) = Er·Re(I)
+  },
+  'pw-charging': (p) => {
+    const w = 2 * PI * p.f;
+    const E = (p.V * 1000) / SQ3;
+    const Ic = w * p.C * 1e-6 * E;
+    return p.mode === 'Ic' ? Ic : (3 * E * Ic) / 1000; // kvar
+  },
+  // 루스 판별: 근을 직접 구해(Durand-Kerner) 실수부가 양수인 근을 센다
+  'cs-routh-count': (p) => countRHP([1, p.a, p.b, p.c, p.d]),
+  // 안정 한계 K: K를 키워 가며 가장 오른쪽 근의 실수부가 0이 되는 지점을 이분법으로 찾는다
+  'cs-kmax': (p) => {
+    const maxRe = (K) => Math.max(...roots([1, p.a + p.b, p.a * p.b, K]).map((z) => z[0]));
+    let lo = 0;
+    let hi = 10 * p.a * p.b * (p.a + p.b) + 10;
+    for (let i = 0; i < 200; i++) {
+      const mid = (lo + hi) / 2;
+      if (maxRe(mid) < 0) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
+  },
+  // 최대 오버슈트: 계단응답 y(t)를 직접 계산해 최댓값을 찾는다 (ωn = 1로 정규화)
+  'cs-overshoot': (p) => {
+    const z = p.useTf ? p.a / (2 * Math.sqrt(p.K)) : p.z;
+    const wd = Math.sqrt(1 - z * z);
+    const phi = Math.acos(z);
+    const y = (t) => 1 - (Math.exp(-z * t) / wd) * Math.sin(wd * t + phi);
+    let best = 0;
+    const T = (8 * PI) / wd;
+    const N = 4000;
+    for (let i = 1; i <= N; i++) best = Math.max(best, y((T * i) / N));
+    // 극값 주변 정밀화(황금분할)
+    let tPk = PI / wd;
+    let a = tPk - 0.01;
+    let b = tPk + 0.01;
+    for (let i = 0; i < 100; i++) {
+      const c1 = b - (b - a) / 1.618033988749895;
+      const c2 = a + (b - a) / 1.618033988749895;
+      if (y(c1) > y(c2)) b = c2;
+      else a = c1;
+    }
+    best = Math.max(best, y((a + b) / 2));
+    return (best - 1) * 100;
+  },
+  // 감쇠비: 극점 위치에서 ζ = −Re(p)/|p|
+  'cs-damping': (p) => {
+    const D = p.a * p.a - 4 * p.K;
+    const re = -p.a / 2;
+    const im = D < 0 ? Math.sqrt(-D) / 2 : 0;
+    return -re / Math.hypot(re, im);
+  },
+  // 위상제어 평균 출력: 전원 파형을 직접 적분
+  'mc-thyristor': (p) => {
+    const al = (p.alpha * PI) / 180;
+    const vm = Math.SQRT2 * p.E;
+    const integ = (f, a, b) => {
+      const N = 20000;
+      const h = (b - a) / N;
+      let s = f(a) + f(b);
+      for (let i = 1; i < N; i++) s += f(a + i * h) * (i % 2 ? 4 : 2);
+      return (s * h) / 3;
+    };
+    const sin = (t) => vm * Math.sin(t);
+    if (p.type === 'half-R') return integ(sin, al, PI) / (2 * PI);
+    if (p.type === 'full-R') return integ(sin, al, PI) / PI;
+    return integ(sin, al, PI + al) / PI; // 전류가 끊어지지 않는 유도성 부하
+  },
+  // 단권변압기: 직렬 권선의 전압 × 직렬 권선의 전류 (= 자기용량)
+  'mc-autotr': (p) => {
+    const Vh = Math.max(p.V1, p.V2);
+    const Vl = Math.min(p.V1, p.V2);
+    const Ih = p.S / Vh; // 높은 쪽 선로 전류 = 직렬 권선 전류
+    return (Vh - Vl) * Ih;
+  },
+  // 병렬운전: 두 대의 전압강하(pu)가 같다는 조건과 부하 합 조건을 연립
+  'mc-tr-parallel': (p) => {
+    // P1·z1/S1 = P2·z2/S2,  P1 + P2 = P
+    const k1 = p.z1 / p.S1;
+    const k2 = p.z2 / p.S2;
+    return (p.P * k2) / (k1 + k2);
+  },
+  'em-wave-impedance': (p) => 120 * PI * Math.sqrt(p.ur / p.er),
+  'em-wave-speed': (p) => {
+    const v = 3e8 / Math.sqrt(p.er * p.ur);
+    return p.mode === 'v' ? v / 1e8 : v / (p.f * 1e6);
   },
 };

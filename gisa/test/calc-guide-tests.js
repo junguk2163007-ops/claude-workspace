@@ -23,6 +23,7 @@ let totalKeys = 0;
 G.templateList.forEach((t) => {
   const probe = G.generate(t.id, 1);
   if (probe.answerValue === null || probe.answerValue === undefined) return; // 식으로 답하는 문제는 계산기 대상이 아님
+  if (t.noCalc) return; // 개수 세기처럼 계산기로 풀 게 아닌 문제(루스 표 등)는 가이드 없음
   if (!G.calcGuides[t.id]) {
     missing.push(t.id);
     return;

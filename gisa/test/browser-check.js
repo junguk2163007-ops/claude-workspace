@@ -152,7 +152,7 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(await noOverflow(page), '과목별 목록 가로 넘침');
     await page.screenshot({ path: path.join(SHOTS, '05c-iphone-units-list.png'), fullPage: true });
     await page.click('.chip[data-subject="em"]');
-    check((await page.$$('.lesson-row[data-unit]')).length === 8, '전기자기학 단락 8개');
+    check((await page.$$('.lesson-row[data-unit]')).length === 9, '전기자기학 단락 9개');
     await page.click('.chip[data-subject="code"]');
     check(await page.isVisible('.empty'), '기술기준은 준비 중 안내');
     await page.click('.chip[data-subject="circuit"]');
