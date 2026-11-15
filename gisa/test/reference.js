@@ -369,3 +369,4 @@ module.exports = {
   },
 };
 Object.assign(module.exports, require('./reference-code'));
+Object.assign(module.exports, require('./reference-kg'));

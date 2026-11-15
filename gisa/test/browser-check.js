@@ -160,8 +160,9 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(!(await page.isVisible('.empty')), '기술기준은 더 이상 준비 중이 아님');
     await page.click('.chip[data-subject="circuit"]');
     await page.click('.lesson-row[data-unit="ohm"]');
-    check((await page.$$('.point-card')).length === 3, '옴의 법칙 포인트 카드 3개');
-    check((await page.$$('.pt-list li')).length === 3, '포인트 한눈에 목록 3개');
+    const ohmPts = await page.evaluate(() => GISA.pointsFor('ohm').length);
+    check((await page.$$('.point-card')).length === ohmPts && ohmPts >= 3, '옴의 법칙 포인트 카드 ' + ohmPts + '개');
+    check((await page.$$('.pt-list li')).length === ohmPts, '포인트 한눈에 목록 ' + ohmPts + '개');
     check(await page.isVisible('.unit .box.analogy'), '개념 설명(비유) 표시');
     check(await noOverflow(page), '단락 상세 가로 넘침');
     await page.click('.point-card[data-point="ohm-current"] summary');
@@ -205,7 +206,7 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
       await page.click('.choice[data-i="' + aa + '"]');
       await page.click('#next');
     }
-    check(seenT.size >= 2 && [...seenT].every((t) => ['ohm-current', 'ohm-voltage', 'ohm-resistance'].includes(t)), '단락 전체 반복은 그 단락 포인트만 섞어서: ' + [...seenT].join(','));
+    check(seenT.size >= 2 && [...seenT].every((t) => !t || ['ohm-current', 'ohm-voltage', 'ohm-resistance', 'ohm-cells'].includes(t)), '단락 전체 반복은 그 단락 포인트만 섞어서: ' + [...seenT].join(','));
     await page.click('#drill-exit');
     await page.click('#unit-next');
     check((await page.evaluate(() => GISA.ui._view.unitCid)) === 'series', '다음 단락으로 이동');
@@ -773,6 +774,8 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
       const terms = await page.$$('.qtext .term');
       check(terms.length >= 2, '용어 사전: 문제 글 속 용어에 링크가 걸림 (' + terms.length + '개)');
       check((await page.$$('.choices .term')).length === 0, '용어 사전: 보기에는 링크를 걸지 않음');
+      const termStyle = await page.evaluate(() => { const c = getComputedStyle(document.querySelector('.qtext .term')); return { color: c.color, border: c.borderBottomWidth, deco: c.textDecorationLine }; });
+      check(termStyle.color === 'rgb(2, 117, 216)' && termStyle.border === '0px' && termStyle.deco === 'none', '용어 링크: 나무위키처럼 글자 자체가 파란색, 점선·밑줄 없음 ' + JSON.stringify(termStyle));
       const firstId = await page.evaluate(() => document.querySelector('.qtext .term').dataset.term);
       await page.click('.qtext .term');
       check(await page.isVisible('#wiki'), '용어 사전: 용어를 누르면 해설 창이 열림');

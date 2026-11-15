@@ -1932,17 +1932,34 @@ body.calc-float .calc-btn {
 }
 
 /* ── 용어 사전 (나무위키처럼 눌러서 보는 해설) ── */
+/* 나무위키처럼 글자 자체가 파란색 링크(밑줄·점선 없음, 올리면 밑줄) */
 a.term {
-  color: inherit;
+  color: #0275d8;
   text-decoration: none;
-  border-bottom: 1.5px dotted var(--accent);
-  cursor: help;
+  cursor: pointer;
   border-radius: 2px;
 }
 a.term:hover,
 a.term:focus-visible {
-  background: var(--accent-soft);
+  text-decoration: underline;
   outline: none;
+}
+a.term:visited {
+  color: #0275d8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) a.term,
+  :root:not([data-theme="light"]) a.term:visited {
+    color: #6db3ff;
+  }
+}
+:root[data-theme="dark"] a.term,
+:root[data-theme="dark"] a.term:visited {
+  color: #6db3ff;
+}
+:root[data-theme="light"] a.term,
+:root[data-theme="light"] a.term:visited {
+  color: #0275d8;
 }
 .wiki-open {
   flex: none;

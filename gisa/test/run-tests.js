@@ -264,7 +264,7 @@ G.concepts.forEach((c) => {
     for (let i = 1; i <= 3; i++) P.record(stp, G.buildStatic('st-base-ampere', i), true);
     ok(P.pointMastered(stp, 's:st-base-ampere'), 'points', '이론형 포인트 기록');
     const cp = P.conceptPoints(fakeSt, 'ohm');
-    ok(cp.total === 3 && cp.mastered === 0, 'points', '개념 포인트 집계: ' + JSON.stringify(cp));
+    ok(cp.total === G.pointsFor('ohm').length && cp.total >= 3 && cp.mastered === 0, 'points', '개념 포인트 집계: ' + JSON.stringify(cp));
     for (let i = 5; i <= 7; i++) P.record(fakeSt, pq('ohm-current', i), true);
     ok(P.conceptPoints(fakeSt, 'ohm').mastered === 1, 'points', '익숙한 포인트 집계');
     ok(P.normalize(JSON.parse(JSON.stringify(fakeSt))).points['ohm-current'].streak === 3, 'storage', '포인트 기록이 저장·복원되지 않음');
