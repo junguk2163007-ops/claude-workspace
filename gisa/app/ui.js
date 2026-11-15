@@ -242,8 +242,20 @@
   // 지금 읽고 있는 단락/레슨의 기억 키(목록 화면이면 null)
   function scrollKey() {
     if (view.tab === 'units' && view.unitCid) return 'unit:' + view.unitCid;
+    if (view.tab === 'units' && view.restTopic) return 'rest:' + view.restTopic.s + ':' + (view.restTopic.id || 'all');
+    if (view.tab === 'units') return 'ulist:' + view.unitSubject;
     if (view.tab === 'learn' && view.lessonId) return 'lesson:' + view.lessonId;
+    if (view.tab === 'learn') return 'llist';
     return null;
+  }
+  // 목록에서 단락·레슨으로 들어갈 때 지금 자리를 기억하고, 돌아오면 그 자리로 간다
+  function rememberScroll() {
+    const k = scrollKey();
+    if (k) view.scrollMemo[k] = window.scrollY;
+  }
+  function backScroll() {
+    const k = scrollKey();
+    window.scrollTo(0, (k && view.scrollMemo[k]) || 0);
   }
 
   function goTab(tab) {
@@ -1678,6 +1690,7 @@
     return G.lessons.find((l) => !S.lessons[l.id]) || null;
   }
   function openLesson(id) {
+    rememberScroll();
     const l = G.lessonMap[id];
     view.lessonId = id;
     view.exampleKey = l && l.example ? 't:' + l.example.replace('#', '#') : null;
@@ -1920,7 +1933,7 @@
     const idx = lessonIndex(l.id);
     const next = G.lessons[idx + 1] || null;
     const c = l.concept ? concept(l.concept) : null;
-    root.appendChild(h('button', { class: 'btn small back', id: 'lesson-back', onclick: () => { view.lessonId = null; render(); window.scrollTo(0, 0); } }, '← 레슨 목록'));
+    root.appendChild(h('button', { class: 'btn small back', id: 'lesson-back', onclick: () => { rememberScroll(); view.lessonId = null; render(); backScroll(); } }, '← 레슨 목록'));
     const art = h(
       'article',
       { class: 'lesson' },
@@ -1977,6 +1990,7 @@
   // ───────── 과목별(단원) 탭 ─────────
   // restore가 true면(문제 풀다가 돌아올 때) 읽던 자리로, 아니면 맨 위로
   function openUnit(cid, restore) {
+    rememberScroll();
     view.unitSubject = concept(cid).subject;
     view.unitCid = cid;
     view.tab = 'units';
@@ -2092,12 +2106,12 @@
       h(
         'div',
         { class: 'rows' },
-        h('button', { class: 'row lesson-row', 'data-rest': 'all', onclick: () => { view.restTopic = { s: sn, id: null }; render(); window.scrollTo(0, 0); } }, h('span', { class: 'row-head' }, h('span', { class: 'name' }, '전부 모아서 풀기'), h('span', { class: 'right muted small' }, total + '문제'))),
+        h('button', { class: 'row lesson-row', 'data-rest': 'all', onclick: () => { rememberScroll(); view.restTopic = { s: sn, id: null }; render(); window.scrollTo(0, 0); } }, h('span', { class: 'row-head' }, h('span', { class: 'name' }, '전부 모아서 풀기'), h('span', { class: 'right muted small' }, total + '문제'))),
         topics.map((t) => {
           const sm = KG().summary({ s: sn, rest: true, topic: t.id });
           return h(
             'button',
-            { class: 'row lesson-row', 'data-rest': t.id, onclick: () => { view.restTopic = { s: sn, id: t.id }; render(); window.scrollTo(0, 0); } },
+            { class: 'row lesson-row', 'data-rest': t.id, onclick: () => { rememberScroll(); view.restTopic = { s: sn, id: t.id }; render(); window.scrollTo(0, 0); } },
             h('span', { class: 'row-head' }, h('span', { class: 'name' }, t.name), h('span', { class: 'right muted small' }, t.n + '문제')),
             h('span', { class: 'bar' }, h('i', { style: 'width:' + (t.n ? Math.round((100 * sm.right) / t.n) : 0) + '%' })),
             h('span', { class: 'stat-line' }, h('span', null, '푼 문제 ' + sm.tried), h('span', null, '마지막에 맞힌 ' + sm.right))
@@ -2105,6 +2119,113 @@
         })
       )
     );
+  }
+
+  // ───────── Why?: 풀이 핵심이 왜 그렇게 되는지 원리를 팝업으로 자세히 ─────────
+  const WHY_KEY = 'gisa-why';
+  const whyRead = () => lsGet(WHY_KEY) || {};
+  function whySave(id, text) {
+    const m = whyRead();
+    delete m[id];
+    m[id] = text;
+    const keys = Object.keys(m);
+    keys.slice(0, Math.max(0, keys.length - 150)).forEach((k) => delete m[k]);
+    lsSet(WHY_KEY, m);
+  }
+  function whyPrompt(p, c) {
+    return [
+      '너는 한국 전기기사 필기시험을 준비하는 학생의 튜터야. 학생은 이론을 거의 몰라. 아래 "풀이 핵심"이 왜 그렇게 되는지 원리를 처음부터 자세히 설명해 줘.',
+      '규칙:',
+      '- 반말(~야, ~해)로, 쉬운 말과 일상 비유로. 전문용어는 처음 나올 때 한 번 풀어 줘.',
+      '- 마크다운 표·제목·굵게(**)는 쓰지 말고, 아래 번호 순서의 짧은 글로 써.',
+      '- 식은 "어디서 나왔는지"를 한 단계씩 유도해 줘. 식에 나오는 문자마다 뜻과 단위를 말해 줘.',
+      '- 확실하지 않은 공식·수치는 지어내지 말고 "확실하지 않아"라고 말해.',
+      '형식:',
+      '1) 한 줄 결론',
+      '2) 왜 그렇게 되는지 (원리와 유도 과정을 단계별로)',
+      '3) 쉬운 비유 하나',
+      '4) 숫자 예시 하나 (계산 과정 포함)',
+      '5) 자주 하는 착각 한 줄',
+      '',
+      '[개념] ' + c.name,
+      '[개념 한 줄 설명] ' + (c.card || ''),
+      '[포인트] ' + p.t + ' — ' + p.ask,
+      '[풀이 핵심] ' + p.key,
+      '[자주 틀리는 곳] ' + p.trap,
+    ].join('\n');
+  }
+  let whyCtl = null;
+  function closeWhy() {
+    if (whyCtl) whyCtl.abort();
+    whyCtl = null;
+    const o = document.getElementById('why-overlay');
+    if (o) o.remove();
+    document.body.classList.remove('why-open');
+    if (whyOpener && whyOpener.focus) whyOpener.focus();
+    whyOpener = null;
+  }
+  let whyOpener = null;
+  function openWhy(p, cid) {
+    closeWhy();
+    whyOpener = document.activeElement;
+    const c = concept(cid) || {};
+    const pid = p.id;
+    const text = h('div', { class: 'why-text', id: 'why-text' });
+    const foot = h('p', { class: 'muted small why-foot' });
+    const overlay = h(
+      'div',
+      { class: 'why-overlay', id: 'why-overlay', onclick: (e) => { if (e.target === overlay) closeWhy(); } },
+      h(
+        'div',
+        { class: 'why-pop', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Why? ' + p.t },
+        h('div', { class: 'why-head' }, h('strong', null, 'Why? ' + p.t), h('button', { class: 'btn small', id: 'why-close', type: 'button', onclick: closeWhy }, '닫기')),
+        h('div', { class: 'box formula-box' }, h('span', { class: 'eyebrow' }, '풀이 핵심'), h('p', null, p.key)),
+        text,
+        foot
+      )
+    );
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeWhy(); });
+    document.body.appendChild(overlay);
+    document.body.classList.add('why-open');
+    const fin = (t) => {
+      text.textContent = t;
+      if (G.mathUi) G.mathUi.typeset(text);
+    };
+    const basic = () => {
+      // AI 없이 볼 수 있는 기본 설명: 개념 카드·비유·공식
+      text.textContent = '';
+      [c.card, c.analogy ? '비유: ' + c.analogy : '', c.formula ? '공식: ' + c.formula : '', c.remember ? '기억할 점: ' + c.remember : ''].filter(Boolean).forEach((t) => text.appendChild(h('p', null, t)));
+      if (G.mathUi) G.mathUi.typeset(text);
+      foot.textContent = 'AI 연결이 되면(claude.ai에서 열었을 때) 이 포인트의 원리를 유도 과정까지 자세히 설명해 줘.';
+    };
+    const cached = whyRead()[pid];
+    if (cached) {
+      fin(cached);
+      foot.textContent = '한 번 받은 설명은 저장해 두었어. AI가 쓴 설명이라 틀릴 수 있어.';
+    } else if (!G.aiTutor || !G.aiTutor.available()) {
+      basic();
+    } else {
+      text.textContent = '설명을 쓰는 중…';
+      whyCtl = new AbortController();
+      const mine = whyCtl;
+      G.aiTutor
+        .ask(whyPrompt(p, c), { signal: mine.signal, onText: (t) => { if (document.getElementById('why-text') === text) text.textContent = t; } })
+        .then((res) => {
+          whySave(pid, res.text);
+          if (document.getElementById('why-text') === text) {
+            fin(res.text);
+            foot.textContent = 'AI가 쓴 설명이라 틀릴 수 있어. 이상하면 위의 풀이 핵심과 개념 설명을 믿어 줘.';
+          }
+        })
+        .catch((e) => {
+          if (e && e.code === 'cancelled') return;
+          if (document.getElementById('why-text') !== text) return;
+          basic();
+          foot.textContent = '설명을 불러오지 못해서 기본 설명을 보여 줘. 잠시 뒤에 다시 눌러 봐.';
+        });
+    }
+    const x = document.getElementById('why-close');
+    if (x) x.focus();
   }
 
   // 포인트 카드 안의 예제(같은 숫자로 항상 같은 예제, "다른 숫자로"로 바꿀 수 있음)
@@ -2144,7 +2265,7 @@
     const sameSubject = G.concepts.filter((x) => x.subject === c.subject);
     const nextC = sameSubject[sameSubject.findIndex((x) => x.id === c.id) + 1] || null;
 
-    root.appendChild(h('button', { class: 'btn small back', id: 'unit-back', onclick: () => { view.unitCid = null; render(); window.scrollTo(0, 0); } }, '← ' + sj.short + ' 단원 목록'));
+    root.appendChild(h('button', { class: 'btn small back', id: 'unit-back', onclick: () => { rememberScroll(); view.unitCid = null; render(); backScroll(); } }, '← ' + sj.short + ' 단원 목록'));
     const kids = [
       h('span', { class: 'eyebrow' }, sj.name + ' · ' + c.group),
       h('h2', null, starBadge(c.id), c.name),
@@ -2191,7 +2312,7 @@
           { class: 'point-card', 'data-point': pid },
           h('div', { class: 'point-head' }, h('span', { class: 'lesson-no' }, i + 1), h('h3', null, p.t), h('span', { class: 'state ' + stt.cls }, stt.text)),
           h('p', { class: 'point-ask' }, p.ask),
-          h('div', { class: 'box formula-box' }, h('span', { class: 'eyebrow' }, '풀이 핵심'), h('p', null, p.key)),
+          h('div', { class: 'box formula-box' }, h('div', { class: 'box-head' }, h('span', { class: 'eyebrow' }, '풀이 핵심'), h('button', { class: 'btn small soft why-btn', type: 'button', 'data-why': pid, 'aria-label': '풀이 핵심의 원리 자세히 보기', onclick: () => openWhy(p, c.id) }, 'Why?')), h('p', null, p.key)),
           h('div', { class: 'box trap-box' }, h('span', { class: 'eyebrow' }, '자주 틀리는 곳'), h('p', null, p.trap)),
           pointExample(p),
           h(
@@ -2207,7 +2328,7 @@
         'div',
         { class: 'actions' },
         nextC ? h('button', { class: 'btn', id: 'unit-next', onclick: () => openUnit(nextC.id) }, '다음 단락: ' + nextC.name) : null,
-        h('button', { class: 'btn', onclick: () => { view.unitCid = null; render(); window.scrollTo(0, 0); } }, '단원 목록으로')
+        h('button', { class: 'btn', onclick: () => { rememberScroll(); view.unitCid = null; render(); backScroll(); } }, '단원 목록으로')
       ),
     ];
     root.appendChild(h('article', { class: 'lesson unit' }, kids));
@@ -2228,7 +2349,7 @@
     const note = rt.id && G.restNotes ? G.restNotes[rt.id] : null;
     const f = { s: rt.s, rest: true, topic: rt.id || null };
     const sm = KG().summary(f);
-    root.appendChild(h('button', { class: 'btn small back', id: 'rest-back', onclick: () => { view.restTopic = null; view.unitSubject = subjId; render(); window.scrollTo(0, 0); } }, '← ' + sjName + ' 단원 목록'));
+    root.appendChild(h('button', { class: 'btn small back', id: 'rest-back', onclick: () => { rememberScroll(); view.restTopic = null; view.unitSubject = subjId; render(); backScroll(); } }, '← ' + sjName + ' 단원 목록'));
     root.appendChild(
       h(
         'section',

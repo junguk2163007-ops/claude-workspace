@@ -1388,6 +1388,106 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-17s. AI 답변이 써지는 동안 화면이 자동으로 내려가지 않음 ──
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 800 }, colorScheme: 'light' });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await ctx.addInitScript(() => {
+      const fake = async (input, opts) => {
+        const lines = [];
+        for (let i = 1; i <= 60; i++) lines.push(i + ') 긴 답변의 ' + i + '번째 줄이야. 위에서부터 읽는 중이야.');
+        let acc = '';
+        for (let i = 0; i < lines.length; i++) {
+          acc += (i ? '\n' : '') + lines[i];
+          opts.onText({ text: acc, delta: '' });
+          await new Promise((r) => setTimeout(r, 15));
+        }
+        return { text: acc, truncated: false, modelTierApplied: 'default' };
+      };
+      window.claude = { use: async (n) => (n === 'sample' ? fake : null) };
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(FILE);
+    await page.waitForSelector('#side .side-head');
+    await page.fill('#ai-side-input', '질문 하나');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#side .ai-msg.pending, #side .ai-msg.ai');
+    await page.waitForTimeout(150);
+    const s0 = await page.evaluate(() => document.querySelector('#side .ai-thread').scrollTop);
+    await page.waitForSelector('#side .ai-reply-btn', { timeout: 20000 });
+    const m = await page.evaluate(() => { const t = document.querySelector('#side .ai-thread'); return { top: t.scrollTop, max: t.scrollHeight - t.clientHeight }; });
+    check(m.max > 200 && Math.abs(m.top - s0) <= 2 && m.top < m.max - 100, 'AI 답변이 길어도 화면이 따라 내려가지 않음 (처음 ' + s0 + ' → 끝 ' + m.top + ', 맨 아래 ' + m.max + ')');
+    check(errors.length === 0, '자동 스크롤 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── 2-17w. 풀이 핵심 복사(가로 원문), Why? 팝업, 목록 스크롤 기억 ──
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1000, height: 900 }, colorScheme: 'light' });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await ctx.addInitScript(() => {
+      window.__asks = [];
+      const fake = async (input, opts) => {
+        window.__asks.push(JSON.stringify(input));
+        const t = '1) 한 줄 결론: 테스트 설명이야.\n2) 원리: XL = ωL 에서 L = XL/ω 가 나와.';
+        opts.onText({ text: t, delta: '' });
+        return { text: t, truncated: false, modelTierApplied: 'default' };
+      };
+      window.claude = { use: async (n) => (n === 'sample' ? fake : null) };
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(FILE);
+    await page.waitForSelector('#tab-units');
+    await page.click('#tab-units');
+    await page.click('.chip[data-subject="circuit"]');
+    await page.click('.lesson-row[data-unit="rlc"]');
+    await page.waitForSelector('[data-why="rlc-xtol"]');
+    // 풀이 핵심을 드래그해 복사하면 한 줄(원문)
+    const copied = await page.evaluate(() => {
+      const card = document.querySelector('.point-card[data-point="rlc-xtol"] .formula-box p');
+      const r = document.createRange();
+      r.selectNodeContents(card);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      const dt = new DataTransfer();
+      const ev = new ClipboardEvent('copy', { clipboardData: dt, bubbles: true, cancelable: true });
+      document.dispatchEvent(ev);
+      return { text: dt.getData('text/plain'), prevented: ev.defaultPrevented, shown: card.textContent };
+    });
+    check(copied.prevented && copied.text.includes('L = XL/ω') && copied.text.includes('C = 1/(ω·XC)') && !/\n/.test(copied.text.trim()), '풀이 핵심 복사: 분수로 그린 글도 원문 그대로 한 줄 ' + JSON.stringify(copied.text));
+    // Why? 팝업
+    await page.click('[data-why="rlc-xtol"]');
+    await page.waitForSelector('#why-overlay');
+    check((await page.textContent('#why-overlay')).includes('풀이 핵심') && (await page.textContent('#why-overlay')).includes('Why?'), 'Why? 팝업이 풀이 핵심과 함께 열림');
+    await page.waitForFunction(() => document.getElementById('why-text') && document.getElementById('why-text').textContent.includes('테스트 설명이야'));
+    check((await page.evaluate(() => window.__asks.length)) === 1, 'Why? 를 누르면 AI에 원리를 물음');
+    const prompt = await page.evaluate(() => window.__asks[0]);
+    check(prompt.includes('원리') && prompt.includes('풀이 핵심'), 'AI 질문에 풀이 핵심과 원리 요청이 들어감');
+    await page.keyboard.press('Escape');
+    check(!(await page.$('#why-overlay')), 'Esc 로 팝업이 닫힘');
+    await page.click('[data-why="rlc-xtol"]');
+    await page.waitForSelector('#why-text');
+    check((await page.textContent('#why-text')).includes('테스트 설명이야') && (await page.evaluate(() => window.__asks.length)) === 1, '받은 설명은 저장돼서 다시 안 물음');
+    await page.click('#why-close');
+    check(!(await page.$('#why-overlay')), '닫기 버튼으로 닫힘');
+    // 목록 스크롤 기억: 목록에서 내려서 단락에 들어갔다 돌아오면 그 자리
+    await page.click('#unit-back');
+    await page.evaluate(() => window.scrollTo(0, 700));
+    const before = await page.evaluate(() => window.scrollY);
+    await page.evaluate(() => document.querySelectorAll('.lesson-row[data-unit]')[Math.min(8, document.querySelectorAll('.lesson-row[data-unit]').length - 1)].click());
+    await page.waitForSelector('#unit-back');
+    await page.click('#unit-back');
+    const after = await page.evaluate(() => window.scrollY);
+    check(before > 100 && Math.abs(after - before) < 5, '단락에서 돌아오면 과목별 목록의 보던 자리 (' + before + ' → ' + after + ')');
+    check(errors.length === 0, 'Why/복사 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 2-17a. 계산기 화면 복사: 글자마다 줄바꿈이 되지 않고 한 줄 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1400, height: 900 }, colorScheme: 'light' });

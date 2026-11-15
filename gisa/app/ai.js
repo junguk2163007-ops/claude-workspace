@@ -249,8 +249,12 @@
       stop.hidden = !v;
       presets.querySelectorAll('button').forEach((b) => (b.disabled = v));
     }
-    function toBottom() {
-      if (o.side) thread.scrollTop = thread.scrollHeight;
+    // 답이 길게 써지는 동안 화면이 자동으로 내려가면 위에서부터 읽기 어려워서, 따라 내려가지 않는다.
+    // 새 질문을 보내면 그 질문(과 답의 시작)이 보이는 자리로만 한 번 옮긴다.
+    function toStart(el) {
+      if (!o.side || !el) return;
+      const top = el.getBoundingClientRect().top - thread.getBoundingClientRect().top + thread.scrollTop;
+      thread.scrollTop = Math.max(0, top - 6);
     }
     function bubble(role, text, quote, kind) {
       if (hint && hint.parentNode) hint.remove();
@@ -260,7 +264,6 @@
         b.append(el('div', 'ai-quote', (kind === 'sentence' ? '↩ 문장: ' : '↩ ') + snippet(quote, 90)), document.createTextNode(text));
       }
       thread.append(b);
-      toBottom();
       return b;
     }
 
@@ -274,11 +277,12 @@
           ? '[앞선 AI 답변 중 이 문장에 대한 질문]\n문장: "' + String(quote).slice(0, 500) + '"\n(이 문장은 바로 위 대화의 네 답변 안에 있어. 그 흐름을 이어서 이 문장에 대해서만 답해 줘.)\n질문: ' + text
           : '[앞선 AI 답변에 대한 질문]\n앞선 답변: "' + String(quote).slice(0, 700) + '"\n질문: ' + text
         : text;
-      bubble('user', text, quote, kind);
+      const asked = bubble('user', text, quote, kind);
       turns.push({ role: 'user', content: sendText });
       setReply(null);
       const out = bubble('assistant', '생각 중…');
       out.classList.add('pending');
+      toStart(asked);
       setBusy(true);
       ctl = new AbortController();
       const recent = turns.slice(-12);
@@ -290,7 +294,6 @@
           onText: ({ text: t }) => {
             out.classList.remove('pending');
             out.textContent = t;
-            toBottom();
           },
         });
         out.classList.remove('pending');
@@ -320,7 +323,6 @@
         ctl = null;
         setBusy(false);
         refresh();
-        toBottom();
       }
     }
 

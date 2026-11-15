@@ -7,7 +7,7 @@
   // 건드리지 않는 자리: 입력칸, 그림, 계산기·AI 패널(자기 글자를 따로 그림), 이미 바꾼 수식
   // (진행 표시 "16/44", "연속 2/3", "열린 개념 17/42" 같은 화면 장식 글자도 건드리지 않는다)
   const SKIP =
-    'script,style,svg,input,textarea,select,option,#calc,#side,.ai-msg,.mf,.mf-r,.mf-sup,.cele,.toast,.qid,code.expr,' +
+    'script,style,svg,input,textarea,select,option,#calc,#side,.ai-msg,.mxo,.mf,.mf-r,.mf-sup,.cele,.toast,.qid,code.expr,' +
     '.eyebrow,.stat-line,.state,.banner,.lockbar,.tabs,.tag,.chip,.streak,.lesson-no,.bar,.progress-tile,.field,.switch,.msg,.stat-sub,.nowrap,button.row,.row-head,.ex-head,.ex-result,.ex-sec,.exam-entry,.ex-confirm,#bookmark-panel,#weak-panel,#exam-history,.bm-btn,.cfig';
 
   const plain = (nodes) =>
@@ -89,9 +89,58 @@
     }
     targets.forEach((tn) => {
       const nodes = G.typeset(tn.nodeValue);
-      if (nodes) tn.parentNode.replaceChild(build(nodes), tn);
+      if (!nodes) return;
+      // 복사할 때 원문 그대로 나오게 원래 글을 data-src 에 같이 둔다
+      const w = document.createElement('span');
+      w.className = 'mxo';
+      w.dataset.src = tn.nodeValue;
+      w.appendChild(build(nodes));
+      tn.parentNode.replaceChild(w, tn);
     });
   }
+
+  // 분수·제곱근으로 바꿔 그린 글을 드래그해 복사하면 조각마다 줄이 바뀌어 붙던 문제:
+  // 원문(data-src)으로 되돌리고, 줄바꿈은 원래 문단 단위로만 남긴다
+  const wrapText = (e) => {
+    const t = e.textContent;
+    return t.length > 1 && !/^\(.*\)$/.test(t) ? '(' + t + ')' : t;
+  };
+  function plainOfMath(box) {
+    const q = (sel) => Array.prototype.slice.call(box.querySelectorAll(sel));
+    q('.mf').forEach((e) => {
+      const nn = e.querySelector('.mf-n');
+      const dd = e.querySelector('.mf-d');
+      e.replaceWith(document.createTextNode(wrapText(nn || { textContent: '' }) + '/' + wrapText(dd || { textContent: '' })));
+    });
+    q('.mf-r').forEach((e) => {
+      const b = e.querySelector('.mf-rb');
+      e.replaceWith(document.createTextNode('√(' + (b ? b.textContent : '') + ')'));
+    });
+    q('.mf-sup').forEach((e) => e.replaceWith(document.createTextNode('^' + wrapText(e))));
+  }
+  document.addEventListener('copy', (ev) => {
+    if (ev.defaultPrevented || !ev.clipboardData) return;
+    const sel = window.getSelection && window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const box = document.createElement('div');
+    box.appendChild(range.cloneContents());
+    if (!box.querySelector('.mxo, .mf, .mf-r, .mf-sup, .mx')) {
+      // 한 수식 글 안쪽만 골랐을 때는 조각에 .mxo 가 없을 수 있어 부모를 본다
+      const anc = range.commonAncestorContainer;
+      const host = anc && (anc.nodeType === 1 ? anc : anc.parentElement);
+      if (!host || !host.closest || !host.closest('.mxo')) return;
+    }
+    box.querySelectorAll('.mxo').forEach((w) => w.replaceWith(document.createTextNode(w.getAttribute('data-src') || w.textContent)));
+    plainOfMath(box);
+    box.style.cssText = 'position:fixed;left:-99999px;top:0;width:640px;white-space:pre-wrap';
+    document.body.appendChild(box);
+    const text = box.innerText.replace(/\n{3,}/g, '\n\n').trim();
+    box.remove();
+    if (!text) return;
+    ev.clipboardData.setData('text/plain', text);
+    ev.preventDefault();
+  });
 
   G.mathUi = { typeset };
 })(globalThis.GISA);

@@ -2935,6 +2935,66 @@ a.term:visited {
   color: var(--muted);
   align-self: center;
 }
+/* 복사용 원문 보관 껍데기: 화면 배치에는 영향 없음 */
+.mxo {
+  display: contents;
+}
+.box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.why-btn {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.why-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(10, 14, 18, 0.55);
+}
+.why-pop {
+  width: min(600px, 100%);
+  max-height: 86vh;
+  overflow: auto;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+.why-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.why-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.why-text {
+  margin: 12px 0 6px;
+  font-size: 15px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.why-text p {
+  margin: 0 0 8px;
+  white-space: normal;
+}
+body.why-open {
+  overflow: hidden;
+}
+
 .kg-peek {
   margin-left: 4px;
   padding: 2px 10px;
