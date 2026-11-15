@@ -298,9 +298,26 @@
     }
   };
   let restoring = false;
+  // 보던 화면을 계정(개인 문서)에도 저장: 브라우저 저장소가 비워져도 업데이트 뒤에 그 자리로 돌아오게
+  let cloudTimer = null;
+  let cloudLast = '';
+  function cloudSaveView(rec) {
+    if (!G.sync || !G.sync.userDoc || S.settings.syncOn === false) return;
+    const doc = G.sync.userDoc('view');
+    if (!doc) return;
+    const body = JSON.stringify(Object.assign({}, rec, { t: 0, y: Math.round(rec.y / 50) * 50 }));
+    if (body === cloudLast) return; // 바뀐 게 없으면 올리지 않음
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(() => {
+      cloudLast = body;
+      Promise.resolve()
+        .then(() => doc.set(Object.assign({}, rec, { t: Date.now() })))
+        .catch(() => (cloudLast = ''));
+    }, 1500);
+  }
   function rememberView() {
-    if (restoring) return;
-    lsSet(VIEW_KEY, {
+    if (restoring || booting) return;
+    const rec = {
       tab: view.tab,
       lessonId: view.lessonId,
       unitCid: view.unitCid,
@@ -309,11 +326,13 @@
       exam: view.mode === 'exam' && view.ex && !view.ex.result ? 1 : 0,
       y: Math.round(window.scrollY || 0),
       t: Date.now(),
-    });
+    };
+    lsSet(VIEW_KEY, rec);
+    cloudSaveView(rec);
   }
   // 불러온 값이 지금 데이터와 맞을 때만 복원(없어진 레슨·문제는 무시)
-  function restoreView() {
-    const r = lsGet(VIEW_KEY);
+  function restoreView(rec) {
+    const r = rec || lsGet(VIEW_KEY);
     if (!r || typeof r !== 'object') return null;
     const tabs = ['learn', 'units', 'practice', 'review', 'stats', 'settings'];
     if (tabs.indexOf(r.tab) === -1) return null;
@@ -1235,6 +1254,7 @@
       if (i + 1 === k.q.a) k.set.right += 1;
     }
     KG().record(k.q.id, i + 1 === k.q.a);
+    kgxLoad(k.q, i);
     render();
     const v = document.querySelector('.verdict');
     if (v && v.scrollIntoView) v.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -1245,6 +1265,93 @@
     if (f.s) parts.push(KG().SUBJECTS[f.s]);
     if (f.from) parts.push(f.from + '년 이후');
     return parts.length ? parts.join(' · ') : '전체 기출';
+  }
+
+  // ───────── 기출 해설: 맞히든 틀리든 AI가 달아 준다 ─────────
+  const KGX_KEY = 'gisa-kg-expl';
+  const kgxRead = () => lsGet(KGX_KEY) || {};
+  function kgxSave(id, text) {
+    const m = kgxRead();
+    delete m[id];
+    m[id] = text;
+    const keys = Object.keys(m);
+    keys.slice(0, Math.max(0, keys.length - 300)).forEach((k) => delete m[k]);
+    lsSet(KGX_KEY, m);
+  }
+  function kgxPrompt(q, chosen) {
+    const lines = [
+      '너는 한국 전기기사 필기시험을 준비하는 학생의 튜터야. 학생은 이론을 거의 몰라. 아래 기출문제의 해설을 써 줘.',
+      '규칙:',
+      '- 반말(~야, ~해)로, 쉬운 말과 일상 비유로. 전문용어는 처음 나올 때 한 번 풀어 줘.',
+      '- 마크다운 표·제목·굵게(**)는 쓰지 말고, 아래 번호 순서의 짧은 글로 써.',
+      '- "정답"으로 주어진 번호를 기준으로 설명해. 다만 계산해 보니 그 보기가 도저히 안 나오거나 개념과 어긋나면 지어내서 맞추지 말고 "이 정답은 확인이 필요해"라고 솔직히 말해.',
+      '- 확실하지 않은 공식·수치는 지어내지 말고 "확실하지 않아"라고 말해.',
+      '형식:',
+      '1) 정답과 한 줄 이유',
+      '2) 핵심 개념을 쉬운 말로 (필요하면 비유 하나)',
+      '3) 풀이 과정 (계산 문제면 식과 숫자를 단계별로, 개념 문제면 판단 순서)',
+      '4) 나머지 보기가 왜 아닌지 한 줄씩',
+      '5) 기억할 점 한 줄',
+      '',
+      '[기출문제] ' + KG().SUBJECTS[q.s] + ' · ' + q.exam + ' ' + q.n + '번',
+      q.q,
+    ];
+    q.c.forEach((c, i) => lines.push(NUMS[i] + ' ' + c));
+    lines.push('정답(출처 자료 기준): ' + q.a + '번');
+    lines.push('학생이 고른 답: ' + (chosen + 1) + '번 (' + (chosen + 1 === q.a ? '맞혔어' : '틀렸어') + ')');
+    return lines.join('\n');
+  }
+  let kgxCtl = null;
+  function kgxLoad(q, chosen) {
+    const k = view.kg;
+    if (kgxCtl) kgxCtl.abort();
+    kgxCtl = null;
+    const cached = kgxRead()[q.id];
+    if (cached) {
+      k.expl = { id: q.id, state: 'done', text: cached };
+      return;
+    }
+    if (!G.aiTutor || !G.aiTutor.available()) {
+      k.expl = { id: q.id, state: 'none', text: '' };
+      return;
+    }
+    k.expl = { id: q.id, state: 'loading', text: '' };
+    kgxCtl = new AbortController();
+    const mine = k.expl;
+    G.aiTutor
+      .ask(kgxPrompt(q, chosen), {
+        signal: kgxCtl.signal,
+        onText: (t) => {
+          mine.text = t;
+          const el = document.getElementById('kg-expl-body');
+          if (el && view.kg && view.kg.expl === mine) el.textContent = t;
+        },
+      })
+      .then((res) => {
+        mine.state = 'done';
+        mine.text = res.text;
+        kgxSave(q.id, res.text);
+        if (view.kg && view.kg.expl === mine) render();
+      })
+      .catch((e) => {
+        if (e && e.code === 'cancelled') return;
+        mine.state = 'error';
+        if (view.kg && view.kg.expl === mine) render();
+      });
+  }
+  function kgExplainBlock(k, q) {
+    const x = k.expl;
+    if (!x || x.id !== q.id) return null;
+    if (x.state === 'none') return h('p', { class: 'note', id: 'kg-expl-none' }, 'AI 해설은 claude.ai에서 열었을 때 나와. 지금은 정답만 보여 줄게.');
+    return h(
+      'section',
+      { class: 'ex kg-expl', id: 'kg-expl' },
+      h('h3', null, 'AI 해설'),
+      x.state === 'error'
+        ? h('p', { class: 'note' }, '해설을 불러오지 못했어. ', h('button', { class: 'btn small', id: 'kg-expl-retry', onclick: () => { kgxLoad(q, k.chosen); render(); } }, '다시 시도'))
+        : h('p', { class: 'kg-expl-body', id: 'kg-expl-body' }, x.text || '해설을 쓰는 중…'),
+      x.state === 'done' ? h('p', { class: 'muted small' }, 'AI가 쓴 해설이라 틀릴 수 있어. 기출 원문에는 공식 해설이 없고, 정답은 가져온 자료를 따랐어.') : null
+    );
   }
 
   function renderKigeum(root) {
@@ -1318,7 +1425,7 @@
               'div',
               null,
               h('div', { class: 'verdict ' + (ok ? 'ok' : 'bad'), role: 'status' }, ok ? '정답!' : '아쉽다, 오답이야', h('small', null, '정답은 ' + NUMS[q.a - 1] + '번 · ' + q.c[q.a - 1])),
-              h('p', { class: 'note' }, '기출 원문에는 공식 해설이 없어서 정답만 보여 줘. 모르는 용어는 눌러서 해설을 보고, 헷갈리면 AI에게 물어봐.'),
+              kgExplainBlock(k, q),
               q.cids.length
                 ? h(
                     'div',
@@ -2303,7 +2410,9 @@
     return { kind: 'general', label: names[view.tab] || '', stats: statsSummary() };
   }
 
+  let pendingBoot = false; // 보던 화면 기록을 가져오는 동안(최대 약 2초) 첫 화면을 그리지 않는다
   function render() {
+    if (pendingBoot) return;
     // 다른 문제로 넘어가면 계산기 시연을 끝낸다
     if (G.calcDemo && G.calcDemo.active() && G.calcDemo.scope() === 'question' && G.calcDemo.key() !== (view.q && view.q.key)) G.calcDemo.stop();
     renderBar();
@@ -2368,13 +2477,11 @@
     }
   });
 
-  function start() {
-    if (G.kigeum) G.kigeum.load().then(() => render());
-    if (!S.settings.theme) S.settings.theme = 'system';
-    if (S.total.n === 0 && !Object.keys(S.lessons || {}).length) view.tab = 'learn';
-    applyTheme();
+  // 첫 화면 정하기: 기억해 둔 자리가 있으면 거기로, 없으면 기본 화면
+  function finishBoot(rec) {
+    pendingBoot = false;
     restoring = true;
-    const back = restoreView();
+    const back = restoreView(rec);
     if (!(back && back.tab === 'practice' && view.q)) nextQuestion();
     render();
     restoring = false;
@@ -2382,6 +2489,20 @@
     if (back && back.exam && G.exam && G.exam.cur.load() && G.exam.remaining(G.exam.cur.load()) > 0) startExam(true);
     if (back && back.y) setTimeout(() => window.scrollTo(0, back.y), 60);
     announceUpdate();
+    rememberView();
+  }
+
+  function start() {
+    if (G.kigeum) G.kigeum.load().then(() => render());
+    if (!S.settings.theme) S.settings.theme = 'system';
+    if (S.total.n === 0 && !Object.keys(S.lessons || {}).length) view.tab = 'learn';
+    applyTheme();
+    const local = lsGet(VIEW_KEY);
+    const wantCloud = !local && G.sync && G.sync.peek && S.settings.syncOn !== false && typeof window.claude !== 'undefined' && window.claude && typeof window.claude.use === 'function';
+    if (wantCloud) {
+      pendingBoot = true;
+      G.sync.peek('view', 1800).then((r) => finishBoot(r && Date.now() - (r.t || 0) < 7 * 24 * 3600 * 1000 ? r : null));
+    } else finishBoot(local);
     if (G.sync) {
       G.sync.init({
         getState: () => S,

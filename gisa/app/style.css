@@ -2771,3 +2771,9 @@ a.term:focus-visible {
   color: var(--ink);
   font-size: 14px;
 }
+
+/* ── 기출 AI 해설 ── */
+.kg-expl-body {
+  white-space: pre-wrap;
+  line-height: 1.75;
+}

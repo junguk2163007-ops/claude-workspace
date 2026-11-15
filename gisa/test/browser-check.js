@@ -1239,6 +1239,110 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-15. 브라우저 저장소가 비어 있어도 계정에 저장해 둔 보던 화면으로 복원 ──
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await ctx.addInitScript(() => {
+      window.__sets = [];
+      const seed = { tab: 'stats', lessonId: null, unitCid: null, unitSubject: 'circuit', q: null, exam: 0, y: 0, t: Date.now() };
+      window.claude = {
+        use: async (n) => {
+          if (n === 'db') {
+            return {
+              doc: (path) => ({
+                get: async () => (path.endsWith('/view') ? { exists: true, data: () => seed } : { exists: false, data: () => null }),
+                set: async (d) => {
+                  window.__sets.push({ path, d });
+                },
+              }),
+            };
+          }
+          if (n === 'user') return { id: async () => 'u_test', isOwner: () => true };
+          return null;
+        },
+      };
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(FILE);
+    await page.waitForSelector('#bar .tab');
+    check((await page.evaluate(() => GISA.ui._view.tab)) === 'stats', '저장소가 비어 있어도 계정에 저장된 보던 화면(기록 탭)으로 복원');
+    await page.click('#tab-review');
+    await page.waitForFunction(() => window.__sets.some((x) => /\/view$/.test(x.path) && x.d.tab === 'review'), null, { timeout: 8000 });
+    check(true, '탭을 옮기면 보던 화면이 계정에도 저장됨');
+    check(errors.length === 0, '클라우드 복원 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── 2-16. 기출 해설: 맞히든 틀리든 AI가 해설을 달아 줌 ──
+  {
+    const bank = [
+      { id: 'x-1', exam: '2019-08-04', s: 4, n: 61, q: '시험용 문제: 역률이 0.8일 때 무효율 sinθ는?', c: ['0.4', '0.6', '0.8', '1.0'], a: 2, p: 70, f: 1 },
+      { id: 'x-2', exam: '2020-06-06', s: 4, n: 62, q: '시험용 문제: 직렬 공진 회로에서 임피던스가 최소가 되는 조건은?', c: ['XL = XC', 'XL > XC', 'XL < XC', 'R = 0'], a: 1, p: 60, f: 1 },
+    ];
+    // AI가 있을 때
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await ctx.addInitScript(() => {
+      window.__prompts = [];
+      const fake = async (input, opts) => {
+        window.__prompts.push(input[0].content);
+        opts.onText({ text: '해설 조각', delta: '해설 조각' });
+        return { text: '1) 정답은 이거야\n2) 핵심 개념', truncated: false, modelTierApplied: 'default' };
+      };
+      window.claude = { use: async (n) => (n === 'sample' ? fake : null) };
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(FILE);
+    await page.waitForSelector('#bar .tab');
+    await page.evaluate((b) => GISA.kigeum.importText(JSON.stringify(b)), bank);
+    await page.evaluate(() => GISA.ui.startKigeum({ s: 4 }));
+    // 틀린 답
+    const id1 = await page.getAttribute('.kg-card', 'data-kg');
+    const a1 = await page.evaluate((id) => GISA.kigeum.get(id).a, id1);
+    await page.click('.kg-card .choice[data-i="' + (a1 === 1 ? 1 : 0) + '"]');
+    await page.waitForSelector('#kg-expl-body');
+    await page.waitForFunction(() => document.getElementById('kg-expl-body').textContent.includes('핵심 개념'));
+    check((await page.$$('#kg-expl')).length === 1, '기출: 틀려도 AI 해설이 나옴');
+    const pr = await page.evaluate(() => window.__prompts[0]);
+    check(pr.includes('시험용 문제') && pr.includes('정답(출처 자료 기준): ' + a1 + '번') && pr.includes('학생이 고른 답'), '기출 해설 요청에 문제·보기·정답·고른 답이 들어 있음');
+    // 맞힌 답
+    await page.click('#kg-next');
+    const id2 = await page.getAttribute('.kg-card', 'data-kg');
+    const a2 = await page.evaluate((id) => GISA.kigeum.get(id).a, id2);
+    await page.click('.kg-card .choice[data-i="' + (a2 - 1) + '"]');
+    await page.waitForFunction(() => document.getElementById('kg-expl-body') && document.getElementById('kg-expl-body').textContent.includes('핵심 개념'));
+    check(await page.isVisible('.verdict.ok') && (await page.$$('#kg-expl')).length === 1, '기출: 맞혀도 AI 해설이 나옴');
+    // 같은 문제는 다시 묻지 않음(저장해 둔 해설)
+    const nPrompts = await page.evaluate(() => window.__prompts.length);
+    await page.evaluate(() => GISA.ui.startKigeum({ s: 4 }));
+    const idr = await page.getAttribute('.kg-card', 'data-kg');
+    const ar = await page.evaluate((id) => GISA.kigeum.get(id).a, idr);
+    await page.click('.kg-card .choice[data-i="' + (ar - 1) + '"]');
+    await page.waitForFunction(() => document.getElementById('kg-expl-body') && document.getElementById('kg-expl-body').textContent.includes('핵심 개념'));
+    const cachedIds = await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('gisa-kg-expl') || '{}')));
+    check(cachedIds.length >= 2 && cachedIds.includes(id1), '기출: 해설을 저장해 둠');
+    if (idr === id1 || idr === id2) check((await page.evaluate(() => window.__prompts.length)) === nPrompts, '기출: 이미 받은 해설은 다시 묻지 않음');
+    check(await noOverflow(page), '기출 해설 화면 가로 넘침');
+    await page.screenshot({ path: path.join(SHOTS, '18-kigeum-explain.png'), fullPage: true });
+    check(errors.length === 0, '기출 해설 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+  // AI가 없을 때(파일로 열기)는 정답만 + 안내
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await page.evaluate(() => GISA.kigeum.importText(JSON.stringify([{ id: 'x-9', exam: '2019-08-04', s: 4, n: 63, q: '시험용: 옴의 법칙에서 V는?', c: ['IR', 'I/R', 'R/I', 'I+R'], a: 1, p: 80, f: 1 }])));
+    await page.evaluate(() => GISA.ui.startKigeum({ s: 4 }));
+    await page.click('.kg-card .choice[data-i="0"]');
+    check(await page.isVisible('#kg-expl-none'), '기출: AI가 없을 땐 해설 대신 안내');
+    check(errors.length === 0, '기출 해설(AI 없음) 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });

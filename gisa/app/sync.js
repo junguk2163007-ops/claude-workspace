@@ -100,6 +100,29 @@
     timer = setTimeout(syncNow, DEBOUNCE_MS);
   }
 
+  let dbHandle = null;
+  let userId = null;
+  // 이 사용자만 보는 작은 문서(예: 보던 화면). 못 쓰는 환경이면 null
+  const userDoc = (name) => (dbHandle && userId ? dbHandle.doc('data/users/' + userId + '/' + name) : null);
+
+  // 앱이 뜨기 전에 개인 문서 하나를 빨리 읽어 본다(오래 걸리면 ms 뒤에 포기하고 null)
+  async function peek(name, ms) {
+    try {
+      if (typeof window === 'undefined' || !window.claude || typeof window.claude.use !== 'function') return null;
+      const work = (async () => {
+        const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+        if (!db || !user) return null;
+        const id = await user.id();
+        if (!id) return null;
+        const snap = await db.doc('data/users/' + id + '/' + name).get();
+        return snap && snap.exists ? snap.data() : null;
+      })();
+      return await Promise.race([work, new Promise((r) => setTimeout(() => r(null), ms))]);
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function init(h) {
     hooks = h;
     try {
@@ -109,6 +132,8 @@
       const id = await user.id();
       if (!id) return set('unavailable');
       ref = db.doc('data/users/' + id + '/save');
+      dbHandle = db;
+      userId = id;
     } catch (e) {
       return set('unavailable');
     }
@@ -134,5 +159,5 @@
     else set('off');
   }
 
-  G.sync = { init, schedule, syncNow, setEnabled, status: () => status, available: () => !!ref };
+  G.sync = { userDoc, peek, init, schedule, syncNow, setEnabled, status: () => status, available: () => !!ref };
 })(globalThis.GISA);

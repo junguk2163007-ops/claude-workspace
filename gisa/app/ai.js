@@ -320,6 +320,16 @@
       if (side) side.refresh();
     },
     sideMode,
+    // 대화가 아니라 한 번 물어서 답만 받는다(기출 해설 같은 용도). onText는 지금까지 받은 전체 글을 넘겨 준다.
+    async ask(content, o) {
+      if (!sample) throw { code: 'unavailable' };
+      const res = await sample([{ role: 'user', content }], {
+        cache: false,
+        signal: o && o.signal,
+        onText: ({ text }) => o && o.onText && o.onText(text),
+      });
+      return res;
+    },
     available: () => !!sample,
     onReady(fn) {
       readyFns.push(fn);
