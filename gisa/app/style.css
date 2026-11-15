@@ -166,6 +166,14 @@ button:disabled {
   border-bottom: 3px solid transparent;
   white-space: nowrap;
 }
+.tab#tab-practice {
+  flex: 1.7; /* "∞ 문제풀이"는 다른 탭보다 글자가 길어서 조금 더 넓게 */
+}
+@media (max-width: 430px) {
+  .tab {
+    font-size: 13px;
+  }
+}
 .tab[aria-selected="true"] {
   color: var(--ink);
   border-bottom-color: var(--accent);

@@ -251,7 +251,7 @@
     const tabs = [
       ['learn', '배우기'],
       ['units', '과목별'],
-      ['practice', '문제풀이'],
+      ['practice', '∞ 문제풀이'],
       ['review', '복습'],
       ['stats', '기록'],
       ['settings', '설정'],

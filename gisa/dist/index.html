@@ -178,6 +178,14 @@ button:disabled {
   border-bottom: 3px solid transparent;
   white-space: nowrap;
 }
+.tab#tab-practice {
+  flex: 1.7; /* "∞ 문제풀이"는 다른 탭보다 글자가 길어서 조금 더 넓게 */
+}
+@media (max-width: 430px) {
+  .tab {
+    font-size: 13px;
+  }
+}
 .tab[aria-selected="true"] {
   color: var(--ink);
   border-bottom-color: var(--accent);
@@ -7392,7 +7400,7 @@ a.term:focus-visible {
     {
       id: 'ohm',
       name: '옴의 법칙',
-      group: '기초',
+      group: '회로 기본',
       prereqs: [],
       card:
         '전압(V)은 전기를 미는 힘, 전류(I)는 흐르는 전기의 양, 저항(R)은 흐름을 방해하는 정도야. 셋은 V = I × R 하나로 묶여 있어. 그래서 I = V/R, R = V/I로 바꿔 쓸 수 있어. 단위는 V(볼트), A(암페어), Ω(옴).',
@@ -7404,7 +7412,7 @@ a.term:focus-visible {
     {
       id: 'series',
       name: '직렬 회로',
-      group: '기초',
+      group: '회로 기본',
       prereqs: ['ohm'],
       card:
         '저항을 한 줄로 이어 붙이면(직렬) 전류가 갈 길이 하나뿐이라 모든 저항에 같은 전류가 흘러. 전체(합성) 저항은 그냥 다 더하면 돼: R = R₁ + R₂ + R₃. 전체 전류는 I = V ÷ (전체 저항).',
@@ -7416,7 +7424,7 @@ a.term:focus-visible {
     {
       id: 'parallel',
       name: '병렬 회로',
-      group: '기초',
+      group: '회로 기본',
       prereqs: ['ohm'],
       card:
         '저항을 나란히 연결하면(병렬) 모든 저항에 같은 전압이 걸리고, 전류는 갈래로 나뉘어 흘러. 길이 늘어나니 전체 저항은 오히려 작아져: 1/R = 1/R₁ + 1/R₂ + …. 두 개일 때만 R = R₁R₂/(R₁+R₂)(곱 나누기 합)로 줄여 쓸 수 있어.',
@@ -7428,7 +7436,7 @@ a.term:focus-visible {
     {
       id: 'divider',
       name: '전압 분배',
-      group: '기초',
+      group: '회로 기본',
       prereqs: ['series'],
       card:
         '직렬 회로에서는 전체 전압을 저항 크기에 비례해서 나눠 가져. 저항 R₂에 걸리는 전압은 V₂ = V × R₂/(R₁+R₂). 큰 저항이 전압을 더 많이 가져가고, 나눠 가진 전압을 다 더하면 전체 전압이 돼.',
@@ -7440,7 +7448,7 @@ a.term:focus-visible {
     {
       id: 'power',
       name: '전력 (P=VI, I²R, V²/R)',
-      group: '기초',
+      group: '회로 기본',
       prereqs: ['ohm'],
       card:
         '전력 P는 1초 동안 쓰는 전기 에너지야(단위 W, 와트). 기본은 P = V × I. 여기에 옴의 법칙(V = IR)을 끼워 넣으면 P = I²R, P = V²/R도 돼. 주어진 값 두 개에 맞는 식을 골라 쓰면 끝이야.',
@@ -7452,7 +7460,7 @@ a.term:focus-visible {
     {
       id: 'energy',
       name: '전력량·요금 (kWh)',
-      group: '기초',
+      group: '회로 기본',
       prereqs: ['power'],
       card:
         '전력량은 전력 × 시간이야. 1 kW로 1시간 쓰면 1 kWh. W를 kW로 바꾸려면 1000으로 나눠. 전기요금 = 전력량(kWh) × 1 kWh당 단가. 그리고 1 kWh = 1000 W × 3600 s = 3,600,000 J = 3.6 MJ.',
@@ -7464,7 +7472,7 @@ a.term:focus-visible {
     {
       id: 'three-phase',
       name: '3상 전력',
-      group: '기초',
+      group: '회로 기본',
       prereqs: ['power'],
       card:
         '3상 전력은 선간전압 V와 선전류 I로 P = √3 × V × I × cosθ (W)야. cosθ는 역률(전기가 실제 일에 쓰이는 비율). 한 상 전력의 3배인데, 이걸 선간 값으로 바꾸면 3/√3 = √3이 남아서 √3이 붙어. 역률을 빼면 피상전력 S = √3VI (VA).',
@@ -20212,7 +20220,7 @@ a.term:focus-visible {
     const tabs = [
       ['learn', '배우기'],
       ['units', '과목별'],
-      ['practice', '문제풀이'],
+      ['practice', '∞ 문제풀이'],
       ['review', '복습'],
       ['stats', '기록'],
       ['settings', '설정'],
