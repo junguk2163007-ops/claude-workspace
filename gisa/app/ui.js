@@ -249,6 +249,17 @@
     window.scrollTo(0, 0);
   }
 
+  // ───────── 개념 그림(도식·실물 일러스트) ─────────
+  function conceptFigures(cid) {
+    const figs = G.figuresFor ? G.figuresFor(cid) : [];
+    if (!figs.length) return null;
+    return h(
+      'div',
+      { class: 'cfigs', 'data-figs': cid },
+      figs.map((f) => h('figure', { class: 'cfig', 'data-fig': f.id }, h('div', { class: 'cfig-art', html: G.figures.render(f) }), h('figcaption', null, h('strong', null, f.title), f.caption ? h('span', null, f.caption) : null)))
+    );
+  }
+
   // ───────── 보던 화면 기억 · 업데이트 알림 ─────────
   // 새 버전이 올라와서 페이지가 다시 열려도 보던 탭·레슨·단락·문제·스크롤 위치로 돌아오게 한다(이 브라우저 localStorage).
   const VIEW_KEY = 'gisa-view';
@@ -1625,6 +1636,7 @@
       h('span', { class: 'eyebrow' }, l.part + ' · ' + (idx + 1) + '/' + G.lessons.length),
       h('h2', null, l.title),
       h('p', { class: 'goal' }, '이번 목표: ' + l.goal),
+      c ? conceptFigures(c.id) : null,
       l.sections.map((sec) =>
         h('section', { class: 'lesson-sec' }, h('h3', null, sec.h), (sec.p || []).map((t) => h('p', null, t)), sec.list ? h('ul', null, sec.list.map((t) => h('li', null, t))) : null)
       ),
@@ -1832,7 +1844,8 @@
         'section',
         { class: 'lesson-sec' },
         h('h3', null, '2. 개념을 쉽게 이해하기'),
-        h('p', null, c.card)
+        h('p', null, c.card),
+        conceptFigures(c.id)
       ),
       l
         ? l.sections.map((sec) => h('section', { class: 'lesson-sec' }, h('h3', null, sec.h), (sec.p || []).map((t) => h('p', null, t)), sec.list ? h('ul', null, sec.list.map((t) => h('li', null, t))) : null))

@@ -1210,6 +1210,26 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-14. 개념 그림(도식·실물 일러스트) ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+    await page.evaluate(() => GISA.ui._openLesson('l-cd-height'));
+    check((await page.$$('.cfig')).length === 1, '레슨에 개념 그림');
+    check(await page.isVisible('.cfig svg') && (await page.textContent('.cfig figcaption')).includes('6.5 m'), '그림 설명 글');
+    const w = await page.evaluate(() => document.querySelector('.cfig svg').getBoundingClientRect().width);
+    check(w > 250 && w <= 390, '폰 폭에 맞는 그림 크기 (' + Math.round(w) + 'px)');
+    check(await noOverflow(page), '그림 때문에 가로로 넘치지 않음');
+    await page.evaluate(() => GISA.ui._openUnit('em-capacitor'));
+    check((await page.$$('.cfig')).length === 1, '과목별 단락에 개념 그림');
+    check(await page.evaluate(() => getComputedStyle(document.querySelector('.cfig svg text')).fill !== 'rgba(0, 0, 0, 0)'), '다크모드에서 그림 글자가 보임');
+    await page.screenshot({ path: path.join(SHOTS, '17-figure-unit.png'), fullPage: false });
+    // 그림 없는 개념은 그냥 열림
+    await page.evaluate(() => GISA.ui._openUnit('pw-gen'));
+    check((await page.$$('.cfig')).length === 0, '그림이 없는 개념도 정상');
+    check(errors.length === 0, '그림 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });

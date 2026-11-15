@@ -18,6 +18,7 @@ module.exports = {
     'engine/generate.js',
     'engine/static-bank.js',
     'engine/svg.js',
+    'engine/figures.js',
     'engine/lessons.js',
   ],
   content: [
@@ -61,6 +62,9 @@ module.exports = {
     'glossary/ext1.js',
     'glossary/code1.js',
     'glossary/code2.js',
+    'figures/basic.js',
+    'figures/power-machine.js',
+    'figures/code.js',
     'calc-guides/base-basics.js',
     'calc-guides/circuit-ac.js',
     'calc-guides/em.js',
