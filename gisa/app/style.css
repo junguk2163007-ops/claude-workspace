@@ -622,7 +622,7 @@ select {
 }
 @media (min-width: 940px) {
   body.has-side {
-    padding-right: 380px;
+    padding-right: 340px;
   }
   body.has-side #side {
     display: flex;
@@ -632,7 +632,7 @@ select {
     top: env(safe-area-inset-top, 0px);
     right: 0;
     bottom: 0;
-    width: 380px;
+    width: 340px;
     padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
     background: var(--surface);
     border-left: 1px solid var(--line);
@@ -1341,10 +1341,10 @@ body.calc-dock .toast {
   left: calc(50% + 170px);
 }
 body.calc-dock.has-side .toast {
-  left: calc(50% + 170px - 190px);
+  left: 50%;
 }
 body.has-side:not(.calc-dock) .toast {
-  left: calc((100% - 380px) / 2);
+  left: calc((100% - 340px) / 2);
 }
 /* 액정 */
 .lcd-panel {
@@ -2553,4 +2553,147 @@ a.term:focus-visible {
 }
 .kg-bank p {
   margin: 0;
+}
+
+/* 양쪽 패널(계산기 + AI)이 다 붙어 있을 땐 가운데 글자 영역 좌우 여백을 줄여 덜 좁아 보이게 */
+@media (min-width: 1280px) {
+  body.calc-dock.has-side .wrap {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* ── 모의고사(시험모드), 북마크, 모르겠어요 ── */
+.exam-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  margin: 10px 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.exam-entry p {
+  margin: 4px 0 0;
+}
+.ex-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ex-timer {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.ex-timer.low {
+  color: #d13b2e;
+}
+.ex-grid-panel {
+  margin-top: 10px;
+}
+.ex-sec {
+  margin: 12px 0 6px;
+  font-size: 14px;
+}
+.ex-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.ex-no {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.ex-no.done,
+.ex-sw.done {
+  background: var(--surface-2);
+  border-color: var(--muted);
+}
+.ex-no.idk,
+.ex-sw.idk {
+  background: repeating-linear-gradient(45deg, var(--surface), var(--surface) 4px, var(--surface-2) 4px, var(--surface-2) 8px);
+}
+.ex-no.cur,
+.ex-sw.cur {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+}
+.ex-no.right {
+  background: rgba(46, 160, 67, 0.16);
+  border-color: #2ea043;
+}
+.ex-no.wrong {
+  background: rgba(209, 59, 46, 0.14);
+  border-color: #d13b2e;
+}
+.ex-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+}
+.ex-sw {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  vertical-align: -2px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.choice.is-picked {
+  border-color: var(--ink);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.ex-nav {
+  display: flex;
+  gap: 8px;
+}
+.ex-nav .btn {
+  flex: 1;
+}
+.ex-confirm {
+  border-color: var(--accent);
+}
+.bar.cut {
+  position: relative;
+}
+.bar.cut .cutline {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--ink);
+  opacity: 0.55;
+}
+.bad-text {
+  color: #d13b2e;
+  font-weight: 700;
+}
+.bm-btn {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bm-btn.on {
+  color: #b7791f;
+  border-color: #b7791f;
 }

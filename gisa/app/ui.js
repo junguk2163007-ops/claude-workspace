@@ -140,6 +140,7 @@
     view.analogy = false;
     view.event = null;
     view.unlocked = [];
+    view.kgNext = null;
   }
 
   function nextQuestion() {
@@ -174,6 +175,7 @@
     }
     let cid = null;
     if (view.mode === 'basics' && view.basics) cid = view.basics.focus;
+    else if (view.mode === 'weak' && view.weak) cid = view.weak.cid;
     else if (S.settings.focus !== 'auto' && concept(S.settings.focus) && P.isUnlocked(S, S.settings.focus) && inSubject(concept(S.settings.focus)))
       cid = S.settings.focus;
     else {
@@ -205,6 +207,8 @@
     }
     const after = unlockedSet();
     view.unlocked = after.filter((id) => before.indexOf(id) === -1);
+    view.kgNext = null;
+    if (masteredName !== null && G.kigeum && KG().count() && KG().pool({ cid: view.q.conceptId }).length) view.kgNext = { cid: view.q.conceptId };
     save();
     render();
     const v = document.querySelector('.verdict');
@@ -384,6 +388,14 @@
         h('button', { class: 'btn small', onclick: () => { view.mode = 'normal'; view.reviewQueue = []; nextQuestion(); render(); } }, '복습 그만하기')
       );
     }
+    if (view.mode === 'weak' && view.weak) {
+      return h(
+        'div',
+        { class: 'banner', id: 'weak-banner' },
+        '약점 집중: ' + concept(view.weak.cid).name,
+        h('button', { class: 'btn small', id: 'weak-exit', onclick: () => { view.mode = 'normal'; view.weak = null; nextQuestion(); render(); } }, '그만하기')
+      );
+    }
     if (view.mode === 'basics' && view.basics) {
       return h(
         'div',
@@ -450,7 +462,8 @@
         'div',
         { class: 'hint-row' },
         h('button', { class: 'btn small soft', id: 'hint1', disabled: view.hint >= 1, onclick: () => { view.hint = 1; render(); } }, '힌트 1 · 개념 카드'),
-        h('button', { class: 'btn small soft', id: 'hint2', disabled: view.hint !== 1, onclick: () => { view.hint = 2; render(); } }, '힌트 2 · 쓸 공식')
+        h('button', { class: 'btn small soft', id: 'hint2', disabled: view.hint !== 1, onclick: () => { view.hint = 2; render(); } }, '힌트 2 · 쓸 공식'),
+        h('button', { class: 'btn small', id: 'idk', title: '고르지 않고 정답과 풀이를 봐. 오답으로 기록되고 복습에 들어가', onclick: giveUp }, '모르겠어요')
       ),
       body
     );
@@ -492,7 +505,7 @@
 
   function explainBlock(q) {
     const chosen = q.choices[view.chosen];
-    const ok = chosen.correct;
+    const ok = !!chosen && chosen.correct;
     const ex = q.explain;
     const c = concept(q.conceptId);
     const cards = [];
@@ -500,7 +513,7 @@
       h(
         'div',
         { class: 'verdict ' + (ok ? 'ok' : 'bad'), role: 'status' },
-        ok ? '정답!' : '아쉽다, 오답이야',
+        ok ? '정답!' : view.chosen < 0 ? '모르겠어요로 넘겼어' : '아쉽다, 오답이야',
         h('small', null, ok ? '연속 정답 ' + S.streak.cur + '개째' : '정답은 ' + NUMS[q.answerIndex] + '번 · ' + q.choices[q.answerIndex].label)
       )
     );
@@ -544,10 +557,13 @@
     const notes = [];
     const rn = reviewNote();
     if (rn) notes.push(h('p', { class: 'note' }, rn));
+    if (view.kgNext) notes.push(h('p', { class: 'note', id: 'kg-bonus-note' }, '연속 3정답으로 이 포인트가 익숙해졌어. 이제 같은 개념의 기출·CBT 문제 ' + Math.min(3, KG().conceptCount(view.kgNext.cid)) + '개로 실전 감각을 확인해 보자.'));
     if (view.unlocked.length) notes.push(h('p', { class: 'note' }, '새 개념이 열렸어: ' + view.unlocked.map((id) => concept(id).name).join(', ')));
     cards.push(notes);
     const actions = [
-      h('button', { class: 'btn primary', id: 'next', onclick: () => { nextQuestion(); render(); window.scrollTo(0, 0); } }, '다음 문제'),
+      view.kgNext
+        ? h('button', { class: 'btn primary', id: 'next', onclick: () => startKigeumSet(view.kgNext.cid) }, '다음: 이 개념 기출·CBT ' + Math.min(3, KG().conceptCount(view.kgNext.cid)) + '문제')
+        : h('button', { class: 'btn primary', id: 'next', onclick: () => { nextQuestion(); render(); window.scrollTo(0, 0); } }, '다음 문제'),
       h('button', { class: 'btn', id: 'retry', onclick: () => { resetCard(); view.q = G.fromKey(q.key); render(); window.scrollTo(0, 0); } }, '같은 문제 다시'),
     ];
     if (!ok) {
@@ -604,7 +620,8 @@
         h('span', { class: 'tag' }, c.name),
         h('span', { class: 'tag plain' }, c.group + (q.source === 'static' ? ' · 이론형' : '')),
         isReview ? h('span', { class: 'tag review' }, '복습') : null,
-        h('span', { class: 'qid', title: '문제 번호 (설정에서 다시 불러올 수 있어)' }, q.key)
+        h('span', { class: 'qid', title: '문제 번호 (설정에서 다시 불러올 수 있어)' }, q.key),
+        bookmarkButton(q)
       ),
       h('div', { class: 'qrow' }, h('p', { class: 'qtext' }, q.text), calcButton(q)),
       calcAsk(q),
@@ -633,6 +650,440 @@
     );
   }
 
+  // ───────── 모의고사(시험모드) ─────────
+  const X = () => G.exam;
+  const fmtClock = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return String(Math.floor(m / 60)) + ':' + String(m % 60).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  };
+  let examTimer = null;
+  function stopExamTimer() {
+    if (examTimer) clearInterval(examTimer);
+    examTimer = null;
+  }
+  function startExamTimer() {
+    stopExamTimer();
+    examTimer = setInterval(() => {
+      const ex = view.ex;
+      if (!ex || ex.result) return stopExamTimer();
+      const left = X().remaining(ex.c);
+      const el = document.getElementById('ex-timer');
+      if (el) {
+        el.textContent = fmtClock(left);
+        el.classList.toggle('low', left <= 600);
+      }
+      if (left <= 0) examSubmit();
+    }, 1000);
+  }
+  function examQuestion() {
+    const ex = view.ex;
+    if (!ex.q || ex.qIdx !== ex.c.idx) {
+      ex.q = G.fromKey(ex.c.paper.keys[ex.c.idx]);
+      ex.qIdx = ex.c.idx;
+    }
+    return ex.q;
+  }
+  function startExam(resume) {
+    let c = resume ? X().cur.load() : null;
+    if (!c) c = X().cur.start();
+    view.mode = 'exam';
+    view.ex = { c, q: null, qIdx: -1, grid: false, confirm: false, result: null };
+    startExamTimer();
+    goTab('practice');
+    window.scrollTo(0, 0);
+  }
+  function exitExam() {
+    stopExamTimer();
+    view.mode = 'normal';
+    view.ex = null;
+    nextQuestion();
+    render();
+    window.scrollTo(0, 0);
+  }
+  function examSave() {
+    X().cur.save(view.ex.c);
+  }
+  function examGo(n) {
+    const ex = view.ex;
+    ex.c.idx = Math.max(0, Math.min(ex.c.answers.length - 1, n));
+    ex.grid = false;
+    examSave();
+    render();
+    window.scrollTo(0, 0);
+  }
+  function examPick(i) {
+    const ex = view.ex;
+    ex.c.answers[ex.c.idx] = ex.c.answers[ex.c.idx] === i ? -1 : i; // 한 번 더 누르면 선택 취소
+    examSave();
+    render();
+  }
+  function examIdk() {
+    const ex = view.ex;
+    ex.c.answers[ex.c.idx] = -2;
+    examSave();
+    if (ex.c.idx < ex.c.answers.length - 1) examGo(ex.c.idx + 1);
+    else render();
+  }
+  function examSubmit() {
+    const ex = view.ex;
+    if (!ex || ex.result) return;
+    stopExamTimer();
+    const g = X().grade(ex.c);
+    // 푼 기록과 복습에도 반영: 틀리거나 못 푼 문제는 복습 목록으로
+    ex.c.paper.keys.forEach((key, i) => {
+      try {
+        const q = G.fromKey(key);
+        P.record(S, q, ex.c.answers[i] >= 0 && ex.c.answers[i] === q.answerIndex);
+      } catch (e) {
+        /* 없어진 문제는 건너뜀 */
+      }
+    });
+    save();
+    X().hist.add(ex.c, g);
+    X().cur.clear();
+    ex.result = g;
+    ex.confirm = false;
+    render();
+    window.scrollTo(0, 0);
+  }
+
+  function examGrid(ex) {
+    const c = ex.c;
+    const wrap = h('div', { class: 'ex-grid-panel', id: 'ex-grid' });
+    c.paper.sections.forEach((s) => {
+      const done = c.answers.slice(s.from, s.to).filter((a) => a !== -1).length;
+      wrap.appendChild(h('h3', { class: 'ex-sec' }, s.name, h('span', { class: 'muted small' }, ' (' + done + '/' + (s.to - s.from) + ')')));
+      const grid = h('div', { class: 'ex-grid' });
+      for (let i = s.from; i < s.to; i++) {
+        const a = c.answers[i];
+        let cls = 'ex-no';
+        if (i === c.idx) cls += ' cur';
+        else if (a === -2) cls += ' idk';
+        else if (a >= 0) cls += ' done';
+        grid.appendChild(h('button', { class: cls, 'data-n': i, 'aria-label': i + 1 + '번' + (a >= 0 ? ' 푼 문제' : a === -2 ? ' 모르겠어요' : ' 안 푼 문제'), onclick: () => examGo(i) }, String(i + 1)));
+      }
+      wrap.appendChild(grid);
+    });
+    wrap.appendChild(
+      h(
+        'div',
+        { class: 'ex-legend muted small' },
+        h('span', null, h('i', { class: 'ex-sw cur' }), '현재'),
+        h('span', null, h('i', { class: 'ex-sw done' }), '푼 문제'),
+        h('span', null, h('i', { class: 'ex-sw idk' }), '모르겠어요'),
+        h('span', null, h('i', { class: 'ex-sw' }), '안 푼 문제')
+      )
+    );
+    return wrap;
+  }
+
+  function renderExam(root) {
+    const ex = view.ex;
+    if (ex.result) return renderExamResult(root);
+    const c = ex.c;
+    const left = X().remaining(c);
+    if (left <= 0) {
+      examSubmit();
+      return;
+    }
+    const q = examQuestion();
+    const sec = c.paper.sections.find((s) => c.idx >= s.from && c.idx < s.to);
+    const unanswered = c.answers.filter((a) => a === -1).length;
+    const idk = c.answers.filter((a) => a === -2).length;
+    root.appendChild(
+      h(
+        'div',
+        { class: 'panel ex-head' },
+        h(
+          'div',
+          { class: 'ex-top' },
+          h('strong', null, '모의고사'),
+          h('span', { class: 'tag plain' }, '시험모드'),
+          h('span', { class: 'ex-timer' + (left <= 600 ? ' low' : ''), id: 'ex-timer', title: '남은 시간' }, fmtClock(left))
+        ),
+        h('div', { class: 'bar' }, h('i', { style: 'width:' + Math.round(((c.answers.length - unanswered) / c.answers.length) * 100) + '%' })),
+        h(
+          'div',
+          { class: 'stat-line' },
+          h('span', null, sec.name + ' · ' + (c.idx + 1) + '/' + c.answers.length),
+          h('span', null, '푼 문제 ' + (c.answers.length - unanswered - idk) + ' · 모르겠어요 ' + idk + ' · 안 푼 문제 ' + unanswered)
+        ),
+        h(
+          'div',
+          { class: 'actions' },
+          h('button', { class: 'btn small', id: 'ex-grid-btn', 'aria-expanded': String(ex.grid), onclick: () => { ex.grid = !ex.grid; render(); } }, ex.grid ? '번호표 닫기' : '번호표'),
+          h('button', { class: 'btn small primary', id: 'ex-submit', onclick: () => { ex.confirm = true; render(); } }, '제출하기'),
+          h('button', { class: 'btn small soft', id: 'ex-quit', onclick: () => { ex.quit = true; render(); } }, '나가기')
+        ),
+        ex.grid ? examGrid(ex) : null
+      )
+    );
+    if (ex.confirm) {
+      root.appendChild(
+        h(
+          'div',
+          { class: 'panel ex-confirm', id: 'ex-confirm', role: 'alertdialog' },
+          h('strong', null, '지금 제출할까?'),
+          h('p', { class: 'muted small' }, '안 푼 문제 ' + unanswered + '개, 모르겠어요 ' + idk + '개는 오답으로 채점돼. 제출하면 시험이 끝나.'),
+          h(
+            'div',
+            { class: 'actions' },
+            h('button', { class: 'btn primary', id: 'ex-submit-yes', onclick: examSubmit }, '제출'),
+            h('button', { class: 'btn', id: 'ex-submit-no', onclick: () => { ex.confirm = false; render(); } }, '계속 풀기')
+          )
+        )
+      );
+    }
+    if (ex.quit) {
+      root.appendChild(
+        h(
+          'div',
+          { class: 'panel ex-confirm', id: 'ex-quit-box', role: 'alertdialog' },
+          h('strong', null, '시험을 나갈까?'),
+          h('p', { class: 'muted small' }, '지금까지 푼 답과 남은 시간은 저장돼서 문제풀이 탭의 "이어서 풀기"로 다시 올 수 있어. 시간은 나가 있는 동안에도 흘러.'),
+          h(
+            'div',
+            { class: 'actions' },
+            h('button', { class: 'btn primary', id: 'ex-quit-yes', onclick: exitExam }, '나가기'),
+            h('button', { class: 'btn', id: 'ex-quit-no', onclick: () => { ex.quit = false; render(); } }, '계속 풀기')
+          )
+        )
+      );
+    }
+    const a = c.answers[c.idx];
+    root.appendChild(
+      h(
+        'article',
+        { class: 'qcard ex-card', 'data-ex': c.idx },
+        h('div', { class: 'qmeta' }, h('span', { class: 'tag' }, '문제 ' + (c.idx + 1)), h('span', { class: 'tag plain' }, sec.short), bookmarkButton(q)),
+        h('div', { class: 'qrow' }, h('p', { class: 'qtext' }, q.text), calcButton(q)),
+        q.svg ? h('div', { class: 'figure', html: q.svg }) : null,
+        h(
+          'ol',
+          { class: 'choices' },
+          q.choices.map((ch, i) =>
+            h('li', null, h('button', { class: 'choice' + (a === i ? ' is-picked' : ''), 'aria-pressed': String(a === i), 'data-i': i, onclick: () => examPick(i) }, h('span', { class: 'no' }, NUMS[i]), h('span', { class: 'lab' }, ch.label)))
+          )
+        ),
+        a === -2 ? h('p', { class: 'note' }, '"모르겠어요"로 표시했어. 보기를 고르면 바뀌어.') : null,
+        h(
+          'div',
+          { class: 'actions ex-nav' },
+          h('button', { class: 'btn', id: 'ex-prev', disabled: c.idx === 0, onclick: () => examGo(c.idx - 1) }, '이전 문제'),
+          h('button', { class: 'btn soft', id: 'ex-idk', onclick: examIdk }, '모르겠어요'),
+          c.idx < c.answers.length - 1
+            ? h('button', { class: 'btn primary', id: 'ex-next', onclick: () => examGo(c.idx + 1) }, '다음 문제')
+            : h('button', { class: 'btn primary', id: 'ex-next', onclick: () => { ex.confirm = true; render(); } }, '제출하기')
+        )
+      )
+    );
+  }
+
+  function renderExamResult(root) {
+    const ex = view.ex;
+    const g = ex.result;
+    const c = ex.c;
+    const secs = Math.min(X().LIMIT_SEC, Math.floor((Date.now() - c.startedAt) / 1000));
+    root.appendChild(
+      h(
+        'div',
+        { class: 'panel ex-result', id: 'ex-result' },
+        h('h2', null, g.pass ? '합격권이야! 🎉' : '아쉽다, 불합격 점수야'),
+        h('p', { class: 'muted small' }, '평균 ' + g.avg + '점 (합격은 평균 ' + X().PASS_AVG + '점 이상, 과목마다 ' + X().CUT + '점 이상) · 맞힌 문제 ' + g.correct + '/100 · 걸린 시간 ' + fmtClock(secs)),
+        g.cutSubjects.length ? h('p', { class: 'note', id: 'ex-cut' }, '과락 과목: ' + g.cutSubjects.join(', ') + ' (' + X().CUT + '점 미만이면 평균이 높아도 불합격이야)') : null,
+        h(
+          'div',
+          { class: 'rows' },
+          g.per.map((p) =>
+            h(
+              'div',
+              { class: 'row' },
+              h('div', { class: 'row-head' }, h('span', { class: 'name' }, p.name), h('span', { class: 'right' + (p.score < X().CUT ? ' bad-text' : '') }, p.score + '점 (' + p.ok + '/' + p.n + ')')),
+              h('div', { class: 'bar cut' + (p.score < X().CUT ? ' low' : '') }, h('i', { style: 'width:' + p.score + '%' }), h('b', { class: 'cutline', style: 'left:' + X().CUT + '%', title: '과락선 ' + X().CUT + '점' }))
+            )
+          )
+        ),
+        h(
+          'div',
+          { class: 'actions' },
+          g.wrong.length
+            ? h('button', { class: 'btn primary', id: 'ex-review-wrong', onclick: () => { stopExamTimer(); view.mode = 'review'; view.ex = null; view.reviewQueue = g.wrong.slice(); nextQuestion(); render(); window.scrollTo(0, 0); } }, '틀린 문제 다시 풀기 (' + g.wrong.length + ')')
+            : null,
+          h('button', { class: 'btn', id: 'ex-new', onclick: () => startExam(false) }, '새 모의고사'),
+          h('button', { class: 'btn soft', id: 'ex-close', onclick: exitExam }, '닫기')
+        ),
+        h('p', { class: 'note' }, '틀리거나 못 푼 문제는 복습 목록(1일 → 3일 → 7일)에 들어갔어.')
+      )
+    );
+    // 문제별 결과 격자
+    const grid = h('div', { class: 'ex-grid-panel' });
+    c.paper.sections.forEach((s) => {
+      grid.appendChild(h('h3', { class: 'ex-sec' }, s.name));
+      const gr = h('div', { class: 'ex-grid' });
+      for (let i = s.from; i < s.to; i++) {
+        const a = c.answers[i];
+        let okk = false;
+        try {
+          okk = a >= 0 && a === X().answerIndexOf(c.paper.keys[i]);
+        } catch (e) {
+          okk = false;
+        }
+        gr.appendChild(
+          h('button', { class: 'ex-no ' + (okk ? 'right' : 'wrong'), 'aria-label': i + 1 + '번 ' + (okk ? '정답' : '오답'), title: '눌러서 이 문제를 다시 풀기', onclick: () => { stopExamTimer(); view.mode = 'normal'; view.ex = null; loadKey(c.paper.keys[i]); render(); window.scrollTo(0, 0); } }, String(i + 1))
+        );
+      }
+      grid.appendChild(gr);
+    });
+    root.appendChild(h('div', { class: 'panel' }, h('h3', { class: 'eyebrow' }, '문제별 결과 (눌러서 다시 풀기)'), grid));
+  }
+
+  // 문제풀이 화면 맨 위의 모의고사 입구
+  function examEntry() {
+    const cur = X().cur.load();
+    const hist = X().hist.list();
+    const last = hist.length ? hist[hist.length - 1] : null;
+    return h(
+      'div',
+      { class: 'exam-entry', id: 'exam-entry' },
+      h('div', null, h('strong', null, '모의고사 (시험모드)'), h('p', { class: 'muted small' }, '5과목 × 20문제 = 100문제 · 150분. 합격은 평균 60점 이상, 과목마다 40점 이상이야.' + (last ? ' 최근 결과: 평균 ' + last.avg + '점 ' + (last.pass ? '합격권' : '불합격') : ''))),
+      h(
+        'div',
+        { class: 'actions' },
+        cur && X().remaining(cur) > 0 ? h('button', { class: 'btn primary', id: 'exam-resume', onclick: () => startExam(true) }, '이어서 풀기 (' + cur.answers.filter((a) => a !== -1).length + '/100)') : null,
+        h('button', { class: cur && X().remaining(cur) > 0 ? 'btn' : 'btn primary', id: 'exam-start', onclick: () => startExam(false) }, '새 모의고사 시작')
+      )
+    );
+  }
+
+  // 문제 카드의 북마크(별) 버튼
+  function bookmarkButton(q) {
+    if (!q || !q.key) return null;
+    const on = X().book.has(q.key);
+    return h(
+      'button',
+      {
+        class: 'bm-btn' + (on ? ' on' : ''),
+        id: 'bookmark-btn',
+        type: 'button',
+        'aria-pressed': String(on),
+        'aria-label': on ? '북마크 해제' : '북마크',
+        title: on ? '북마크 해제' : '북마크: 나중에 복습 탭에서 다시 풀 수 있어',
+        onclick: () => {
+          const now = X().book.toggle(q.key);
+          toast(now ? '북마크했어. 복습 탭에서 다시 풀 수 있어.' : '북마크를 뺐어.');
+          render();
+        },
+      },
+      on ? '★ 북마크됨' : '☆ 북마크'
+    );
+  }
+
+  // "모르겠어요": 고르지 않고 정답과 풀이를 본다(오답으로 기록되고 복습에 들어가)
+  function giveUp() {
+    if (view.answered || !view.q) return;
+    const before = unlockedSet();
+    view.answered = true;
+    view.chosen = -1;
+    view.event = P.record(S, view.q, false);
+    view.unlocked = unlockedSet().filter((id) => before.indexOf(id) === -1);
+    save();
+    render();
+    const v = document.querySelector('.verdict');
+    if (v && v.scrollIntoView) v.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  // 약점 개념 집중 풀이
+  function startWeak(cid) {
+    view.mode = 'weak';
+    view.weak = { cid };
+    nextQuestion();
+    goTab('practice');
+    window.scrollTo(0, 0);
+  }
+
+  // 복습 탭의 북마크 목록
+  function bookmarkPanel() {
+    const list = X().book.list();
+    const rows = list.slice(0, 50).map((key) => {
+      let label = key;
+      let cname = '';
+      try {
+        const m = /^([ts]):([a-z0-9-]+)#/.exec(key);
+        const cid = m[1] === 't' ? (G.templates[m[2]] || {}).concept : ((G.staticMap[m[2]] || {}).concepts || [])[0];
+        cname = cid && concept(cid) ? concept(cid).name : '';
+      } catch (e) {
+        cname = '';
+      }
+      return h(
+        'div',
+        { class: 'row', 'data-bm': key },
+        h('div', { class: 'row-head' }, h('span', { class: 'name' }, cname || key), h('span', { class: 'right' }, h('button', { class: 'btn small', onclick: () => { view.mode = 'normal'; loadKey(key); goTab('practice'); window.scrollTo(0, 0); } }, '풀기'), ' ', h('button', { class: 'btn small soft', 'aria-label': '북마크 해제', onclick: () => { X().book.toggle(key); render(); } }, '빼기'))),
+        h('div', { class: 'stat-line' }, h('span', null, label))
+      );
+    });
+    return h(
+      'div',
+      { class: 'panel', id: 'bookmark-panel' },
+      h('h2', null, '북마크 (' + list.length + ')'),
+      list.length
+        ? h('div', null, h('div', { class: 'rows' }, rows), h('div', { class: 'actions' }, h('button', { class: 'btn primary', id: 'bm-all', onclick: () => { view.mode = 'review'; view.reviewQueue = list.slice(); nextQuestion(); goTab('practice'); window.scrollTo(0, 0); } }, '북마크 전부 풀기')))
+        : h('p', { class: 'muted small' }, '문제 위의 ☆ 북마크를 누르면 여기에 모여. 다시 보고 싶은 문제를 골라 둬.')
+    );
+  }
+
+  // 기록 탭: 약점 개념 + 모의고사 기록
+  function weakPanel() {
+    const rows = G.concepts
+      .map((c) => ({ c, st: P.conceptStat(S, c.id) }))
+      .filter((x) => x.st.n >= 3 && x.st.c / x.st.n < 1)
+      .sort((a, b) => a.st.c / a.st.n - b.st.c / b.st.n || b.st.n - a.st.n)
+      .slice(0, 5);
+    return h(
+      'div',
+      { class: 'panel', id: 'weak-panel' },
+      h('h2', null, '약점 개념 TOP 5'),
+      rows.length
+        ? h(
+            'div',
+            { class: 'rows' },
+            rows.map((x, i) =>
+              h(
+                'div',
+                { class: 'row', 'data-weak': x.c.id },
+                h('div', { class: 'row-head' }, h('span', { class: 'name' }, i + 1 + '. ' + x.c.name), h('span', { class: 'right bad-text' }, Math.round((x.st.c / x.st.n) * 100) + '% (' + x.st.c + '/' + x.st.n + ')')),
+                h('div', { class: 'stat-line' }, h('span', { class: 'muted small' }, subjectName(x.c.subject)), h('button', { class: 'btn small', onclick: () => startWeak(x.c.id) }, '바로 풀기'))
+              )
+            )
+          )
+        : h('p', { class: 'muted small' }, '아직 3문제 이상 푼 개념 중에 틀린 게 없어. 더 풀면 가장 약한 개념 5개를 여기서 바로 풀 수 있게 보여 줄게.')
+    );
+  }
+  function examHistoryPanel() {
+    const hs = X().hist.list().slice(-5).reverse();
+    if (!hs.length) return null;
+    const lastH = hs[0];
+    return h(
+      'div',
+      { class: 'panel', id: 'exam-history' },
+      h('h2', null, '모의고사 기록'),
+      h('p', { class: 'muted small' }, '가장 최근: ' + new Date(lastH.t).toLocaleDateString('ko-KR') + ' · 평균 ' + lastH.avg + '점 · ' + (lastH.pass ? '합격권' : '불합격')),
+      h(
+        'div',
+        { class: 'rows' },
+        lastH.per.map((p) =>
+          h(
+            'div',
+            { class: 'row' },
+            h('div', { class: 'row-head' }, h('span', { class: 'name' }, p.name), h('span', { class: 'right' + (p.score < X().CUT ? ' bad-text' : '') }, p.score + '점')),
+            h('div', { class: 'bar cut' + (p.score < X().CUT ? ' low' : '') }, h('i', { style: 'width:' + p.score + '%' }), h('b', { class: 'cutline', style: 'left:' + X().CUT + '%' }))
+          )
+        )
+      ),
+      hs.length > 1 ? h('p', { class: 'muted small' }, '이전 시험: ' + hs.slice(1).map((e) => e.avg + '점').join(' · ')) : null
+    );
+  }
+
   // ───────── 기출 CBT 반복 (내 기출 보관함) ─────────
   const KG = () => G.kigeum;
   function startKigeum(filter) {
@@ -640,6 +1091,27 @@
     view.kg = { filter: Object.assign({ s: 0, cid: null, from: 0 }, filter || {}), q: null, answered: false, chosen: -1 };
     kigeumNext();
     goTab('practice');
+  }
+  // 연속 3정답 보너스: 같은 개념의 기출·CBT를 최대 3문제 풀고 원래 하던 곳으로 돌아간다
+  function startKigeumSet(cid) {
+    const back = { mode: view.mode };
+    view.mode = 'kigeum';
+    view.kg = { filter: { s: 0, cid, from: 0 }, q: null, answered: false, chosen: -1, back, set: { n: Math.min(3, KG().conceptCount(cid)), done: 0, right: 0 } };
+    view.kgNext = null;
+    kigeumNext();
+    goTab('practice');
+    window.scrollTo(0, 0);
+  }
+  function finishKigeumSet() {
+    const k = view.kg;
+    const back = k && k.back ? k.back.mode : 'normal';
+    const msg = k && k.set ? '기출·CBT ' + k.set.n + '문제 중 ' + k.set.right + '문제 맞혔어!' : '';
+    view.mode = back === 'kigeum' || back === 'exam' ? 'normal' : back;
+    view.kg = null;
+    nextQuestion();
+    render();
+    window.scrollTo(0, 0);
+    if (msg) toast(msg);
   }
   function exitKigeum() {
     view.mode = 'normal';
@@ -659,6 +1131,10 @@
     if (!k || !k.q || k.answered) return;
     k.answered = true;
     k.chosen = i;
+    if (k.set) {
+      k.set.done += 1;
+      if (i + 1 === k.q.a) k.set.right += 1;
+    }
     KG().record(k.q.id, i + 1 === k.q.a);
     render();
     const v = document.querySelector('.verdict');
@@ -699,7 +1175,13 @@
         h('p', { class: 'muted small' }, kgFilterLabel(f) + ' · 풀 수 있는 문제 ' + sum.total + '개 · 푼 문제 ' + sum.tried + '개 중 마지막에 맞힌 것 ' + sum.right + '개. 안 푼 문제 → 틀린 문제 순으로 먼저 나와.'),
         h('div', { class: 'field kg-filters' }, subjSel, yearSel),
         f.cid ? h('div', { class: 'chips' }, h('button', { class: 'chip', id: 'kg-clear-cid', onclick: () => { f.cid = null; kigeumNext(); render(); } }, concept(f.cid).name + ' ✕')) : null,
-        h('div', { class: 'actions' }, h('button', { class: 'btn', id: 'kg-exit', onclick: exitKigeum }, '← 문제풀이로 돌아가기'))
+        k.set ? h('p', { class: 'note', id: 'kg-set-note' }, '연속 3정답 보너스 · 기출·CBT ' + k.set.n + '문제 중 ' + k.set.done + '문제 풀었어 (맞힌 ' + k.set.right + '개)') : null,
+        h(
+          'div',
+          { class: 'actions' },
+          h('button', { class: 'btn', id: 'kg-exit', onclick: k.set ? finishKigeumSet : exitKigeum }, k.set ? '← 원래 문제로 돌아가기' : '← 문제풀이로 돌아가기'),
+          k.q ? k.q.cids.map((cid) => h('button', { class: 'btn small soft', 'data-unit-top': cid, onclick: () => { view.mode = 'normal'; view.kg = null; openUnit(cid); } }, '단락 보기: ' + concept(cid).name)) : null
+        )
       )
     );
     const q = k.q;
@@ -745,7 +1227,13 @@
                     q.cids.map((cid) => h('button', { class: 'btn small soft', 'data-unit': cid, onclick: () => { view.mode = 'normal'; view.kg = null; openUnit(cid); } }, '이 개념 공부: ' + concept(cid).name))
                   )
                 : null,
-              h('div', { class: 'actions' }, h('button', { class: 'btn primary', id: 'kg-next', onclick: () => { kigeumNext(); render(); window.scrollTo(0, 0); } }, '다음 기출'))
+              h(
+                'div',
+                { class: 'actions' },
+                k.set && k.set.done >= k.set.n
+                  ? h('button', { class: 'btn primary', id: 'kg-finish', onclick: finishKigeumSet }, '기출 ' + k.set.n + '문제 끝 (' + k.set.right + '개 정답) · 돌아가기')
+                  : h('button', { class: 'btn primary', id: 'kg-next', onclick: () => { kigeumNext(); render(); window.scrollTo(0, 0); } }, k.set ? '다음 기출 (' + k.set.done + '/' + k.set.n + ')' : '다음 기출')
+              )
             )
           : null
       )
@@ -804,7 +1292,8 @@
 
   function renderPractice(root) {
     if (view.mode === 'kigeum' && view.kg) return renderKigeum(root);
-    root.appendChild(h('div', { class: 'panel' }, subjectChips(), lockBar(), subjectReady() && view.mode !== 'review' && view.mode !== 'drill' ? conceptPicker() : null, view.mode === 'normal' ? kigeumEntry() : null));
+    if (view.mode === 'exam' && view.ex) return renderExam(root);
+    root.appendChild(h('div', { class: 'panel' }, subjectChips(), lockBar(), subjectReady() && view.mode !== 'review' && view.mode !== 'drill' ? conceptPicker() : null, view.mode === 'normal' ? examEntry() : null, view.mode === 'normal' ? kigeumEntry() : null));
     const b = modeBanner();
     if (b) root.appendChild(b);
     root.appendChild(questionCard());
@@ -1355,6 +1844,7 @@
         )
       )
     );
+    root.appendChild(bookmarkPanel());
     const list = (title, items) =>
       items.length
         ? [
@@ -1398,6 +1888,8 @@
           : h('div', { class: 'empty' }, '아직 푼 문제가 없어. 문제풀이 탭에서 첫 문제를 풀면 여기에 쌓여.')
       )
     );
+    root.appendChild(weakPanel());
+    append(root, examHistoryPanel());
     root.appendChild(h('h3', { class: 'group-title eyebrow' }, '개념별 정답률'));
     root.appendChild(
       h(
@@ -1708,6 +2200,21 @@
 
   // 맥 키보드: 1~4 고르기, Enter/N 다음 문제
   document.addEventListener('keydown', (e) => {
+    if (view.tab === 'practice' && view.mode === 'exam' && view.ex && !view.ex.result && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const tg = (e.target && e.target.tagName) || '';
+      if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT' || (e.target && e.target.closest && e.target.closest('#calc'))) return;
+      if (/^[1-4]$/.test(e.key)) {
+        examPick(Number(e.key) - 1);
+        e.preventDefault();
+      } else if (e.key === 'ArrowRight' || e.key === 'n' || e.key === 'N') {
+        examGo(view.ex.c.idx + 1);
+        e.preventDefault();
+      } else if (e.key === 'ArrowLeft') {
+        examGo(view.ex.c.idx - 1);
+        e.preventDefault();
+      }
+      return;
+    }
     if (view.tab === 'practice' && view.mode === 'kigeum' && view.kg && view.kg.q && !e.metaKey && !e.ctrlKey && !e.altKey) {
       const tg = (e.target && e.target.tagName) || '';
       if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT' || (e.target && e.target.closest && e.target.closest('#calc'))) return;
@@ -1774,7 +2281,7 @@
     view.tab = 'practice';
     render();
   }
-  G.ui = { startKigeum, openLesson, openUnit, start, _view: view, _state: () => S, _load, _answer: answer, _openLesson: openLesson, _openUnit: openUnit, _startDrill: startDrill };
+  G.ui = { startKigeum, openLesson, openUnit, start, _view: view, _state: () => S, _load, _answer: answer, _openLesson: openLesson, _openUnit: openUnit, _startDrill: startDrill, startExam, examPick, examGo, examSubmit, giveUp, startWeak };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })(globalThis.GISA);

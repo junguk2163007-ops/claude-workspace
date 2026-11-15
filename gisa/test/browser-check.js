@@ -404,7 +404,7 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
 
     check(await page.isVisible('#side'), 'PC에서 오른쪽 AI 패널 표시');
     check(await page.evaluate(() => document.body.classList.contains('has-side')), '본문 오른쪽 자리 확보(has-side)');
-    check(await page.evaluate(() => document.querySelector('#view').getBoundingClientRect().right <= 1280 - 380 + 1 && document.querySelector('#bar').getBoundingClientRect().right <= 1280 - 380 + 1), '본문·상단 바가 패널과 겹치지 않음');
+    check(await page.evaluate(() => document.querySelector('#view').getBoundingClientRect().right <= 1280 - 340 + 1 && document.querySelector('#bar').getBoundingClientRect().right <= 1280 - 340 + 1), '본문·상단 바가 패널과 겹치지 않음');
     check(await noOverflow(page), 'PC 패널 가로 넘침');
 
     // 문제 화면: 인라인 상자 대신 오른쪽 패널, 정답 숨김 규칙
@@ -1061,6 +1061,28 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(/기출 CBT 반복 \(\d+문제\)/.test(label), '기출: 포인트 카드 옆 버튼에 이어진 문제 수: ' + label);
     await page.click('[data-kg-point="ac-power"]');
     check((await page.evaluate(() => GISA.ui._view.mode)) === 'kigeum' && (await page.getAttribute('.kg-card', 'data-kg')) === 't-1', '기출: 개념 기출 반복은 그 개념에 이어진 문제');
+    check(await page.isVisible('[data-unit-top]'), '기출: 맨 위에도 단락 보기 버튼');
+    // 연속 3정답으로 포인트가 익숙해지면 같은 개념의 기출·CBT로 이어짐
+    await page.click('#kg-exit');
+    const bonus = await page.evaluate(() => {
+      const tid = GISA.templatesFor('ac-power')[0].id;
+      const q = GISA.generate(tid, 1);
+      const st = GISA.ui._state();
+      st.points = st.points || {};
+      st.points[GISA.pointId(q)] = { n: 2, c: 2, streak: 2 };
+      return { key: q.key, ans: q.answerIndex };
+    });
+    await page.evaluate((b) => GISA.ui._load(b.key), bonus);
+    await page.evaluate((b) => GISA.ui._answer(b.ans), bonus);
+    check(await page.isVisible('#kg-bonus-note'), '기출: 연속 3정답 보너스 안내');
+    check((await page.textContent('#next')).includes('기출·CBT'), '기출: 다음 버튼이 기출·CBT로 이어짐');
+    await page.click('#next');
+    check((await page.evaluate(() => GISA.ui._view.mode)) === 'kigeum' && (await page.isVisible('#kg-set-note')), '기출: 보너스 세트 시작');
+    await page.click('.kg-card .choice[data-i="0"]');
+    await page.click('#kg-finish');
+    check((await page.evaluate(() => GISA.ui._view.mode)) === 'normal', '기출: 세트가 끝나면 원래 화면으로 돌아옴');
+    await page.evaluate(() => GISA.ui._openUnit('ac-power'));
+    await page.click('[data-kg-point="ac-power"]');
     check(await noOverflow(page), '기출: 가로 넘침 없음');
     await page.screenshot({ path: path.join(SHOTS, '25-kigeum.png') });
     // 새로고침해도 남음
@@ -1073,6 +1095,85 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.waitForFunction(() => GISA.kigeum.count() === 0);
     check((await page.evaluate(() => GISA.kigeum.count())) === 0, '기출: 보관함 비우기');
     check(errors.length === 0, '기출 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── 2-12. 모의고사(시험모드) · 모르겠어요 · 북마크 · 약점 개념 ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await page.click('#tab-practice');
+    check(await page.isVisible('#exam-entry'), '문제풀이 화면에 모의고사 입구');
+
+    // 모르겠어요: 오답으로 기록 + 정답과 풀이 보임
+    await page.evaluate(() => GISA.ui._load('t:parallel-three#11'));
+    check(await page.isVisible('#idk'), '모르겠어요 버튼');
+    const n0 = await page.evaluate(() => GISA.ui._state().total.n);
+    await page.click('#idk');
+    check(await page.isVisible('.verdict.bad'), '모르겠어요 → 오답 표시');
+    check((await page.evaluate(() => GISA.ui._state().total.n)) === n0 + 1, '모르겠어요도 푼 기록에 들어감');
+    check(await page.evaluate(() => Object.keys(GISA.ui._state().reviews).indexOf('t:parallel-three#11') !== -1), '모르겠어요 → 복습 목록');
+
+    // 북마크
+    await page.evaluate(() => GISA.ui._load('t:series-total#5'));
+    await page.click('#bookmark-btn');
+    check(await page.evaluate(() => GISA.exam.book.has('t:series-total#5')), '북마크 저장');
+    await page.click('#tab-review');
+    check((await page.$$('#bookmark-panel [data-bm]')).length === 1, '복습 탭에 북마크 목록');
+    await page.click('#tab-practice');
+    await page.click('#bookmark-btn');
+    check(!(await page.evaluate(() => GISA.exam.book.has('t:series-total#5'))), '북마크 해제');
+
+    // 모의고사
+    await page.click('#exam-start');
+    check(await page.evaluate(() => GISA.ui._view.mode) === 'exam', '모의고사 시작');
+    check((await page.textContent('.ex-head')).includes('1/100'), '모의고사 1/100');
+    check(await page.isVisible('#ex-timer'), '남은 시간 표시');
+    check(await noOverflow(page), '모의고사 화면 가로 넘침');
+    await page.click('.ex-card .choice[data-i="1"]');
+    check(await page.evaluate(() => GISA.ui._view.ex.c.answers[0]) === 1, '보기 고르기');
+    check(!(await page.isVisible('.verdict')), '시험 중엔 정답을 안 알려 줌');
+    await page.click('#ex-idk');
+    check((await page.evaluate(() => GISA.ui._view.ex.c.answers[0])) === -2 || (await page.evaluate(() => GISA.ui._view.ex.c.idx)) === 1, '모르겠어요 → 다음 문제');
+    await page.click('#ex-grid-btn');
+    check((await page.$$('#ex-grid .ex-no')).length === 100, '번호표 100칸');
+    check((await page.$$('#ex-grid .ex-sec')).length === 5, '번호표 과목 5구간');
+    await page.screenshot({ path: path.join(SHOTS, '14-exam-grid.png'), fullPage: false });
+    await page.click('#ex-grid .ex-no[data-n="40"]');
+    check((await page.evaluate(() => GISA.ui._view.ex.c.idx)) === 40, '번호표로 이동');
+    // 새로고침해도 이어서 풀 수 있음
+    check(await page.evaluate(() => !!GISA.exam.cur.load()), '진행 중인 시험 저장');
+    // 나머지를 정답으로 채우고 제출
+    await page.evaluate(() => {
+      const ex = GISA.ui._view.ex;
+      ex.c.paper.keys.forEach((k, i) => {
+        if (i >= 20) ex.c.answers[i] = GISA.exam.answerIndexOf(k);
+      });
+    });
+    await page.click('#ex-submit');
+    check(await page.isVisible('#ex-confirm'), '제출 확인');
+    await page.click('#ex-submit-yes');
+    check(await page.isVisible('#ex-result'), '결과 화면');
+    const g = await page.evaluate(() => GISA.ui._view.ex.result);
+    check(g.per.length === 5 && g.per[4].score === 100 && g.per[0].score <= 5, '과목별 점수 5개');
+    check(g.cutSubjects.length === 1 && !g.pass, '과락이 있으면 평균이 높아도 불합격');
+    check((await page.$$('#ex-result .bar.cut')).length === 5, '과목별 막대 5개(과락선 포함)');
+    check(await noOverflow(page), '결과 화면 가로 넘침');
+    await page.screenshot({ path: path.join(SHOTS, '15-exam-result.png'), fullPage: true });
+    check(!(await page.evaluate(() => !!GISA.exam.cur.load())), '제출하면 진행 중 시험이 지워짐');
+    check((await page.evaluate(() => GISA.exam.hist.list().length)) === 1, '시험 기록 저장');
+    await page.click('#ex-close');
+    check(await page.evaluate(() => GISA.ui._view.mode) === 'normal', '결과 닫기');
+    // 기록 탭: 모의고사 기록 + 약점
+    await page.click('#tab-stats');
+    check(await page.isVisible('#exam-history'), '기록 탭에 모의고사 기록');
+    check(await page.isVisible('#weak-panel'), '기록 탭에 약점 개념');
+    const weakBtn = await page.$('#weak-panel [data-weak] button');
+    if (weakBtn) {
+      await weakBtn.click();
+      check(await page.isVisible('#weak-banner'), '약점 개념 바로 풀기');
+      await page.click('#weak-exit');
+    } else check(true, '약점 개념(기록이 부족해서 목록 없음)');
+    check(errors.length === 0, '모의고사 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }
 
