@@ -121,6 +121,14 @@
     ],
   };
   G.kgRestTopics = restTopics;
+  // 연결 규칙이 바뀌면 이 값도 자동으로 바뀐다 → 기출 보관함이 가진 문제를 새 규칙으로 다시 이어 붙인다
+  // (예전에는 손으로 올리는 숫자라, 규칙을 고쳐도 이미 가져온 문제는 옛날 연결이 그대로 남았다)
+  G.kgRulesVersion = (function () {
+    const src = JSON.stringify(Object.keys(rules).map((k) => [k, rules[k].s.map((r) => r.source), rules[k].w.map((r) => r.source), rules[k].d.map((r) => r.source)])) + '|' + MIN_SCORE;
+    let h = 5381;
+    for (let i = 0; i < src.length; i++) h = ((h << 5) + h + src.charCodeAt(i)) >>> 0;
+    return 'r' + h.toString(36);
+  })();
   G.kgRestTopic = function (x) {
     const list = restTopics[SUBJECT_KEY[x.s]] || [];
     const text = x.q + ' ' + x.c.join(' ');

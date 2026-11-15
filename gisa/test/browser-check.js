@@ -1421,6 +1421,22 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-17c. 연결 규칙이 바뀌면 가져온 기출도 새 규칙으로 다시 이어 붙음 ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await page.evaluate(() => GISA.kigeum.importText(JSON.stringify([{ id: 'tc-1', exam: '2019-08-04', s: 4, n: 1, q: '시험용: R-L 직렬 회로에서 L=30[mH], R=10[Ω]일 때 이 회로의 시정수는?', c: ['1', '2', '3', '4'], a: 3, p: 70, f: 1 }])));
+    check((await page.evaluate(() => GISA.kigeum.get('tc-1').cids)).join() === 'transient', '시정수 기출은 과도현상 개념에만 이어짐');
+    await page.evaluate(() => localStorage.setItem('gisa-kg-cls', JSON.stringify('옛날-규칙')));
+    await page.reload();
+    await page.waitForFunction(() => GISA.kigeum.isLoaded());
+    const ver = await page.evaluate(() => [localStorage.getItem('gisa-kg-cls'), GISA.kgRulesVersion]);
+    check(ver[0] === ver[1] || ver[0] === JSON.stringify(ver[1]), '규칙 버전이 달랐더니 다시 이어 붙이고 버전을 새로 기록: ' + ver.join(' / '));
+    check((await page.evaluate(() => GISA.kigeum.pool({ cid: 'rlc' }).length)) === 0, 'RLC 직렬회로 기출에 시정수 문제가 섞이지 않음');
+    check((await page.evaluate(() => GISA.kigeum.pool({ cid: 'transient' }).length)) === 1, '과도현상 기출로는 나옴');
+    check(errors.length === 0, '규칙 버전 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 2-17b. 개념 단락이 없는 기출 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'light' });

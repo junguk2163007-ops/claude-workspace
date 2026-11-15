@@ -29,6 +29,7 @@ Object.values(G.kgRestTopics).forEach((list) =>
   })
 );
 Object.keys(G.restNotes).forEach((id) => ok(Object.values(G.kgRestTopics).some((l) => l.some((t) => t.id === id)), '없는 주제의 설명: ' + id));
+ok(typeof G.kgRulesVersion === 'string' && /^r[0-9a-z]+$/.test(G.kgRulesVersion), '규칙 버전 값');
 ok(f.c['cd-volt'] === undefined, '기술기준은 기출 자료가 없어서 빈도 없음');
 // 규칙 파일의 개념이 실제로 있고 정규식이 유효한지
 Object.keys(G.kgRules).forEach((cid) => {
