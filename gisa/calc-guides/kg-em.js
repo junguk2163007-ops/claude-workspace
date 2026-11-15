@@ -1,0 +1,38 @@
+// 계산기 풀이 가이드: 기출 분석 보강(전기자기학)
+(function (G) {
+  'use strict';
+  const g = G.guide;
+  g('cb-eps', () => [{ say: 'εr = F공기 ÷ F유전체', expr: 'F0/F1' }]);
+  g('cb-pot', () => [{ say: 'V = A/r + B (A, B 는 두 점의 값으로 구한 상수)', expr: 'A/r3+B' }]);
+  g('cb-sq', () => [{ say: 'V = 4kQ/R (Q: nC → ×10⁻⁹)', expr: '4*9e9*Qn*1e-9/R' }]);
+  g('cb-tri', () => [{ say: 'F = √3·kQ²/a² (Q: μC → ×10⁻⁶)', expr: 'sqrt(3)*9e9*(Qu*1e-6)^2/a^2' }]);
+  g('cb-wpair', () => [{ say: 'W = kQ1Q2/d (nC×nC → ×10⁻¹⁸), J → nJ ×10⁹', expr: '9e9*q1*q2*1e-18/d*1e9' }]);
+  g('cb-img', (p) => [p.work ? { say: 'W = 2.25×10⁹·Q²/d', expr: '2.25e9*(Qu*1e-6)^2/d' } : { say: "Q′ = (a/d)·Q", expr: 'a/d*Qu' }]);
+  g('ef-rho', () => [{ say: '∇²V = 2a·y + 2b, |ρ|/ε₀ = |∇²V|', expr: 'abs(2*a*y0+2*b)' }]);
+  g('ef-plates', (p) => [p.mode === 'V' ? { say: 'V = σd/ε₀', expr: 's*d/8.855e-12' } : p.mode === 'f1' ? { say: 'f = σ²/(2ε₀)', expr: '(sg*1e-6)^2/(2*8.855e-12)' } : { say: 'f = ½ε₀(V/d)² (d: cm → ÷100)', expr: '0.5*8.855e-12*(Vv/(dc/100))^2' }]);
+  g('ef-move', () => [{ say: 'V = V₀ − E·d (cm → ÷100)', expr: 'V0-E*dcm/100' }]);
+  g('ef-spheres', (p) => [p.mode === 'V' ? { say: 'V = (aV₁ + bV₂)/(a + b)', expr: '(a*V1+b*V2)/(a+b)' } : p.mode === 'loss' ? { say: '손실 비율 = k/(1 + k)', expr: 'k/(1+k)' } : { say: 'Q₂ = Q·r₂/(r₁ + r₂)', expr: 'Q*r2/(r1+r2)' }]);
+  g('ef-sigma', () => [{ say: 'σ = ε₀E, C/m² → nC/m² ×10⁹', expr: '8.855e-12*E*1e9' }]);
+  g('ef-dip', () => [{ say: 'V = 9×10⁹·M·cosθ / r²', expr: '9e9*M*cos(th)/rr^2' }]);
+  g('ef-accel', () => [{ say: 'E = m·|a| ÷ q', expr: 'm/qq*sqrt(ax^2+ay^2)' }]);
+  g('ef-divd', () => [{ say: 'ρ = ∂Dx/∂x + ∂Dy/∂y + ∂Dz/∂z = 2ax + 2by + 2cz', expr: '2*a*px+2*b*py+2*c*pz' }]);
+  g('cap-ser-lim', (p) => [{ say: 'V = Q한계 ÷ C합성, Q한계 = (가장 작은 C)×V내압', expr: 'c1*Vr/(1/(1/c1+1/c2+1/c3))', vars: { c1: p.caps[0], c2: p.caps[1], c3: p.caps[2] } }]);
+  g('cap-sph', (p) => [p.kind === 'single' ? { say: 'C = 4πε₀a (cm → ÷100), F → pF ×10¹²', expr: '4*pi*8.855e-12*a/100*1e12' } : p.kind === 'two' ? { say: 'C = 4πε₀·ab/(b − a)', expr: '4*pi*8.855e-12*(a/100)*(b/100)/((b-a)/100)*1e12' } : { say: 'C = 2πε₀ℓ / ln(b/a)', expr: '2*pi*8.855e-12*len/100/ln(b/a)*1e12' }]);
+  g('cap-glass', () => [{ say: 'C = C₀ ÷ ((1 − f) + f/εr)', expr: 'C0/((1-f)+f/er)' }]);
+  g('cap-w', (p) => [p.mode === 'W' ? { say: 'W = ½CV² (μF → ×10⁻⁶)', expr: '0.5*Cu*1e-6*V^2' } : { say: 'C = 2W/V² (F → μF ×10⁶)', expr: '2*W/V^2*1e6' }]);
+  g('cap-pf', () => [{ say: 'F = Q²/(2ε₀S)', expr: '(Qu*1e-6)^2/(2*8.855e-12*S)' }]);
+  g('cap-eps', () => [{ say: 'ε = D²/(2w) (F/m → pF/m ×10¹²)', expr: 'D^2/(2*w)*1e12' }]);
+  g('cap-sheets', () => [{ say: 'n = ε₀εrS/(C·t)', expr: '8.855e-12*er*Scm*1e-4/(Cp*1e-12*t*1e-3)' }]);
+  g('cap-leak', () => [{ say: 'I = V·C/(ρ·ε₀εr)', expr: 'kV*1000*Cu*1e-6/(rho*8.855e-12*er)' }]);
+  g('cap-line', () => [{ say: 'C = πε₀ℓ/ln(D/a) (mm → ×10⁻³, km → ×1000, F → μF ×10⁶)', expr: 'pi*8.855e-12*len*1000/ln(D/(a*1e-3))*1e6' }]);
+  g('cap-share', () => [{ say: '이동 전하 = |C₂·(Q₁+Q₂)/(C₁+C₂) − Q₂|', expr: 'abs(C2*(Q1+Q2)/(C1+C2)-Q2)' }]);
+  g('mg-force', () => [{ say: 'F = B·I·ℓ·sinθ', expr: 'B*I*L*sin(th)' }]);
+  g('mg-emf', (p) => [p.mode === 'v' ? { say: 'e = B·ℓ·v·sinθ (cm → ÷100)', expr: 'B*Lcm/100*v*sin(th)' } : { say: 'e = B·ℓ·(dx/dt)', expr: 'B*Lcm/100*dx/dt' }]);
+  g('mg-torque', (p) => [p.mode === 'T' ? { say: 'T = m·ℓ·H·sinθ (cm → ÷100)', expr: 'm*lcm/100*H*sin(th)' } : { say: 'W = M·H', expr: 'M*H' }]);
+  g('mg-ring', (p) => [p.mode === 'B' ? { say: 'B = μ₀μr·N·I/ℓ', expr: '4e-7*pi*mu*N*I/(lc/100)' } : p.mode === 'Phi' ? { say: 'Φ = B·S', expr: '4e-7*pi*mu*N*I/(lc/100)*S*1e-4' } : p.mode === 'J' ? { say: 'J = μ₀(μr − 1)H', expr: '4e-7*pi*(mu-1)*H' } : { say: 'μr = (Φ/S)/(μ₀H)', expr: '(Ph*1e-4)/(S*1e-4)/(4e-7*pi*Hh)' }]);
+  g('mc-rel', (p) => [p.mode === 'R' ? { say: 'R = ℓ/(μ₀μr·S)', expr: 'l/(4e-7*pi*mu*S)' } : p.mode === 'gap' ? { say: '배수 = 1 + ℓg·μr/ℓ', expr: '1+gap*1e-3*mu/lc' } : { say: 'F = Φ·ℓ/(μ₀μr·S)', expr: 'phi*l/(4e-7*pi*mu*S*1e-4)' }]);
+  g('mg-w', (p) => [p.mode === 'F' ? { say: 'W = ½·F·Φ', expr: '0.5*Fm*Ph' } : p.mode === 'I' ? { say: 'W = ½·I·Λ', expr: '0.5*I*Lam' } : { say: 'W = B²/(2μ₀μr)·V', expr: 'Bv^2/(2*4e-7*pi*mu)*Vol' }]);
+  g('ind-n', (p) => [p.mode === 'M' ? { say: 'M = L₁·N₂/N₁', expr: 'L1*N2/N1' } : p.mode === 'emf' ? { say: 'e = L·ΔI/Δt (mH → ÷1000)', expr: 'L/1000*dI/dt' } : { say: 'N = 2πr·H/I (r: cm → ÷100)', expr: '2*pi*rcm/100*H/I' }]);
+  g('ew-n', (p) => [p.mode === 'v' ? { say: 'v = c/√(εrμr) → ×10⁸ 단위로', expr: '3e8/sqrt(er*mr)/1e8' } : p.mode === 'lam' ? { say: 'λ = c/(f·√(εrμr))', expr: '3e8/(f*sqrt(er*mr))' } : p.mode === 'eta' ? { say: 'η = 120π·√(μr/εr)', expr: '120*pi*sqrt(mr/er)' } : p.mode === 'H' ? { say: 'H = E/η, η = 120π√(μr/εr)', expr: 'Em/(120*pi*sqrt(mr/er))' } : { say: 'S = P/(4πd²) (km → ×1000)', expr: 'P/(4*pi*(dkm*1000)^2)' }]);
+  g('di-pol', (p) => [p.mode === 'P' ? { say: 'P = D(1 − 1/εr)', expr: 'D*(1-1/er)' } : p.mode === 'chi' ? { say: 'χ/ε₀ = εr − 1', expr: 'er-1' } : { say: 'D = ε₀·εr₁·E₁ (ε₀ 의 배수로)', expr: 'e1*E1' }]);
+})(globalThis.GISA);

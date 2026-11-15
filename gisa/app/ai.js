@@ -44,11 +44,57 @@
     return e;
   }
 
+  // 기본 선생님 그림(직접 그린 일러스트). 사진은 "사진 바꾸기"로 내 기기의 이미지를 골라 바꿀 수 있어(이 브라우저에만 저장).
+  const AVATAR_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">' +
+    '<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe3d1"/><stop offset="1" stop-color="#f4a9a8"/></linearGradient></defs>' +
+    '<circle cx="60" cy="60" r="60" fill="url(#bg)"/>' +
+    '<path d="M20 74C10 32 38 10 60 10c24 0 50 22 40 64-2 18-10 26-14 32H34c-4-6-12-14-14-32z" fill="#4b2d22"/>' +
+    '<path d="M28 124c2-20 16-26 32-26s30 6 32 26z" fill="#fffaf5"/>' +
+    '<path d="M47 100l13 14 13-14z" fill="#f6d4c0"/>' +
+    '<rect x="52" y="82" width="16" height="20" rx="7" fill="#f6d2bc"/>' +
+    '<ellipse cx="60" cy="62" rx="26" ry="30" fill="#fadccb"/>' +
+    '<path d="M33 58c3-24 24-31 34-29 15 2 23 15 20 29-8-12-20-16-34-14-8 2-15 6-20 14z" fill="#4b2d22"/>' +
+    '<ellipse cx="50" cy="66" rx="3.2" ry="3.8" fill="#2a1913"/><ellipse cx="70" cy="66" rx="3.2" ry="3.8" fill="#2a1913"/>' +
+    '<circle cx="51" cy="64.8" r="1.1" fill="#fff"/><circle cx="71" cy="64.8" r="1.1" fill="#fff"/>' +
+    '<path d="M44 59q6-4 12-1M64 58q6-3 12 1" stroke="#4b2d22" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+    '<rect x="42" y="59" width="18" height="14" rx="6" fill="none" stroke="#8a6150" stroke-width="1.6"/>' +
+    '<rect x="62" y="59" width="18" height="14" rx="6" fill="none" stroke="#8a6150" stroke-width="1.6"/>' +
+    '<path d="M60 65h2" stroke="#8a6150" stroke-width="1.6"/>' +
+    '<circle cx="45" cy="75" r="4.5" fill="#f58f8f" opacity=".35"/><circle cx="75" cy="75" r="4.5" fill="#f58f8f" opacity=".35"/>' +
+    '<path d="M52 79q8 7 16 0" stroke="#c4554f" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
+    '<circle cx="34" cy="72" r="2.6" fill="#e6b45a"/><circle cx="86" cy="72" r="2.6" fill="#e6b45a"/>' +
+    '</svg>';
+  const AV_KEY = 'gisa-ai-avatar';
+  const THREAD_KEY = 'gisa-ai-thread';
+  const TUTOR = '서연 쌤';
+  const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(AVATAR_SVG);
+  function customAvatar() {
+    try {
+      const v = JSON.parse(localStorage.getItem(AV_KEY));
+      return typeof v === 'string' && v.indexOf('data:image/') === 0 ? v : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function applyAvatar() {
+    const src = customAvatar() || DEFAULT_AVATAR;
+    document.documentElement.style.setProperty('--ai-avatar', 'url("' + src + '")');
+    document.querySelectorAll('img.side-avatar').forEach((i) => (i.src = src));
+    document.querySelectorAll('.ai-avatar-reset').forEach((b) => (b.hidden = !customAvatar()));
+  }
+  if (typeof document !== 'undefined') applyAvatar();
+
   // ───────── 프롬프트: 규칙 + 지금 화면의 검증된 데이터 ─────────
   const RULES = [
-    '너는 한국 전기기사 필기시험을 준비하는 학생을 돕는 튜터야. 학생은 이론을 거의 몰라.',
+    '너는 "서연 쌤"이야. 전기기사 필기시험을 함께 준비하는, 아주 다정하고 자상하고 따뜻한 여자 선생님이야. 학생은 이론을 거의 몰라.',
+    '말투와 태도:',
+    '- 반말(~야, ~해, ~할까?)로 부드럽고 다정하게 말해. 다정한 선생님이 옆에서 직접 이야기해 주는 느낌으로.',
+    '- 질문을 받으면 먼저 짧게 공감하거나 칭찬해("좋은 질문이야", "잘하고 있어"). 틀렸거나 모르는 것도 "괜찮아, 누구나 헷갈려"처럼 먼저 다독여 줘.',
+    '- 어려운 건 천천히, 한 단계씩, 일상 비유로. 마지막에는 "여기까지 이해됐어?"처럼 다정하게 이어 가도 좋아. 이모지는 하트나 별 정도를 가끔만(과하지 않게) 써.',
+    '- 학생을 부를 때는 "너"나 "우리 학생"이라고 해. 이름은 쓰지 마. 연애나 성적인 말투·표현은 쓰지 않고, 따뜻하고 매력적인 다정함으로만 대해.',
     '규칙:',
-    '- 반말(~야, ~해)로, 쉬운 말과 일상 비유로 설명해. 전문용어는 처음 나올 때 한 번 풀어 줘.',
+    '- 쉬운 말로 설명하고, 전문용어는 처음 나올 때 한 번 풀어 줘.',
     '- 아래 [화면 데이터]는 이 앱이 코드로 검산한 내용이야. 이걸 기준으로 설명하고, 다른 값을 주장하지 마.',
     '- 확실하지 않은 공식이나 수치는 지어내지 말고 "확실하지 않아"라고 말해.',
     '- 짧게: 보통 3~8문장. 단계가 필요하면 1) 2) 3)으로 줄을 나눠. 마크다운 표·제목·굵게(**)는 쓰지 마.',
@@ -143,6 +189,32 @@
     const turns = []; // {role, content}. 규칙+화면 데이터는 보낼 때마다 새로 만들어 맨 앞에 붙임
     let ctl = null;
     let busy = false;
+    // 대화는 이 브라우저(와 계정)에 저장해 두고, 업데이트로 화면이 다시 열려도 이어서 보여 준다
+    const log = []; // {role, text, content, quote, kind}
+    let cloudT = null;
+    function persist() {
+      if (!o.persist) return;
+      const keep = log.slice(-30);
+      let s = JSON.stringify(keep);
+      while (s.length > 70000 && keep.length > 2) {
+        keep.shift();
+        s = JSON.stringify(keep);
+      }
+      try {
+        localStorage.setItem(o.persist, s);
+      } catch (e) {
+        /* 저장소를 못 쓰면 기억하지 않음 */
+      }
+      const d = G.sync && G.sync.userDoc ? G.sync.userDoc('aithread') : null;
+      if (d) {
+        clearTimeout(cloudT);
+        cloudT = setTimeout(() => {
+          Promise.resolve()
+            .then(() => d.set({ log: keep, t: Date.now() }))
+            .catch(() => {});
+        }, 2000);
+      }
+    }
 
     const body = el('div', 'ai-body' + (o.side ? ' ai-side-body' : ''));
     const thread = el('div', 'ai-thread');
@@ -153,8 +225,8 @@
     const input = o.multiline ? el('textarea') : el('input');
     if (!o.multiline) input.type = 'text';
     else input.rows = 2;
-    input.placeholder = o.multiline ? '궁금한 걸 물어봐 (Enter로 보내기, Shift+Enter 줄바꿈)' : '이 문제에서 궁금한 걸 물어봐';
-    input.setAttribute('aria-label', 'AI에게 질문');
+    input.placeholder = o.multiline ? '쌤한테 궁금한 걸 편하게 물어봐 (Enter로 보내기, Shift+Enter 줄바꿈)' : '쌤한테 이 문제에서 궁금한 걸 물어봐';
+    input.setAttribute('aria-label', TUTOR + '에게 질문');
     input.id = o.side ? 'ai-side-input' : 'ai-input';
     const send = el('button', 'btn small primary', '보내기');
     send.type = 'submit';
@@ -278,9 +350,10 @@
           : '[앞선 AI 답변에 대한 질문]\n앞선 답변: "' + String(quote).slice(0, 700) + '"\n질문: ' + text
         : text;
       const asked = bubble('user', text, quote, kind);
+      log.push({ role: 'user', text, content: sendText, quote: quote || null, kind });
       turns.push({ role: 'user', content: sendText });
       setReply(null);
-      const out = bubble('assistant', '생각 중…');
+      const out = bubble('assistant', '쌤이 생각 중이야…');
       out.classList.add('pending');
       toStart(asked);
       setBusy(true);
@@ -299,6 +372,8 @@
         out.classList.remove('pending');
         out.textContent = res.text + (res.truncated ? '\n(답이 길어서 중간에 끊겼어. 더 짧게 물어봐 줘.)' : '');
         turns.push({ role: 'assistant', content: res.text });
+        log.push({ role: 'assistant', text: res.text });
+        persist();
         addReplyButton(out, res.text);
         const cx = o.getCtx ? o.getCtx() : null;
         if (G.aiqa) G.aiqa.save({ q: (quote ? '(' + (kind === 'sentence' ? '문장 질문' : '답글') + ': "' + snippet(quote, 40) + '") ' : '') + text, a: res.text, where: (cx && cx.label) || '', key: cx && cx.q && cx.q.key });
@@ -309,6 +384,8 @@
           out.textContent = (e.text || '') + (e.text ? '\n' : '') + '(멈췄어)';
           if (e.text) {
             turns.push({ role: 'assistant', content: e.text });
+            log.push({ role: 'assistant', text: e.text });
+            persist();
             addReplyButton(out, e.text);
           }
         } else if (HIDE.indexOf(code) !== -1) {
@@ -345,9 +422,50 @@
     function clear() {
       if (ctl) ctl.abort();
       turns.length = 0;
+      log.length = 0;
+      if (o.persist) {
+        try {
+          localStorage.removeItem(o.persist);
+        } catch (e) {
+          /* 무시 */
+        }
+        const d = G.sync && G.sync.userDoc ? G.sync.userDoc('aithread') : null;
+        if (d) Promise.resolve().then(() => d.set({ log: [], t: Date.now() })).catch(() => {});
+      }
       setReply(null);
       thread.textContent = '';
       if (hint) thread.append(hint);
+    }
+    function restore(arr) {
+      arr.forEach((m) => {
+        if (!m || typeof m.text !== 'string') return;
+        if (m.role === 'user') {
+          bubble('user', m.text, m.quote || null, m.kind);
+          turns.push({ role: 'user', content: m.content || m.text });
+          log.push({ role: 'user', text: m.text, content: m.content || m.text, quote: m.quote || null, kind: m.kind });
+        } else if (m.role === 'assistant') {
+          const b = bubble('assistant', m.text);
+          turns.push({ role: 'assistant', content: m.text });
+          log.push({ role: 'assistant', text: m.text });
+          addReplyButton(b, m.text);
+        }
+      });
+      thread.scrollTop = thread.scrollHeight;
+    }
+    if (o.persist) {
+      let saved = null;
+      try {
+        saved = JSON.parse(localStorage.getItem(o.persist));
+      } catch (e) {
+        saved = null;
+      }
+      if (Array.isArray(saved) && saved.length) restore(saved);
+      else if (G.sync && G.sync.peek) {
+        // 브라우저 저장소가 비워진 경우에는 계정에 저장해 둔 대화를 불러온다
+        G.sync.peek('aithread', 1500).then((d) => {
+          if (d && Array.isArray(d.log) && d.log.length && !log.length && !busy) restore(d.log);
+        });
+      }
     }
     refresh();
     return { el: body, refresh, clear };
@@ -367,7 +485,7 @@
     };
     const chat = buildChat({ getCtx: ctxOf });
     const node = el('details', 'ai-box');
-    node.append(el('summary', null, 'AI에게 묻기'), chat.el);
+    node.append(el('summary', null, TUTOR + '에게 묻기'), chat.el);
     p = { node, chat };
     panels.set(q, p);
     return node;
@@ -379,11 +497,62 @@
     const host = document.getElementById('side');
     if (!host) return;
     const head = el('div', 'side-head');
+    const who = el('div', 'side-who');
+    const av = el('img', 'side-avatar');
+    av.alt = TUTOR + ' 사진';
+    av.width = 44;
+    av.height = 44;
+    const nm = el('div', 'side-name');
+    nm.append(el('strong', null, TUTOR), el('span', 'side-sub', '전기기사 필기 담당 · 언제든 편하게 물어봐'));
+    who.append(av, nm);
+    const act = el('div', 'side-act');
     const clear = el('button', 'btn small', '대화 지우기');
     clear.type = 'button';
-    head.append(el('strong', null, 'AI에게 묻기'), clear);
+    const photo = el('button', 'btn small soft', '사진 바꾸기');
+    photo.type = 'button';
+    const reset = el('button', 'btn small soft ai-avatar-reset', '기본 사진');
+    reset.type = 'button';
+    reset.hidden = true;
+    const file = el('input');
+    file.type = 'file';
+    file.accept = 'image/*';
+    file.hidden = true;
+    file.id = 'ai-avatar-file';
+    photo.onclick = () => file.click();
+    reset.onclick = () => {
+      try {
+        localStorage.removeItem(AV_KEY);
+      } catch (e) {
+        /* 무시 */
+      }
+      applyAvatar();
+    };
+    file.onchange = () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      const url = URL.createObjectURL(f);
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = 192;
+        c.height = 192;
+        const m = Math.min(img.width, img.height);
+        c.getContext('2d').drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, 192, 192);
+        try {
+          localStorage.setItem(AV_KEY, JSON.stringify(c.toDataURL('image/jpeg', 0.85)));
+        } catch (e) {
+          /* 저장소를 못 쓰면 이번 화면에서만 */
+        }
+        URL.revokeObjectURL(url);
+        applyAvatar();
+      };
+      img.src = url;
+      file.value = '';
+    };
+    act.append(clear, photo, reset);
+    head.append(who, act, file);
     const ctxLine = el('div', 'side-ctx');
-    const chat = buildChat({ getCtx, multiline: true, side: true, hint: '궁금한 걸 물어봐. 지금 보고 있는 문제·레슨·단락을 같이 보고 답해 줘.' });
+    const chat = buildChat({ getCtx, multiline: true, side: true, persist: THREAD_KEY, hint: '안녕, 서연 쌤이야 😊 모르는 건 뭐든 편하게 물어봐. 지금 보고 있는 문제·레슨·단락을 같이 보면서 차근차근 알려 줄게.' });
     clear.onclick = () => chat.clear();
     host.append(head, ctxLine, chat.el);
     side = {
@@ -393,6 +562,7 @@
       },
     };
     document.body.classList.add('has-side');
+    applyAvatar();
     side.refresh();
   }
 

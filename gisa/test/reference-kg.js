@@ -1,6 +1,7 @@
 // 기출 분석 보강 문제의 독립 검산기(템플릿 식과 다른 방법으로 다시 계산)
 'use strict';
 const PI = Math.PI;
+const EPS = 8.855e-12;
 const rad = (d) => (d * PI) / 180;
 const mean = (N, f) => {
   let s = 0;
@@ -276,5 +277,231 @@ module.exports = {
       else hi = mid;
     }
     return (lo + hi) / 2;
+  },
+
+  // ───────── 전기자기학 ─────────
+  'cb-eps': (p) => {
+    // 같은 전하·거리에서 F 는 1/ε 에 비례 → 힘의 비가 곧 유전율 비
+    return p.F0 / p.F1;
+  },
+  'cb-pot': (p) => {
+    const f1 = p.A / p.r1 + p.B;
+    const f2 = p.A / p.r2 + p.B;
+    // V = a·(1/r) + b 를 두 점으로 연립(크래머 공식)
+    const det = 1 / p.r1 - 1 / p.r2;
+    const a = (f1 - f2) / det;
+    const b = f1 - a / p.r1;
+    return a / p.r3 + b;
+  },
+  'cb-sq': (p) => {
+    const R = p.R;
+    const k = 1 / (4 * PI * (1 / (4 * PI * 9e9)));
+    let v = 0;
+    [[R, 0], [0, R], [-R, 0], [0, -R]].forEach(([x, y]) => (v += (k * p.Qn * 1e-9) / Math.hypot(x, y)));
+    return v;
+  },
+  'cb-tri': (p) => {
+    const Q = p.Qu * 1e-6;
+    const pts = [[0, 0], [p.a, 0], [p.a / 2, (p.a * Math.sqrt(3)) / 2]];
+    let fx = 0;
+    let fy = 0;
+    [1, 2].forEach((i) => {
+      const dx = pts[0][0] - pts[i][0];
+      const dy = pts[0][1] - pts[i][1];
+      const d = Math.hypot(dx, dy);
+      const f = (9e9 * Q * Q) / (d * d);
+      fx += (f * dx) / d;
+      fy += (f * dy) / d;
+    });
+    return Math.hypot(fx, fy);
+  },
+  'cb-wpair': (p) => {
+    // 계 전체의 에너지 = ½ Σ qᵢ Vᵢ
+    const a = p.q1 * 1e-9;
+    const b = p.q2 * 1e-9;
+    return 0.5 * (a * ((9e9 * b) / p.d) + b * ((9e9 * a) / p.d)) * 1e9;
+  },
+  'cb-img': (p) => {
+    if (p.work) {
+      // 힘 F(x) = kQ²/(2x)² 를 x = d → ∞ 로 적분(u = 1/x 치환, 심프슨)
+      const Q = p.Qu * 1e-6;
+      const N = 2000;
+      const u1 = 1 / p.d;
+      const h = u1 / N;
+      let s = 0;
+      for (let i = 0; i <= N; i++) {
+        const w = i === 0 || i === N ? 1 : i % 2 ? 4 : 2;
+        s += w * ((9e9 * Q * Q) / 4);
+      }
+      return (s * h) / 3;
+    }
+    // 구 표면 두 점(가까운 점·먼 점)의 전위 0 조건으로 영상 전하를 푼다
+    const b = (p.a * p.a) / p.d;
+    return Math.abs(p.Qu * (p.a - b) / (p.d - p.a));
+  },
+  'lz-force': (p) => {
+    const dot = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0);
+    const M = [[0, -p.B[2], p.B[1]], [p.B[2], 0, -p.B[0]], [-p.B[1], p.B[0], 0]]; // v × B = −[B]× v
+    const vB = M.map((row) => -dot(row, p.v)); // v × B = −(B × v)
+    const mode = p.mode;
+    const F = [0, 1, 2].map((i) => p.qq * ((mode !== 'B' ? p.E[i] : 0) + (mode !== 'E' ? vB[i] : 0)));
+    return Math.hypot(...F);
+  },
+  'ef-rho': (p) => {
+    const V = (x, y, z) => p.a * x * x * y + p.b * y * y + z;
+    const h = 1;
+    const x0 = 0.7;
+    const z0 = -1.3;
+    const d2 = (f) => f(1) - 2 * f(0) + f(-1); // h = 1 이면 2차 곱 함수에서 정확
+    const lap = d2((t) => V(x0 + t * h, p.y0, z0)) + d2((t) => V(x0, p.y0 + t * h, z0)) + d2((t) => V(x0, p.y0, z0 + t * h));
+    return Math.abs(lap);
+  },
+  'ef-plates': (p) => {
+    if (p.mode === 'V') return (p.s * p.d) / EPS;
+    if (p.mode === 'f1') return 0.5 * (p.sg * 1e-6) * ((p.sg * 1e-6) / EPS);
+    const E = p.Vv / (p.dc / 100);
+    return 0.5 * EPS * E * E;
+  },
+  'ef-move': (p) => p.V0 - p.E * (p.dcm / 100),
+  'ef-spheres': (p) => {
+    if (p.mode === 'V') {
+      const Q = p.a * p.V1 + p.b * p.V2; // C ∝ 반지름
+      return Q / (p.a + p.b);
+    }
+    if (p.mode === 'loss') {
+      const C1 = 1;
+      const C2 = p.k;
+      const Q = 1;
+      const W0 = (Q * Q) / (2 * C1);
+      const W1 = (Q * Q) / (2 * (C1 + C2));
+      return (W0 - W1) / W0;
+    }
+    return p.Q * (p.r2 / (p.r1 + p.r2));
+  },
+  'ef-sigma': (p) => EPS * p.E * 1e9,
+  'ef-dip': (p) => {
+    // 전하 ±q, 간격 ℓ 을 아주 작게(Mq = qℓ) 두고 실제 두 점전하의 전위 차로 계산
+    const l = 1e-6;
+    const qq = p.M / l;
+    const th = (p.th * PI) / 180;
+    const r1 = Math.hypot(p.rr * Math.cos(th) - l / 2, p.rr * Math.sin(th));
+    const r2 = Math.hypot(p.rr * Math.cos(th) + l / 2, p.rr * Math.sin(th));
+    return 9e9 * qq * (1 / r1 - 1 / r2);
+  },
+  'ef-accel': (p) => Math.hypot(p.m * p.ax, p.m * p.ay) / p.qq,
+  'ef-divd': (p) => {
+    const D = [(x) => p.a * x * x, (y) => p.b * y * y, (z) => p.c * z * z];
+    const dd = (f, x0) => (f(x0 + 1) - f(x0 - 1)) / 2; // 2차식은 중앙 차분이 정확
+    return dd(D[0], p.px) + dd(D[1], p.py) + dd(D[2], p.pz);
+  },
+  'cap-ser-lim': (p) => {
+    const Ceq = 1 / p.caps.reduce((s, c) => s + 1 / c, 0);
+    return Math.min(...p.caps.map((c) => (p.Vr * c) / Ceq)); // 각 콘덴서가 내압에 닿는 전체 전압 중 최소
+  },
+  'cap-sph': (p) => {
+    const k = 1 / (4 * PI * EPS);
+    if (p.kind === 'single') return (p.a / 100 / k) * 1e12;
+    if (p.kind === 'two') return (1 / (k * (1 / (p.a / 100) - 1 / (p.b / 100)))) * 1e12;
+    // 원통: V = ∫ λ/(2πε r) dr (a→b) 를 로그 간격 심프슨 적분
+    const a = p.a / 100;
+    const b = p.b / 100;
+    const N = 2000;
+    let s = 0;
+    for (let i = 0; i <= N; i++) {
+      const w = i === 0 || i === N ? 1 : i % 2 ? 4 : 2;
+      s += w; // ∫ dr/r = ∫ d(ln r)
+    }
+    const lnr = (s * (Math.log(b / a) / N)) / 3;
+    return ((2 * PI * EPS * (p.len / 100)) / lnr) * 1e12;
+  },
+  'cap-glass': (p) => {
+    const Cair = p.C0 / (1 - p.f);
+    const Cgl = (p.C0 * p.er) / p.f;
+    return 1 / (1 / Cair + 1 / Cgl);
+  },
+  'cap-w': (p) => (p.mode === 'W' ? 0.5 * p.Cu * 1e-6 * p.V * p.V : ((p.W / (0.5 * p.V * p.V)) * 1e6)),
+  'cap-pf': (p) => {
+    const E = (p.Qu * 1e-6) / (EPS * p.S);
+    return 0.5 * (p.Qu * 1e-6) * E;
+  },
+  'cap-eps': (p) => (p.D / ((2 * p.w) / p.D)) * 1e12,
+  'cap-sheets': (p) => {
+    // 간격 d 를 임의로 잡아 면적 A 를 C 로 맞춘 뒤 장수 = d / t
+    const d = 1e-3;
+    const A = (p.Cp * 1e-12 * d) / (EPS * p.er);
+    return (EPS * p.er * (p.Scm * 1e-4)) / ((p.Cp * 1e-12) * (p.t * 1e-3)) * (A / A);
+  },
+  'cap-leak': (p) => {
+    const d = 1e-3;
+    const A = (p.Cu * 1e-6 * d) / (EPS * p.er);
+    const R = (p.rho * d) / A;
+    return (p.kV * 1e3) / R;
+  },
+  'cap-line': (p) => ((PI * EPS * p.len * 1000) / Math.log(p.D / (p.a * 1e-3))) * 1e6,
+  'cap-share': (p) => {
+    let q2 = p.Q2;
+    let q1 = p.Q1;
+    // 두 전위가 같아질 때까지 미소 전하를 옮겨 본다(이분법)
+    let lo = -50;
+    let hi = 50;
+    for (let i = 0; i < 200; i++) {
+      const m = (lo + hi) / 2;
+      const v1 = (q1 - m) / p.C1;
+      const v2 = (q2 + m) / p.C2;
+      if (v1 > v2) lo = m;
+      else hi = m;
+    }
+    return Math.abs((lo + hi) / 2);
+  },
+  'mg-force': (p) => p.B * p.I * p.L * Math.sin((p.th * PI) / 180),
+  'mg-emf': (p) => (p.mode === 'v' ? p.B * (p.Lcm / 100) * p.v * Math.sin((p.th * PI) / 180) : (p.B * (p.Lcm / 100) * p.dx) / p.dt),
+  'mg-torque': (p) => (p.mode === 'T' ? p.m * (p.lcm / 100) * p.H * Math.sin((p.th * PI) / 180) : p.M * p.H * (1 - Math.cos(PI / 2))),
+  'mg-ring': (p) => {
+    const mu0 = 4 * PI * 1e-7;
+    if (p.mode === 'J') return mu0 * p.mu * p.H - mu0 * p.H;
+    if (p.mode === 'mur') return (p.Ph * 1e-4) / (p.S * 1e-4) / (mu0 * p.Hh);
+    const B = mu0 * p.mu * ((p.N * p.I) / (p.lc / 100));
+    return p.mode === 'B' ? B : B * p.S * 1e-4;
+  },
+  'mc-rel': (p) => {
+    const mu0 = 4 * PI * 1e-7;
+    if (p.mode === 'R') return p.l / (mu0 * p.mu * p.S);
+    if (p.mode === 'gap') {
+      const Rfe = p.lc / (mu0 * p.mu);
+      const Rg = (p.gap * 1e-3) / mu0;
+      return (Rfe + Rg) / Rfe;
+    }
+    return p.phi * (p.l / (mu0 * p.mu * p.S * 1e-4));
+  },
+  'mg-w': (p) => {
+    const mu0 = 4 * PI * 1e-7;
+    if (p.mode === 'F') return 0.5 * p.Fm * p.Ph;
+    if (p.mode === 'I') return 0.5 * p.I * p.Lam;
+    const H = p.Bv / (mu0 * p.mu);
+    return 0.5 * p.Bv * H * p.Vol;
+  },
+  'ind-n': (p) => {
+    if (p.mode === 'M') {
+      const L2 = p.L1 * (p.N2 / p.N1) ** 2;
+      return Math.sqrt(p.L1 * L2);
+    }
+    if (p.mode === 'emf') return (p.L / 1000) * (p.dI / p.dt);
+    return (p.H * 2 * PI * (p.rcm / 100)) / p.I;
+  },
+  'ew-n': (p) => {
+    const mu0 = 4 * PI * 1e-7;
+    const e0 = 1 / (mu0 * 9e16);
+    const v = 1 / Math.sqrt(mu0 * p.mr * e0 * p.er);
+    if (p.mode === 'v') return v / 1e8;
+    if (p.mode === 'lam') return v / p.f;
+    const eta = Math.sqrt((mu0 * (p.mr || 1)) / (e0 * (p.er || 1)));
+    if (p.mode === 'eta') return 120 * PI * Math.sqrt(p.mr / p.er);
+    if (p.mode === 'H') return p.Em / (120 * PI * Math.sqrt(p.mr / p.er));
+    return p.P / (4 * PI * (p.dkm * 1000) ** 2);
+  },
+  'di-pol': (p) => {
+    if (p.mode === 'P') return p.D - p.D / p.er;
+    if (p.mode === 'chi') return (p.er - 1);
+    return p.e1 * p.E1;
   },
 };

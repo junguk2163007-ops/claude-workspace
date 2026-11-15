@@ -1388,6 +1388,50 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-17p. 서연 쌤: 대화는 새로고침(업데이트)해도 이어짐, 사진 영역 ──
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await ctx.addInitScript(() => {
+      const fake = async (input, opts) => {
+        const t = '좋은 질문이야. 천천히 같이 보자. 먼저 식을 써 볼까?';
+        opts.onText({ text: t, delta: '' });
+        return { text: t, truncated: false, modelTierApplied: 'default' };
+      };
+      window.claude = { use: async (n) => (n === 'sample' ? fake : null) };
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(FILE);
+    await page.waitForSelector('#side .side-head');
+    check((await page.textContent('#side .side-head')).includes('서연 쌤') && (await page.isVisible('#side img.side-avatar')), '서연 쌤 이름과 사진이 머리에 보임');
+    check((await page.textContent('#side .ai-hint')).includes('서연 쌤이야'), '인사말');
+    await page.fill('#ai-side-input', '임피던스가 뭐야?');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#side .ai-reply-btn');
+    await page.waitForTimeout(100);
+    await page.reload();
+    await page.waitForSelector('#side .side-head');
+    await page.waitForSelector('#side .ai-msg.ai');
+    check((await page.textContent('#side .ai-msg.me')).includes('임피던스가 뭐야?') && (await page.textContent('#side .ai-msg.ai')).includes('좋은 질문이야'), '새로고침(업데이트) 뒤에도 AI 대화가 그대로 남음');
+    check((await page.$$('#side .ai-msg.ai .ai-sent')).length >= 2 && (await page.$$('#side .ai-reply-btn')).length === 1, '복원된 답변도 문장을 눌러 질문할 수 있음');
+    await page.fill('#ai-side-input', '이어서 하나 더');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelectorAll('#side .ai-reply-btn').length === 2);
+    const sent = await page.evaluate(() => (window.__lastTurns = null, true));
+    await page.click('#side .side-head .btn');
+    check((await page.$$('#side .ai-msg')).length === 0, '대화 지우기');
+    await page.reload();
+    await page.waitForSelector('#side .side-head');
+    check((await page.$$('#side .ai-msg')).length === 0 && (await page.isVisible('#side .ai-hint')), '지운 대화는 새로고침해도 돌아오지 않음');
+    const av = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ai-avatar'));
+    check(av.includes('data:image'), '쌤 사진(기본 일러스트)이 설정됨');
+    await page.screenshot({ path: path.join(SHOTS, '23-seoyeon.png'), fullPage: false });
+    check(errors.length === 0, '서연 쌤 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 2-17s. AI 답변이 써지는 동안 화면이 자동으로 내려가지 않음 ──
   {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 800 }, colorScheme: 'light' });
