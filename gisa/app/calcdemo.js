@@ -117,6 +117,7 @@
     // 계산기를 처음 상태로 되돌린 뒤 idx개 키까지 다시 누른다
     clearTimeout(demo.timer);
     demo.auto = false;
+    demo.free = false;
     resetCalc();
     demo.idx = 0;
     while (demo.idx < idx) {
@@ -153,7 +154,7 @@
   }
   function toggleAuto() {
     if (!demo) return;
-    if (demo.idx >= demo.flat.length) rewindTo(0);
+    if (demo.idx >= demo.flat.length || demo.free) rewindTo(0); // 직접 입력하던 중이면 처음부터 다시 재생
     demo.auto = !demo.auto;
     update();
     schedule();
@@ -162,7 +163,19 @@
   // 사용자가 계산기 키를 직접 눌렀을 때
   function onUser(id) {
     if (!demo) return false;
+    if (demo.free) return false; // 직접 입력 중: 계산기가 그냥 받는다
     const next = demo.flat[demo.idx];
+    // 일시정지 상태에서 시연과 다른 숫자를 누르면: 계산기를 비우고 내가 누른 숫자부터 처음부터 입력
+    if (!demo.auto && /^[0-9.]$/.test(id) && !(next && id === next.key)) {
+      clearTimeout(demo.timer);
+      resetCalc();
+      demo.idx = 0;
+      demo.free = true;
+      U.press(id);
+      update();
+      note('계산기를 비우고 처음부터 입력하는 중이야. 시연으로 돌아가려면 "처음부터"나 "자동 재생"을 눌러.');
+      return true;
+    }
     if (!next) {
       note('시연이 끝났어. "처음부터"를 누르거나 닫고 마음대로 써 봐.');
       return true;
@@ -270,12 +283,17 @@
       if (calc.shift && U.shiftLabel(item.key)) row.append(' (SHIFT 기능: ' + U.shiftLabel(item.key) + ')');
       row.append('  · ' + demo.idx + '/' + demo.flat.length + ' 키');
     } else row.append(demo.idx + '/' + demo.flat.length + ' 키 완료');
-    U.markNext(item ? item.key : null);
+    U.markNext(item && !demo.free ? item.key : null);
+    if (demo.free) {
+      row.textContent = '직접 입력 중이야 · "⏮ 처음부터"나 "▶ 자동 재생"을 누르면 시연으로 돌아가';
+    }
     dom.querySelector('#demo-auto').textContent = demo.auto ? '⏸ 멈춤' : '▶ 자동 재생';
     dom.querySelector('#demo-key').disabled = done;
     dom.querySelector('#demo-step').disabled = done;
     dom.querySelector('#demo-prev').disabled = demo.idx === 0;
-    dom.querySelector('#demo-reset').disabled = demo.idx === 0;
+    dom.querySelector('#demo-reset').disabled = demo.idx === 0 && !demo.free;
+    dom.querySelector('#demo-key').disabled = done || demo.free;
+    dom.querySelector('#demo-step').disabled = done || demo.free;
   }
 
   G.calcDemo = {

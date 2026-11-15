@@ -195,6 +195,46 @@
     });
   }
 
+  // 화면에서 드래그해 복사하면 글자마다 줄이 바뀌어 붙던 문제: 식은 한 줄로, 줄(식/결과)끼리만 줄바꿈
+  function lcdTextOf(frag) {
+    const box = document.createElement('div');
+    box.appendChild(frag);
+    const q = (sel) => Array.prototype.slice.call(box.querySelectorAll(sel));
+    const wrap = (s) => (s.length > 1 && !/^\(.*\)$/.test(s) ? '(' + s + ')' : s);
+    // 안쪽부터 바꾼다: 분수 → (분자)/(분모), 제곱근 → √(…), 위·아래 첨자 → ^ _
+    q('.fr').forEach((e) => {
+      const n = e.querySelector('.fn');
+      const d = e.querySelector('.fd');
+      e.replaceWith(document.createTextNode(wrap(n ? n.textContent : '') + '/' + wrap(d ? d.textContent : '')));
+    });
+    q('.rad').forEach((e) => {
+      const i = e.querySelector('.ri');
+      const b = e.querySelector('.rb');
+      e.replaceWith(document.createTextNode((i ? wrap(i.textContent) : '') + '√(' + (b ? b.textContent : '') + ')'));
+    });
+    q('.sp').forEach((e) => e.replaceWith(document.createTextNode('^' + wrap(e.textContent))));
+    q('.sb').forEach((e) => e.replaceWith(document.createTextNode('_' + wrap(e.textContent))));
+    const lines = q('.l0, .l1, .l2, .tl, .gr');
+    if (!lines.length) return box.textContent.replace(/\s+/g, ' ').trim();
+    return lines
+      .map((e) => e.textContent.replace(/\u00a0/g, ' ').trim())
+      .filter(Boolean)
+      .join('\n');
+  }
+  function onLcdCopy(e) {
+    if (!lcd) return;
+    const sel = window.getSelection && window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    const r = sel.getRangeAt(0);
+    if (!lcd.screen.contains(r.commonAncestorContainer)) return;
+    const text = lcdTextOf(r.cloneContents());
+    if (!text || !e.clipboardData) return;
+    e.clipboardData.setData('text/plain', text);
+    e.preventDefault();
+  }
+  document.addEventListener('copy', onLcdCopy);
+  G.calcCopyText = lcdTextOf; // 시험용
+
   function paint() {
     if (!lcd) return;
     const v = calc.view();

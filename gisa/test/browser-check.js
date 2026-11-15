@@ -687,12 +687,22 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
       check((await page.$$('#calc .key.demo-next')).length === 1, '계산기로 풀기: 다음에 누를 키 하나만 표시');
       // 잘못된 키를 누르면 진행하지 않음
       const firstKey = await page.evaluate(() => GISA.calcDemo._state().flat[0].key);
-      const wrongKey = firstKey === '9' ? '8' : '9';
+      const wrongKey = '+'; // 숫자가 아닌 틀린 키는 그냥 무시(틀린 숫자는 아래 "직접 입력" 동작)
       await page.click('#calc [data-key="' + wrongKey + '"]');
       check((await page.evaluate(() => GISA.calcDemo._state().idx)) === 0 && (await page.textContent('.demo-note')).includes('눌러야'), '계산기로 풀기: 틀린 키는 무시하고 안내');
       // 맞는 키를 직접 눌러 진행
       await page.click('#calc [data-key="' + firstKey + '"]');
       check((await page.evaluate(() => GISA.calcDemo._state().idx)) === 1, '계산기로 풀기: 맞는 키를 누르면 진행');
+      // 멈춘 상태에서 시연과 다른 숫자를 누르면: 계산기를 비우고 내가 누른 숫자부터 처음부터 입력
+      const nextKey = await page.evaluate(() => GISA.calcDemo._state().flat[1].key);
+      const otherDigit = ['7', '8', '9'].find((d) => d !== nextKey && d !== firstKey);
+      await page.click('#calc [data-key="' + otherDigit + '"]');
+      check((await page.evaluate(() => GISA.calcDemo._state().free)) === true && (await page.evaluate(() => GISA.calcUi.calc.text())) === otherDigit, '계산기로 풀기: 멈춘 채 다른 숫자를 누르면 비우고 그 숫자부터 처음부터 입력');
+      await page.click('#calc [data-key="' + otherDigit + '"]');
+      check((await page.evaluate(() => GISA.calcUi.calc.text())) === otherDigit + otherDigit, '계산기로 풀기: 직접 입력 중에는 계산기가 그대로 받음');
+      await page.click('#demo-reset');
+      check((await page.evaluate(() => GISA.calcDemo._state().free)) === false && (await page.evaluate(() => GISA.calcDemo._state().idx)) === 0 && (await page.evaluate(() => GISA.calcUi.calc.text())) === '', '계산기로 풀기: "처음부터"를 누르면 시연으로 돌아가고 계산기가 비워짐');
+      await page.click('#calc [data-key="' + firstKey + '"]');
       await page.click('#demo-step');
       check((await page.textContent('#demo-say')).includes('단계'), '계산기로 풀기: 단계 설명 표시');
       await page.click('#demo-prev');
@@ -1372,6 +1382,42 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.click('#drill-kg');
     check((await page.evaluate(() => GISA.ui._view.mode)) === 'kigeum' && (await page.evaluate(() => GISA.ui._view.kg.filter.cid)) === 'ac-power', '버튼을 누르면 그 개념의 기출로 바로 이동');
     check(errors.length === 0, '업데이트 내역 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── 2-17a. 계산기 화면 복사: 글자마다 줄바꿈이 되지 않고 한 줄 ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1400, height: 900 }, colorScheme: 'light' });
+    await page.waitForSelector('#calc .key');
+    for (const k of ['2', '5', '0', '*', '4', '0', '0', '/', '1', '0', '0', '0']) await page.evaluate((id) => GISA.calcUi && GISA.calcUi.press && GISA.calcUi.press(id), k);
+    const typed = await page.evaluate(() => document.querySelector('.lcd .l1') && document.querySelector('.lcd .l1').textContent);
+    check(!!typed && typed.replace(/\s/g, '').length >= 6, '계산기에 식이 입력됨: ' + typed);
+    const copied = await page.evaluate(() => {
+      const el = document.querySelector('.lcd .l1');
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      return GISA.calcCopyText(r.cloneContents());
+    });
+    check(/^250[×x*]400[÷/]1000$/.test(copied), '식을 복사하면 한 줄로 나옴: ' + JSON.stringify(copied));
+    const two = await page.evaluate(() => {
+      const r = document.createRange();
+      r.selectNodeContents(document.querySelector('.lcd-body'));
+      return GISA.calcCopyText(r.cloneContents());
+    });
+    const real = await page.evaluate(() => {
+      const r = document.createRange();
+      r.selectNodeContents(document.querySelector('.lcd-body'));
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      const dt = new DataTransfer();
+      const ev = new ClipboardEvent('copy', { clipboardData: dt, bubbles: true, cancelable: true });
+      document.dispatchEvent(ev);
+      return { text: dt.getData('text/plain'), prevented: ev.defaultPrevented };
+    });
+    check(real.prevented && !/^\d\n\d/.test(real.text) && /250.400.1000/.test(real.text), '드래그해서 복사(copy 이벤트)해도 한 줄로 들어감: ' + JSON.stringify(real.text));
+    check(two.split('\n').length <= 2 && !/^\d\n\d/.test(two), '식과 결과는 줄 단위로만 나뉘고 글자마다 줄바꿈이 없음: ' + JSON.stringify(two));
+    check(errors.length === 0, '계산기 복사 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }
 

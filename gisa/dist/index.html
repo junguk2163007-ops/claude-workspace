@@ -2936,7 +2936,7 @@ a.term:focus-visible {
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794723243079,"label":"11/15 15:14"};</script>
+<script>window.GISA_BUILD={"t":1794723854692,"label":"11/15 15:24"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -22143,6 +22143,46 @@ a.term:focus-visible {
     });
   }
 
+  // 화면에서 드래그해 복사하면 글자마다 줄이 바뀌어 붙던 문제: 식은 한 줄로, 줄(식/결과)끼리만 줄바꿈
+  function lcdTextOf(frag) {
+    const box = document.createElement('div');
+    box.appendChild(frag);
+    const q = (sel) => Array.prototype.slice.call(box.querySelectorAll(sel));
+    const wrap = (s) => (s.length > 1 && !/^\(.*\)$/.test(s) ? '(' + s + ')' : s);
+    // 안쪽부터 바꾼다: 분수 → (분자)/(분모), 제곱근 → √(…), 위·아래 첨자 → ^ _
+    q('.fr').forEach((e) => {
+      const n = e.querySelector('.fn');
+      const d = e.querySelector('.fd');
+      e.replaceWith(document.createTextNode(wrap(n ? n.textContent : '') + '/' + wrap(d ? d.textContent : '')));
+    });
+    q('.rad').forEach((e) => {
+      const i = e.querySelector('.ri');
+      const b = e.querySelector('.rb');
+      e.replaceWith(document.createTextNode((i ? wrap(i.textContent) : '') + '√(' + (b ? b.textContent : '') + ')'));
+    });
+    q('.sp').forEach((e) => e.replaceWith(document.createTextNode('^' + wrap(e.textContent))));
+    q('.sb').forEach((e) => e.replaceWith(document.createTextNode('_' + wrap(e.textContent))));
+    const lines = q('.l0, .l1, .l2, .tl, .gr');
+    if (!lines.length) return box.textContent.replace(/\s+/g, ' ').trim();
+    return lines
+      .map((e) => e.textContent.replace(/\u00a0/g, ' ').trim())
+      .filter(Boolean)
+      .join('\n');
+  }
+  function onLcdCopy(e) {
+    if (!lcd) return;
+    const sel = window.getSelection && window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    const r = sel.getRangeAt(0);
+    if (!lcd.screen.contains(r.commonAncestorContainer)) return;
+    const text = lcdTextOf(r.cloneContents());
+    if (!text || !e.clipboardData) return;
+    e.clipboardData.setData('text/plain', text);
+    e.preventDefault();
+  }
+  document.addEventListener('copy', onLcdCopy);
+  G.calcCopyText = lcdTextOf; // 시험용
+
   function paint() {
     if (!lcd) return;
     const v = calc.view();
@@ -22815,6 +22855,7 @@ a.term:focus-visible {
     // 계산기를 처음 상태로 되돌린 뒤 idx개 키까지 다시 누른다
     clearTimeout(demo.timer);
     demo.auto = false;
+    demo.free = false;
     resetCalc();
     demo.idx = 0;
     while (demo.idx < idx) {
@@ -22851,7 +22892,7 @@ a.term:focus-visible {
   }
   function toggleAuto() {
     if (!demo) return;
-    if (demo.idx >= demo.flat.length) rewindTo(0);
+    if (demo.idx >= demo.flat.length || demo.free) rewindTo(0); // 직접 입력하던 중이면 처음부터 다시 재생
     demo.auto = !demo.auto;
     update();
     schedule();
@@ -22860,7 +22901,19 @@ a.term:focus-visible {
   // 사용자가 계산기 키를 직접 눌렀을 때
   function onUser(id) {
     if (!demo) return false;
+    if (demo.free) return false; // 직접 입력 중: 계산기가 그냥 받는다
     const next = demo.flat[demo.idx];
+    // 일시정지 상태에서 시연과 다른 숫자를 누르면: 계산기를 비우고 내가 누른 숫자부터 처음부터 입력
+    if (!demo.auto && /^[0-9.]$/.test(id) && !(next && id === next.key)) {
+      clearTimeout(demo.timer);
+      resetCalc();
+      demo.idx = 0;
+      demo.free = true;
+      U.press(id);
+      update();
+      note('계산기를 비우고 처음부터 입력하는 중이야. 시연으로 돌아가려면 "처음부터"나 "자동 재생"을 눌러.');
+      return true;
+    }
     if (!next) {
       note('시연이 끝났어. "처음부터"를 누르거나 닫고 마음대로 써 봐.');
       return true;
@@ -22968,12 +23021,17 @@ a.term:focus-visible {
       if (calc.shift && U.shiftLabel(item.key)) row.append(' (SHIFT 기능: ' + U.shiftLabel(item.key) + ')');
       row.append('  · ' + demo.idx + '/' + demo.flat.length + ' 키');
     } else row.append(demo.idx + '/' + demo.flat.length + ' 키 완료');
-    U.markNext(item ? item.key : null);
+    U.markNext(item && !demo.free ? item.key : null);
+    if (demo.free) {
+      row.textContent = '직접 입력 중이야 · "⏮ 처음부터"나 "▶ 자동 재생"을 누르면 시연으로 돌아가';
+    }
     dom.querySelector('#demo-auto').textContent = demo.auto ? '⏸ 멈춤' : '▶ 자동 재생';
     dom.querySelector('#demo-key').disabled = done;
     dom.querySelector('#demo-step').disabled = done;
     dom.querySelector('#demo-prev').disabled = demo.idx === 0;
-    dom.querySelector('#demo-reset').disabled = demo.idx === 0;
+    dom.querySelector('#demo-reset').disabled = demo.idx === 0 && !demo.free;
+    dom.querySelector('#demo-key').disabled = done || demo.free;
+    dom.querySelector('#demo-step').disabled = done || demo.free;
   }
 
   G.calcDemo = {
@@ -23485,6 +23543,14 @@ a.term:focus-visible {
 (function (G) {
   'use strict';
   G.changelog = [
+    {
+      date: '11/15',
+      title: '계산기 복사 · 재생 중 직접 입력',
+      items: [
+        '계산기 화면을 드래그해서 복사하면 글자마다 줄이 바뀌어 붙던 걸 고쳤어. 식은 한 줄(250×400÷1000), 식과 결과만 줄이 나뉘어. 분수는 (분자)/(분모), 제곱근은 √( )로 복사돼.',
+        '"계산기로 풀기"를 멈춘 상태에서 시연과 다른 숫자를 누르면, 계산기를 비우고 내가 누른 숫자부터 처음부터 입력돼. 그다음엔 계산기가 내 입력을 그대로 받고, "처음부터"나 "자동 재생"을 누르면 시연으로 돌아가.',
+      ],
+    },
     {
       date: '11/15',
       title: '업데이트 뒤에 보던 화면 그대로',
