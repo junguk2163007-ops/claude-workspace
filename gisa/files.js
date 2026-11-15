@@ -85,6 +85,6 @@ module.exports = {
     'calc-guides/code2.js',
   ],
   logic: ['app/progress.js'],
-  app: ['app/storage.js', 'app/sync.js', 'app/aiqa.js', 'app/ai.js', 'app/calcui.js', 'app/pad.js', 'app/calcdemo.js', 'app/mathui.js', 'app/wikiui.js', 'app/celebrate.js', 'app/changelog.js', 'app/kigeum-rules.js', 'app/kigeum-freq.js', 'app/kigeum.js', 'app/exam.js', 'app/ui.js'],
+  app: ['app/storage.js', 'app/sync.js', 'app/aiqa.js', 'app/ai.js', 'app/calcui.js', 'app/pad.js', 'app/calcdemo.js', 'app/mathui.js', 'app/wikiui.js', 'app/celebrate.js', 'app/changelog.js', 'app/kigeum-rules.js', 'app/kigeum-freq.js', 'app/rest-notes.js', 'app/kigeum.js', 'app/exam.js', 'app/ui.js'],
   style: 'app/style.css',
 };

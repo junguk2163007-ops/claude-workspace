@@ -19,6 +19,16 @@ ok(f && f.meta && f.meta.total > 1000 && f.meta.classified > 0 && f.meta.classif
   ok(f.subjectTotal[s] > 100, '과목 문제 수: ' + s);
   G.concepts.filter((c) => c.subject === s).forEach((c) => ok(Number.isInteger(f.c[c.id]) && f.c[c.id] >= 0, '빈도 값 없음: ' + c.id));
 });
+// 단락 없는 기출 주제마다 개념 설명이 있어야 함('기타'는 제외)
+require(path.join(ROOT, 'app/rest-notes.js'));
+Object.values(G.kgRestTopics).forEach((list) =>
+  list.forEach((t) => {
+    const n = G.restNotes[t.id];
+    ok(n && n.lead && Array.isArray(n.points) && n.points.length >= 4 && n.points.every((x) => x.length > 10), '주제 개념 설명 없음/부족: ' + t.id);
+    ok(n && n.tips && n.tips.length >= 1, '주제 시험 포인트 없음: ' + t.id);
+  })
+);
+Object.keys(G.restNotes).forEach((id) => ok(Object.values(G.kgRestTopics).some((l) => l.some((t) => t.id === id)), '없는 주제의 설명: ' + id));
 ok(f.c['cd-volt'] === undefined, '기술기준은 기출 자료가 없어서 빈도 없음');
 // 규칙 파일의 개념이 실제로 있고 정규식이 유효한지
 Object.keys(G.kgRules).forEach((cid) => {

@@ -1350,6 +1350,10 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check((await page.evaluate(() => GISA.ui._view.tab)) === 'settings', '업데이트 시각을 누르면 설정 탭으로');
     check(await page.isVisible('#update-log') && (await page.textContent('#update-latest')).includes('최근 업데이트'), '설정에 업데이트 내역과 최근 업데이트 시각');
     check((await page.$$('#update-log .ulog')).length >= 3, '업데이트 내역 목록');
+    check((await page.$$('#update-log details.ulog[open]')).length === 0, '업데이트 내역은 처음에 제목만 보이고 상세는 접혀 있음');
+    check(!(await page.isVisible('#update-log .ulog li')), '접힌 항목의 상세 글은 안 보임');
+    await page.click('#update-log .ulog summary');
+    check(await page.isVisible('#update-log .ulog[open] li'), '항목을 누르면 상세가 펼쳐짐');
     check(await noOverflow(page), '업데이트 내역 가로 넘침');
     await page.screenshot({ path: path.join(SHOTS, '20-update-log.png'), fullPage: false });
     // 단락 반복: 기출 버튼이 항상 보임
@@ -1388,6 +1392,15 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(rows.length >= 2, '전부 이어 풀기 + 주제 줄 (' + rows.length + ')');
     check(await noOverflow(page), '단락 없는 기출 구역이 가로로 넘치지 않음');
     await page.click('.lesson-row[data-rest="all"]');
+    check(await page.isVisible('#rest-detail') && (await page.evaluate(() => GISA.ui._view.mode)) !== 'kigeum', '주제를 누르면 바로 문제가 아니라 주제 화면이 먼저 열림');
+    await page.click('#rest-back');
+    await page.click('.lesson-row[data-rest="p-line"]');
+    check((await page.textContent('#rest-detail')).includes('개념 설명') && (await page.textContent('#rest-detail')).includes('댐퍼'), '주제 화면에 개념 설명');
+    check(await noOverflow(page), '주제 화면이 가로로 넘치지 않음');
+    await page.screenshot({ path: path.join(SHOTS, '22-rest-topic.png'), fullPage: false });
+    await page.click('#rest-back');
+    await page.click('.lesson-row[data-rest="all"]');
+    await page.click('#rest-drill');
     const f = await page.evaluate(() => GISA.ui._view.kg.filter);
     check(f.rest === true && f.s === 2, '전부 이어 풀기는 그 과목의 단락 없는 기출 필터');
     const qid = await page.getAttribute('.kg-card', 'data-kg');
@@ -1402,7 +1415,10 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'light' });
     await page.click('#tab-units');
-    check(await page.isVisible('#kgstar-legend'), '과목별 단원 위에 별 등급 설명');
+    check(await page.isVisible('#kgstar-toggle') && !(await page.isChecked('#kgstar-check')), '과목별 단원에 별 보기 체크 표시(처음엔 꺼짐)');
+    check((await page.$$('.lesson-row[data-unit] .kgstar')).length === 0 && !(await page.isVisible('#kgstar-legend')), '꺼져 있으면 별도 설명도 안 보임');
+    await page.click('#kgstar-check');
+    check(await page.isVisible('#kgstar-legend'), '체크하면 별 등급 설명이 나옴');
     await page.click('.chip[data-subject="em"]');
     const s3 = await page.getAttribute('.lesson-row[data-unit="em-efield"] .kgstar', 'data-stars');
     check(s3 === '3', '전계와 전위는 별 3개 (' + s3 + ')');
@@ -1415,6 +1431,14 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(await page.isVisible('#kgstar-line') && (await page.textContent('#kgstar-line')).includes('★★★'), '단락 화면에 기출 빈출 등급과 문제 수');
     await page.click('#tab-learn');
     check((await page.$$('.lesson-row[data-lesson] .kgstar')).length >= 5, '배우기 목록에도 별 표시');
+    await page.click('#tab-units');
+    await page.click('#tab-units');
+    await page.click('#kgstar-check');
+    check((await page.$$('.lesson-row[data-unit] .kgstar')).length === 0, '체크를 끄면 별이 사라짐');
+    await page.reload();
+    await page.click('#tab-units');
+    await page.click('#tab-units');
+    check(!(await page.isChecked('#kgstar-check')), '끈 상태가 다시 열어도 유지됨');
     check(errors.length === 0, '별 표시 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }

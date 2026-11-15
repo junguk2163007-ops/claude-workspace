@@ -37,6 +37,7 @@
     kg: null, // 기출 반복 중: { filter, q, answered, chosen }
     unitSubject: 'circuit',
     unitCid: null,
+    restTopic: null,
     exSeeds: {},
     exOpen: {},
     scrollMemo: {}, // 읽던 단락·레슨의 스크롤 위치(문제를 풀고 돌아오면 거기로)
@@ -247,7 +248,7 @@
     const leaving = scrollKey();
     if (leaving) view.scrollMemo[leaving] = window.scrollY;
     if (tab === 'learn' && view.tab === 'learn') view.lessonId = null;
-    if (tab === 'units' && view.tab === 'units') view.unitCid = null;
+    if (tab === 'units' && view.tab === 'units') { view.unitCid = null; view.restTopic = null; }
     view.tab = tab;
     view.resetArmed = false;
     render();
@@ -261,6 +262,7 @@
     view.search = '';
     view.lessonId = null;
     view.unitCid = null;
+    view.restTopic = null;
     view.mode = view.mode === 'review' ? 'normal' : view.mode;
     view.tab = 'learn';
     view.resetArmed = false;
@@ -280,7 +282,10 @@
     const stars = pc >= 8 ? 3 : pc >= 3.5 ? 2 : pc >= 1.5 ? 1 : 0;
     return { stars, n, pct: Math.round(pc * 10) / 10 };
   }
+  // 별 표시는 기본으로 숨기고, 과목별 단원의 체크 표시로 켜고 끈다(켠 상태는 이 브라우저에 기억)
+  const starsOn = () => lsGet('gisa-show-stars') === true;
   function starBadge(cid) {
+    if (!starsOn()) return null;
     const k = kgStar(cid);
     if (!k || !k.stars) return null;
     return h(
@@ -292,10 +297,23 @@
   function starLegend() {
     const f = G.kgFreq;
     if (!f) return null;
+    const on = starsOn();
+    const toggle = h(
+      'label',
+      { class: 'star-toggle', id: 'kgstar-toggle' },
+      h('input', { type: 'checkbox', id: 'kgstar-check', checked: on, onchange: (e) => { lsSet('gisa-show-stars', !!e.target.checked); render(); } }),
+      ' ★ 기출 빈출 별 보기'
+    );
+    if (!on) return toggle;
     return h(
+      'div',
+      { class: 'star-wrap' },
+      toggle,
+      h(
       'p',
       { class: 'kgstar-legend muted small', id: 'kgstar-legend' },
       h('span', { class: 'kgstar s3' }, '★★★'), ' 아주 자주  ', h('span', { class: 'kgstar s2' }, '★★'), ' 자주  ', h('span', { class: 'kgstar s1' }, '★'), ' 가끔 — 기출 ' + f.meta.total.toLocaleString() + '문제(' + f.meta.from + '~' + f.meta.to + '년, 글로 된 문제)에서 이 개념이 나온 비율 기준이야. 별이 없으면 기출에서 드문 편이고, 기술기준은 아직 기출 자료가 없어.'
+      )
     );
   }
 
@@ -434,11 +452,12 @@
         h('h2', null, '업데이트 내역'),
         h('p', { class: 'muted small', id: 'update-latest' }, b && b.label ? '최근 업데이트: ' + b.label + ' (한국 시간)' : '이 화면은 파일로 열어서 업데이트 시각이 없어.'),
         log.length > 1 ? h('p', { class: 'muted small' }, '이 기기에서 열린 버전: ' + log.map((x) => x.label).join(' · ')) : null,
+        h('p', { class: 'muted small' }, '항목을 누르면 자세한 내용이 나와.'),
         cl.map((e) =>
           h(
-            'div',
+            'details',
             { class: 'ulog' },
-            h('div', { class: 'ulog-head' }, h('span', { class: 'tag plain' }, e.date), h('strong', null, e.title)),
+            h('summary', { class: 'ulog-head' }, h('span', { class: 'tag plain' }, e.date), h('strong', null, e.title)),
             h('ul', null, e.items.map((t) => h('li', null, t)))
           )
         )
@@ -2018,12 +2037,12 @@
       h(
         'div',
         { class: 'rows' },
-        h('button', { class: 'row lesson-row', 'data-rest': 'all', onclick: () => startKigeum({ s: sn, rest: true }) }, h('span', { class: 'row-head' }, h('span', { class: 'name' }, '전부 이어 풀기'), h('span', { class: 'right muted small' }, total + '문제'))),
+        h('button', { class: 'row lesson-row', 'data-rest': 'all', onclick: () => { view.restTopic = { s: sn, id: null }; render(); window.scrollTo(0, 0); } }, h('span', { class: 'row-head' }, h('span', { class: 'name' }, '전부 모아서 풀기'), h('span', { class: 'right muted small' }, total + '문제'))),
         topics.map((t) => {
           const sm = KG().summary({ s: sn, rest: true, topic: t.id });
           return h(
             'button',
-            { class: 'row lesson-row', 'data-rest': t.id, onclick: () => startKigeum({ s: sn, rest: true, topic: t.id }) },
+            { class: 'row lesson-row', 'data-rest': t.id, onclick: () => { view.restTopic = { s: sn, id: t.id }; render(); window.scrollTo(0, 0); } },
             h('span', { class: 'row-head' }, h('span', { class: 'name' }, t.name), h('span', { class: 'right muted small' }, t.n + '문제')),
             h('span', { class: 'bar' }, h('i', { style: 'width:' + (t.n ? Math.round((100 * sm.right) / t.n) : 0) + '%' })),
             h('span', { class: 'stat-line' }, h('span', null, '푼 문제 ' + sm.tried), h('span', null, '마지막에 맞힌 ' + sm.right))
@@ -2076,7 +2095,7 @@
       h('h2', null, starBadge(c.id), c.name),
       (() => {
         const k = kgStar(c.id);
-        return k && k.stars ? h('p', { class: 'muted small', id: 'kgstar-line' }, '기출 빈출 ' + '★'.repeat(k.stars) + ' · 가져온 기출 중 ' + k.n + '문제(과목의 ' + k.pct + '%)가 이 개념이야.') : null;
+        return starsOn() && k && k.stars ? h('p', { class: 'muted small', id: 'kgstar-line' }, '기출 빈출 ' + '★'.repeat(k.stars) + ' · 가져온 기출 중 ' + k.n + '문제(과목의 ' + k.pct + '%)가 이 개념이야.') : null;
       })(),
       l ? h('p', { class: 'goal' }, '이번 목표: ' + l.goal) : null,
       progressTile('익숙해진 포인트', cp.mastered, cp.total),
@@ -2142,7 +2161,40 @@
   function renderUnits(root) {
     const c = view.unitCid ? G.conceptMap[view.unitCid] : null;
     if (c) renderUnitDetail(root, c);
+    else if (view.restTopic && KG() && KG().count()) renderRestTopic(root, view.restTopic);
     else renderUnitList(root);
+  }
+
+  // 단락 없는 기출의 주제 화면: 개념 설명을 먼저 읽고 → 기출 연습
+  function renderRestTopic(root, rt) {
+    const sjName = { 1: '전기자기학', 2: '전력공학', 3: '전기기기', 4: '회로이론·제어' }[rt.s];
+    const subjId = { 1: 'em', 2: 'power', 3: 'machine', 4: 'circuit' }[rt.s];
+    const name = rt.id ? KG().topicName(rt.id) : '단락 없는 기출 전부';
+    const note = rt.id && G.restNotes ? G.restNotes[rt.id] : null;
+    const f = { s: rt.s, rest: true, topic: rt.id || null };
+    const sm = KG().summary(f);
+    root.appendChild(h('button', { class: 'btn small back', id: 'rest-back', onclick: () => { view.restTopic = null; view.unitSubject = subjId; render(); window.scrollTo(0, 0); } }, '← ' + sjName + ' 단원 목록'));
+    root.appendChild(
+      h(
+        'section',
+        { class: 'panel', id: 'rest-detail' },
+        h('span', { class: 'eyebrow' }, sjName + ' · 개념 단락이 없는 기출'),
+        h('h2', null, name),
+        h('p', { class: 'muted small' }, '기출 ' + sm.total + '문제 · 푼 문제 ' + sm.tried + '개 중 마지막에 맞힌 것 ' + sm.right + '개'),
+        h('div', { class: 'actions' }, h('button', { class: 'btn primary', id: 'rest-drill', onclick: () => startKigeum(f) }, '이 주제 기출 풀기 (' + sm.total + '문제)')),
+        note
+          ? h(
+              'section',
+              { class: 'lesson-sec' },
+              h('h3', null, '1. 개념 설명'),
+              h('p', { class: 'goal' }, note.lead),
+              h('ul', { class: 'rest-points' }, note.points.map((t) => h('li', null, t))),
+              note.tips && note.tips.length ? h('div', { class: 'note' }, h('strong', null, '시험에서 자주 나와: '), note.tips.join(' ')) : null
+            )
+          : h('p', { class: 'muted' }, '여러 주제가 섞인 기출이라 따로 정리한 개념 설명은 없어. 풀면서 나오는 AI 해설로 공부해.'),
+        h('section', { class: 'lesson-sec' }, h('h3', null, note ? '2. 기출 연습' : '기출 연습'), h('p', { class: 'muted small' }, '풀 때마다 맞히든 틀리든 AI 해설이 나와. 안 푼 문제 → 틀린 문제 순으로 먼저 나와.'), h('button', { class: 'btn primary', onclick: () => startKigeum(f) }, '기출 풀기 시작'))
+      )
+    );
   }
 
   // ───────── 복습 탭 ─────────

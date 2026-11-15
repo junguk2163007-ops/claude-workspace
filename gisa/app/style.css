@@ -2801,6 +2801,34 @@ a.term:focus-visible {
   font-size: 14.5px;
 }
 
+.ulog > summary {
+  list-style: none;
+  cursor: pointer;
+  color: inherit;
+  font-size: inherit;
+  padding: 6px 0;
+}
+.ulog > summary::-webkit-details-marker {
+  display: none;
+}
+.ulog > summary::after {
+  content: '▾';
+  margin-left: auto;
+  color: var(--muted, #888);
+  transition: transform 0.15s;
+}
+.ulog[open] > summary::after {
+  transform: rotate(180deg);
+}
+.rest-points {
+  margin: 8px 0;
+  padding-left: 20px;
+  line-height: 1.75;
+}
+.rest-points li + li {
+  margin-top: 6px;
+}
+
 /* ── 기출 빈출 별 ── */
 .kgstar {
   display: inline-block;
@@ -2875,4 +2903,19 @@ a.term:focus-visible {
   font-size: 12px;
   opacity: 0.8;
   overflow-wrap: anywhere;
+}
+
+.star-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--muted, #666);
+}
+.star-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #c98a00;
 }
