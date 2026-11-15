@@ -27,6 +27,14 @@ const TABLE = {
   'hv-sec-wood': 100, 'hv-sec-b': 150, 'hv-sec-tower': 400,
   'ehv-wood': 150, 'ehv-b': 250, 'ehv-tower': 600, 'ehv-tower-single': 400,
   // 331.11, 331.7 지지선·기초
+  // 212.3.4 표 212.3-1, 212.3-2 시간(분)
+  'fuse-30': 60, 'fuse-100': 120, 'fuse-250': 180, 'fuse-500': 240, 'mccb-50': 60, 'mccb-100': 120,
+  // 332.11 표 332.11-1, 332.11-2, 332.11의 2
+  'lv-top': 2, 'lv-top-cable': 1, 'lv-side': 1.2, 'lv-side-safe': 0.8, 'lv-side-cable': 0.4,
+  'hv-top': 2, 'hv-top-cable': 1, 'hv-side': 1.2, 'hv-side-cable': 0.4,
+  'lv-below': 0.6, 'lv-below-cable': 0.3, 'hv-below': 0.8, 'hv-below-cable': 0.4,
+  // 151.1, 152.1, 152.2 피뢰시스템
+  scope: 20, side: 20, thatch: 0.15, other: 0.1, wall: 0.1, 'wall-area': 100, count: 2, 'gap-1': 10, 'gap-3': 15, 'gap-4': 20, rebar: 0.2,
   safety: 2.5, 'min-load': 4.31, strands: 3, dia: 2.6, 'road-h': 5, 'road-h-exc': 4.5, 'base-safety': 2, 'base-safety-tower': 1.33,
 };
 const byKey = (p) => {
@@ -36,6 +44,44 @@ const byKey = (p) => {
 const near = (x) => Math.round(x * 1e6) / 1e6;
 
 module.exports = {
+  'cd-ocpd-time': byKey,
+  'cd-bldg-lvhv': byKey,
+  'cd-lps-fact': byKey,
+
+  // 표 212.3-1 퓨즈(gG): 구간별 [상한 A, 불용단 배수, 용단 배수]
+  'cd-fuse-trip': (p) => {
+    const rows = [
+      [4, 1.5, 2.1],
+      [15.999, 1.5, 1.9],
+      [Infinity, 1.25, 1.6],
+    ];
+    const row = rows.find((r) => p.I <= r[0]);
+    return near(p.I * (p.blow ? row[2] : row[1]));
+  },
+  // 표 212.3-2(산업용), 표 212.3-4(주택용)
+  'cd-mccb-trip': (p) => {
+    const m = { 'ind-no': 1.05, 'ind-op': 1.3, 'home-no': 1.13, 'home-op': 1.45 }[p.kind];
+    return near(p.I * m);
+  },
+  // 표 212.3-3 순시트립 범위
+  'cd-mccb-inst': (p) => {
+    const r = { B: [3, 5], C: [5, 10], D: [10, 20] }[p.type];
+    return p.In * (p.hi ? r[1] : r[0]);
+  },
+  // 표 333.23-1(35 kV 이하) + 333.23의 1 다(35 kV 초과: 10 kV 또는 그 단수마다 0.15 m)
+  'cd-bldg-ehv': (p) => {
+    const base = { 'ins/top-up': 2.5, 'ins/top-side': 1.5, 'cable/top-up': 1.2, 'cable/top-side': 0.5, 'bare/top-up': 3 }[p.wire + '/' + p.part];
+    let steps = 0;
+    while (35 + steps * 10 < p.V - 1e-9) steps++;
+    return near(base + (p.V > 35 ? steps * 0.15 : 0));
+  },
+  // 152.2의 2 나: 병렬 인하도선 최대 간격, 인하도선은 최소 2가닥
+  'cd-downcond': (p) => {
+    const d = { I: 10, II: 10, III: 15, IV: 20 }[p.grade];
+    let n = 1;
+    while (n * d < p.L - 1e-9) n++;
+    return Math.max(2, n);
+  },
   'cd-volt-limit': byKey,
   'cd-earth-fact': byKey,
   'cd-gnd-wire': byKey,

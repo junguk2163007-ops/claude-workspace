@@ -154,7 +154,7 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.click('.chip[data-subject="em"]');
     check((await page.$$('.lesson-row[data-unit]')).length === 9, '전기자기학 단락 9개');
     await page.click('.chip[data-subject="code"]');
-    check((await page.$$('.lesson-row[data-unit]')).length === 10, '기술기준 단락 10개');
+    check((await page.$$('.lesson-row[data-unit]')).length === 13, '기술기준 단락 13개');
     check(!(await page.isVisible('.empty')), '기술기준은 더 이상 준비 중이 아님');
     await page.click('.chip[data-subject="circuit"]');
     await page.click('.lesson-row[data-unit="ohm"]');
