@@ -157,10 +157,22 @@
 
   // ───────── 문제 고르기 ─────────
   const year = (x) => Number(String(x.exam).slice(0, 4)) || 0;
-  // filter: { s: 과목(1~4, 0/없음=전체), cid: 개념, from: 이 연도 이후 }
+  // filter: { s: 과목(1~4, 0/없음=전체), cid: 개념, from: 이 연도 이후, rest: 개념 단락에 안 이어진 문제만, topic: rest 안의 주제 id }
+  const topicOf = (x) => (G.kgRestTopic ? G.kgRestTopic(x) : { id: 'etc', name: '기타' });
   function pool(f) {
     const o = f || {};
-    return items.filter((x) => (!o.s || x.s === o.s) && (!o.cid || x.cids.indexOf(o.cid) >= 0) && (!o.from || year(x) >= o.from));
+    return items.filter((x) => (!o.s || x.s === o.s) && (!o.cid || x.cids.indexOf(o.cid) >= 0) && (!o.from || year(x) >= o.from) && (!o.rest || !x.cids.length) && (!o.topic || topicOf(x).id === o.topic));
+  }
+  // 개념 단락에 안 이어진 기출을 과목(1~4)별로 주제로 묶어 개수를 센다
+  function restTopics(s) {
+    const map = {};
+    items.forEach((x) => {
+      if (x.cids.length || x.s !== s) return;
+      const t = topicOf(x);
+      (map[t.id] = map[t.id] || { id: t.id, name: t.name, n: 0 }).n++;
+    });
+    const order = ((G.kgRestTopics || {})[SUBJECT_KEY[s]] || []).map((t) => t.id);
+    return Object.values(map).sort((a, b) => (order.indexOf(a.id) < 0 ? 99 : order.indexOf(a.id)) - (order.indexOf(b.id) < 0 ? 99 : order.indexOf(b.id)));
   }
   // 안 푼 문제 → 틀린 문제 → 맞힌 문제 순으로 우선, 같은 묶음 안에서는 무작위
   function pick(f, rnd, avoidId) {
@@ -206,6 +218,12 @@
     clear,
     reclassify,
     pool,
+    restTopics,
+    topicName: (id) => {
+      const all = [].concat.apply([], Object.values(G.kgRestTopics || {}));
+      const t = all.find((y) => y.id === id);
+      return t ? t.name : '기타';
+    },
     pick,
     record,
     summary,

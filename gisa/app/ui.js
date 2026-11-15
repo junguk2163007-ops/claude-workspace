@@ -1351,6 +1351,7 @@
   function kgFilterLabel(f) {
     const parts = [];
     if (f.cid) parts.push(concept(f.cid).name);
+    if (f.rest) parts.push('단락 없는 기출' + (f.topic ? ' · ' + KG().topicName(f.topic) : ''));
     if (f.s) parts.push(KG().SUBJECTS[f.s]);
     if (f.from) parts.push(f.from + '년 이후');
     return parts.length ? parts.join(' · ') : '전체 기출';
@@ -1449,7 +1450,7 @@
     const sum = KG().summary(f);
     const subjSel = h(
       'select',
-      { id: 'kg-subject', 'aria-label': '기출 과목', onchange: (e) => { f.s = Number(e.target.value); f.cid = null; kigeumNext(); render(); } },
+      { id: 'kg-subject', 'aria-label': '기출 과목', onchange: (e) => { f.s = Number(e.target.value); f.cid = null; f.topic = null; kigeumNext(); render(); } },
       h('option', { value: '0' }, '전체 과목'),
       Object.keys(KG().SUBJECTS).map((n) => h('option', { value: n }, KG().SUBJECTS[n]))
     );
@@ -1470,6 +1471,7 @@
         h('p', { class: 'muted small' }, kgFilterLabel(f) + ' · 풀 수 있는 문제 ' + sum.total + '개 · 푼 문제 ' + sum.tried + '개 중 마지막에 맞힌 것 ' + sum.right + '개. 안 푼 문제 → 틀린 문제 순으로 먼저 나와.'),
         h('div', { class: 'field kg-filters' }, subjSel, yearSel),
         f.cid ? h('div', { class: 'chips' }, h('button', { class: 'chip', id: 'kg-clear-cid', onclick: () => { f.cid = null; kigeumNext(); render(); } }, concept(f.cid).name + ' ✕')) : null,
+        f.rest ? h('div', { class: 'chips' }, h('button', { class: 'chip', id: 'kg-clear-rest', onclick: () => { f.rest = false; f.topic = null; kigeumNext(); render(); } }, '단락 없는 기출' + (f.topic ? ' · ' + KG().topicName(f.topic) : '') + ' ✕')) : null,
         k.set ? h('p', { class: 'note', id: 'kg-set-note' }, '연속 3정답 보너스 · 기출·CBT ' + k.set.n + '문제 중 ' + k.set.done + '문제 풀었어 (맞힌 ' + k.set.right + '개)') : null,
         h(
           'div',
@@ -1999,6 +2001,36 @@
         )
       );
     });
+    restKigeumSection(root, sj.id);
+  }
+
+  // 개념 단락이 없는 기출: 과목마다 주제별로 묶어서 이어 풀기(문제마다 AI 해설이 나옴)
+  function restKigeumSection(root, sid) {
+    if (!KG() || !KG().count()) return;
+    const sn = { em: 1, power: 2, machine: 3, circuit: 4 }[sid];
+    if (!sn) return;
+    const topics = KG().restTopics(sn);
+    if (!topics.length) return;
+    const total = topics.reduce((a, t) => a + t.n, 0);
+    root.appendChild(h('h3', { class: 'group-title eyebrow', id: 'rest-title' }, '개념 단락이 없는 기출 (' + total + '문제)'));
+    root.appendChild(h('p', { class: 'muted small' }, '위 단락들 어디에도 이어지지 않은 기출이야. 주제별로 이어 풀고, 풀 때마다 AI 해설로 공부해.'));
+    root.appendChild(
+      h(
+        'div',
+        { class: 'rows' },
+        h('button', { class: 'row lesson-row', 'data-rest': 'all', onclick: () => startKigeum({ s: sn, rest: true }) }, h('span', { class: 'row-head' }, h('span', { class: 'name' }, '전부 이어 풀기'), h('span', { class: 'right muted small' }, total + '문제'))),
+        topics.map((t) => {
+          const sm = KG().summary({ s: sn, rest: true, topic: t.id });
+          return h(
+            'button',
+            { class: 'row lesson-row', 'data-rest': t.id, onclick: () => startKigeum({ s: sn, rest: true, topic: t.id }) },
+            h('span', { class: 'row-head' }, h('span', { class: 'name' }, t.name), h('span', { class: 'right muted small' }, t.n + '문제')),
+            h('span', { class: 'bar' }, h('i', { style: 'width:' + (t.n ? Math.round((100 * sm.right) / t.n) : 0) + '%' })),
+            h('span', { class: 'stat-line' }, h('span', null, '푼 문제 ' + sm.tried), h('span', null, '마지막에 맞힌 ' + sm.right))
+          );
+        })
+      )
+    );
   }
 
   // 포인트 카드 안의 예제(같은 숫자로 항상 같은 예제, "다른 숫자로"로 바꿀 수 있음)

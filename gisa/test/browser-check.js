@@ -1365,6 +1365,39 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-17b. 개념 단락이 없는 기출 ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await page.click('#tab-units');
+    await page.click('.chip[data-subject="power"]');
+    check((await page.$$('#rest-title')).length === 0, '기출 보관함이 비어 있으면 "단락 없는 기출" 구역이 없음');
+    await page.evaluate(() =>
+      GISA.kigeum.importText(
+        JSON.stringify([
+          { id: 'r-1', exam: '2019-08-04', s: 2, n: 1, q: '시험용: 피뢰기의 정격전압이란 무엇인가?', c: ['가', '나', '다', '라'], a: 1, p: 70, f: 1 },
+          { id: 'r-2', exam: '2019-08-04', s: 2, n: 2, q: '시험용: 가공 송전선에 다는 댐퍼의 역할은?', c: ['가', '나', '다', '라'], a: 2, p: 70, f: 1 },
+          { id: 'r-3', exam: '2019-08-04', s: 2, n: 3, q: '시험용: 이 문장은 어떤 주제에도 안 맞는 아주 특이한 문제', c: ['가', '나', '다', '라'], a: 3, p: 70, f: 1 },
+        ])
+      )
+    );
+    await page.click('#tab-learn');
+    await page.click('#tab-units');
+    await page.click('.chip[data-subject="power"]');
+    check(await page.isVisible('#rest-title'), '단락 없는 기출 구역 제목');
+    const rows = await page.$$('.lesson-row[data-rest]');
+    check(rows.length >= 2, '전부 이어 풀기 + 주제 줄 (' + rows.length + ')');
+    check(await noOverflow(page), '단락 없는 기출 구역이 가로로 넘치지 않음');
+    await page.click('.lesson-row[data-rest="all"]');
+    const f = await page.evaluate(() => GISA.ui._view.kg.filter);
+    check(f.rest === true && f.s === 2, '전부 이어 풀기는 그 과목의 단락 없는 기출 필터');
+    const qid = await page.getAttribute('.kg-card', 'data-kg');
+    const cids = await page.evaluate((id) => GISA.kigeum.get(id).cids, qid);
+    check(cids.length === 0, '나오는 문제는 어떤 개념에도 안 이어진 것 (' + qid + ')');
+    check((await page.textContent('#kg-clear-rest')).includes('단락 없는 기출'), '필터 칩');
+    check(errors.length === 0, '단락 없는 기출 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 2-18. 기출 빈출 별(★) ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'light' });
