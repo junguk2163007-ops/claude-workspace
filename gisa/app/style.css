@@ -2700,6 +2700,13 @@ a.term:focus-visible {
 
 /* ── 업데이트 시각(홈 버튼 오른쪽) ── */
 .build-stamp {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
@@ -2776,4 +2783,20 @@ a.term:focus-visible {
 .kg-expl-body {
   white-space: pre-wrap;
   line-height: 1.75;
+}
+
+/* ── 업데이트 내역 ── */
+.ulog {
+  margin-top: 14px;
+}
+.ulog-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ulog ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  line-height: 1.7;
+  font-size: 14.5px;
 }

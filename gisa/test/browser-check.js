@@ -1014,10 +1014,10 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });
     // 시험용 가짜 문제(실제 기출이 아님)
     const fake = [
-      { id: 't-1', exam: '2019-08-04', s: 4, n: 61, q: '시험용 문제: 역률이 0.8일 때 무효율 sinθ는?', c: ['0.4', '0.6', '0.8', '1.0'], a: 2, p: 70, f: 2 },
+      { id: 't-1', exam: '2019-08-04', s: 4, n: 61, q: '시험용 문제: 피상 전력 100[VA], 역률이 0.8일 때 유효 전력과 무효율 sinθ는?', c: ['0.4', '0.6', '0.8', '1.0'], a: 2, p: 70, f: 2 },
       { id: 't-2', exam: '2020-06-06', s: 4, n: 62, q: '시험용 문제: 직렬 공진 회로에서 임피던스가 최소가 되는 조건은?', c: ['XL = XC', 'XL > XC', 'XL < XC', 'R = 0'], a: 1, p: 55 },
       { id: 't-3', exam: '2012-03-04', s: 3, n: 41, q: '시험용 문제: 유도전동기의 슬립이 0.03이고 2차 입력이 20 kW일 때 기계적 출력은?', c: ['19.4 kW', '20 kW', '0.6 kW', '21 kW'], a: 1, p: 60 },
-      { id: 't-4', exam: '2021-03-07', s: 1, n: 5, q: '시험용 문제: 쿨롱의 법칙에서 거리가 2배가 되면 힘은?', c: ['2배', '1/2배', '4배', '1/4배'], a: 4, p: 80 },
+      { id: 't-4', exam: '2021-03-07', s: 1, n: 5, q: '시험용 문제: 쿨롱의 법칙에서 두 점전하 사이의 거리가 2배가 되면 힘은?', c: ['2배', '1/2배', '4배', '1/4배'], a: 4, p: 80 },
       { id: 't-5', exam: '2018-04-28', s: 2, n: 25, q: '시험용 문제: 송전 전압을 2배로 올리면 전력손실은?', c: ['1/2', '1/4', '2배', '4배'], a: 2, p: 65 },
       { id: 'bad', s: 9, q: 'x', c: [], a: 7 },
     ];
@@ -1340,6 +1340,28 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.click('.kg-card .choice[data-i="0"]');
     check(await page.isVisible('#kg-expl-none'), '기출: AI가 없을 땐 해설 대신 안내');
     check(errors.length === 0, '기출 해설(AI 없음) 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── 2-17. 업데이트 시각 → 업데이트 내역, 단락 반복의 기출 버튼 ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await page.click('#build-stamp');
+    check((await page.evaluate(() => GISA.ui._view.tab)) === 'settings', '업데이트 시각을 누르면 설정 탭으로');
+    check(await page.isVisible('#update-log') && (await page.textContent('#update-latest')).includes('최근 업데이트'), '설정에 업데이트 내역과 최근 업데이트 시각');
+    check((await page.$$('#update-log .ulog')).length >= 3, '업데이트 내역 목록');
+    check(await noOverflow(page), '업데이트 내역 가로 넘침');
+    await page.screenshot({ path: path.join(SHOTS, '20-update-log.png'), fullPage: false });
+    // 단락 반복: 기출 버튼이 항상 보임
+    await page.evaluate(() => GISA.ui._startDrill('ac-power'));
+    check(await page.isVisible('#drill-kg'), '단락 반복 화면에 기출 버튼(보관함이 비어 있으면 "기출 가져오기")');
+    check((await page.textContent('#drill-kg')).includes('기출'), '기출 버튼 글자');
+    await page.evaluate(() => GISA.kigeum.importText(JSON.stringify([{ id: 'u-1', exam: '2019-08-04', s: 4, n: 1, q: '시험용: 피상 전력 100[VA], 역률 0.8일 때 유효 전력은?', c: ['40', '60', '80', '100'], a: 3, p: 70, f: 1 }])));
+    await page.evaluate(() => GISA.ui._startDrill('ac-power'));
+    check((await page.textContent('#drill-kg')).includes('(1)'), '단락 반복의 기출 버튼에 문제 수');
+    await page.click('#drill-kg');
+    check((await page.evaluate(() => GISA.ui._view.mode)) === 'kigeum' && (await page.evaluate(() => GISA.ui._view.kg.filter.cid)) === 'ac-power', '버튼을 누르면 그 개념의 기출로 바로 이동');
+    check(errors.length === 0, '업데이트 내역 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }
 

@@ -52,22 +52,36 @@
   }
 
   // ───────── 개념 이어 붙이기 ─────────
-  // 문제·보기 글에서 용어 사전의 용어를 찾고, 그 용어가 속한 개념에 표를 준다. 과목 안의 개념만 인정한다.
+  // 개념마다 정해 둔 말(app/kigeum-rules.js)이 문제 글에 얼마나 나오는지로 점수를 낸다.
+  // (예전에는 용어 사전의 "전압", "변압기" 같은 흔한 말까지 표로 세서 엉뚱한 개념에 이어 붙었다.)
+  //  - 강한 말: 본문 3점 / 보기에만 있으면 1.5점,  약한 말: 본문 1점 / 보기 0.5점
+  //  - 3.5점 이상이고 가장 높은 점수의 60% 이상인 개념만, 최대 2개. 과목이 다른 개념은 안 이어 붙인다.
+  const CLS_VER = '2';
+  const CLS_MIN = 3.5;
   function classify(x) {
-    const text = x.q + ' ' + x.c.join(' ');
-    const votes = {};
-    if (G.glossary) {
-      G.glossary.find(text).forEach((m) => {
-        const t = G.glossary.byId[m.id];
-        if (!t || !t.concept) return;
-        const c = G.concepts.find((k) => k.id === t.concept);
-        if (!c || c.subject === 'base') return;
-        if (SUBJECT_KEY[x.s] && c.subject !== SUBJECT_KEY[x.s]) return;
-        votes[c.id] = (votes[c.id] || 0) + 1;
+    const rules = G.kgRules || {};
+    const stem = x.q;
+    const ch = x.c.join(' ');
+    const sc = {};
+    Object.keys(rules).forEach((cid) => {
+      const c = G.conceptMap && G.conceptMap[cid];
+      if (!c || c.subject === 'base') return;
+      if (SUBJECT_KEY[x.s] && c.subject !== SUBJECT_KEY[x.s]) return;
+      let v = 0;
+      rules[cid].s.forEach((re) => {
+        if (re.test(stem)) v += 3;
+        else if (re.test(ch)) v += 1.5;
       });
-    }
-    return Object.keys(votes)
-      .sort((a, b) => votes[b] - votes[a])
+      rules[cid].w.forEach((re) => {
+        if (re.test(stem)) v += 1;
+        else if (re.test(ch)) v += 0.5;
+      });
+      if (v) sc[cid] = v;
+    });
+    const best = Math.max(0, ...Object.values(sc));
+    return Object.keys(sc)
+      .filter((c) => sc[c] >= CLS_MIN && sc[c] >= 0.6 * best)
+      .sort((a, b) => sc[b] - sc[a])
       .slice(0, 2);
   }
 
@@ -97,6 +111,16 @@
       db.close();
     } catch (e) {
       items = [];
+    }
+    // 연결 규칙이 바뀌었으면 가진 문제를 한 번 다시 이어 붙인다
+    try {
+      if (items.length && localStorage.getItem('gisa-kg-cls') !== CLS_VER) {
+        items.forEach((x) => (x.cids = classify(x)));
+        localStorage.setItem('gisa-kg-cls', CLS_VER);
+        reclassify().catch(() => {});
+      }
+    } catch (e) {
+      /* 저장소를 못 쓰면 이번 화면에서만 다시 계산한 값을 쓴다 */
     }
     index();
     loaded = true;

@@ -357,7 +357,19 @@
   function buildStamp() {
     const b = window.GISA_BUILD;
     if (!b || !b.label) return null;
-    return h('span', { class: 'build-stamp', id: 'build-stamp', title: '이 버전이 만들어진 시각(한국 시간)' }, h('span', null, '업데이트'), h('span', null, b.label));
+    return h(
+      'button',
+      {
+        class: 'build-stamp',
+        id: 'build-stamp',
+        type: 'button',
+        title: '이 버전이 만들어진 시각(한국 시간). 누르면 업데이트 내역',
+        'aria-label': '업데이트 ' + b.label + ', 업데이트 내역 보기',
+        onclick: openUpdateLog,
+      },
+      h('span', null, '업데이트'),
+      h('span', null, b.label)
+    );
   }
   function announceUpdate() {
     const b = window.GISA_BUILD;
@@ -365,6 +377,42 @@
     const seen = lsGet(BUILD_KEY);
     if (seen && seen.t && seen.t !== b.t) toast('업데이트 되었습니다 · ' + b.label);
     lsSet(BUILD_KEY, { t: b.t, label: b.label });
+    // 이 기기에서 열린 버전 시각 기록(설정 → 업데이트 내역에 보여 줌)
+    const log = lsGet('gisa-build-log') || [];
+    if (!log.some((x) => x.t === b.t)) {
+      log.push({ t: b.t, label: b.label });
+      lsSet('gisa-build-log', log.slice(-12));
+    }
+  }
+  function openUpdateLog() {
+    goTab('settings');
+    setTimeout(() => {
+      const el = document.getElementById('update-log');
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }, 30);
+  }
+  // 설정 탭의 "업데이트 내역": 최근 업데이트 시각과 바뀐 내용
+  function renderUpdateLog(root) {
+    const b = window.GISA_BUILD;
+    const log = (lsGet('gisa-build-log') || []).slice().reverse();
+    const cl = G.changelog || [];
+    root.appendChild(
+      h(
+        'section',
+        { class: 'panel', id: 'update-log' },
+        h('h2', null, '업데이트 내역'),
+        h('p', { class: 'muted small', id: 'update-latest' }, b && b.label ? '최근 업데이트: ' + b.label + ' (한국 시간)' : '이 화면은 파일로 열어서 업데이트 시각이 없어.'),
+        log.length > 1 ? h('p', { class: 'muted small' }, '이 기기에서 열린 버전: ' + log.map((x) => x.label).join(' · ')) : null,
+        cl.map((e) =>
+          h(
+            'div',
+            { class: 'ulog' },
+            h('div', { class: 'ulog-head' }, h('span', { class: 'tag plain' }, e.date), h('strong', null, e.title)),
+            h('ul', null, e.items.map((t) => h('li', null, t)))
+          )
+        )
+      )
+    );
   }
 
   // ───────── 상단 바 ─────────
@@ -484,6 +532,15 @@
     return h('div', { class: 'picker' }, h('label', { for: 'concept-select' }, '개념'), sel);
   }
 
+  // 단락 반복 중에 언제든 이 개념의 기출로 바로 넘어가는 버튼
+  function kgDrillButton(cid) {
+    if (!G.kigeum) return null;
+    const n = G.kigeum.conceptCount(cid);
+    if (!G.kigeum.count()) return h('button', { class: 'btn small soft', id: 'drill-kg', onclick: () => goTab('settings') }, '기출 가져오기');
+    if (!n) return h('button', { class: 'btn small soft', id: 'drill-kg', disabled: true, title: '이 개념에 이어진 기출이 아직 없어' }, '이 개념 기출 없음');
+    return h('button', { class: 'btn small primary', id: 'drill-kg', onclick: () => startKigeum({ cid }) }, '이 개념 기출 풀기 (' + n + ')');
+  }
+
   function modeBanner() {
     if (view.mode === 'drill' && view.drill) {
       const d = view.drill;
@@ -496,6 +553,7 @@
         'div',
         { class: 'banner', id: 'drill-banner' },
         label,
+        kgDrillButton(d.cid),
         h('button', { class: 'btn small', id: 'drill-exit', onclick: () => { view.mode = 'normal'; view.drill = null; openUnit(d.cid, true); } }, '단락으로 돌아가기')
       );
     }
@@ -2173,6 +2231,7 @@
   // ───────── 설정 탭 ─────────
   function renderSettings(root) {
     const m = view.msg;
+    renderUpdateLog(root);
     const sw = (id, key, title, desc) =>
       h(
         'label',
