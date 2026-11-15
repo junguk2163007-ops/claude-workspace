@@ -2697,3 +2697,23 @@ a.term:focus-visible {
   color: #b7791f;
   border-color: #b7791f;
 }
+
+/* ── 업데이트 시각(홈 버튼 오른쪽) ── */
+.build-stamp {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 폰 폭에서는 머리글이 좁아서 부제를 숨기고 업데이트 시각 자리를 확보 */
+@media (max-width: 430px) {
+  .brand small {
+    display: none;
+  }
+}

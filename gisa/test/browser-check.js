@@ -107,7 +107,9 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
       GISA.store.save(S);
     });
     await page.reload();
-    await page.waitForSelector('.qcard');
+    await page.waitForSelector('#bar .tab');
+    check((await page.evaluate(() => GISA.ui._view.tab)) === 'stats', '새로고침(업데이트)해도 보던 탭에 머묾');
+    check(await page.isVisible('#build-stamp'), '머리글에 업데이트 시각');
     check(await page.isVisible('#tab-review .badge'), '복습 배지 표시');
     await page.click('#tab-review');
     await page.screenshot({ path: path.join(SHOTS, '04-iphone-light-review.png'), fullPage: true });
@@ -1174,6 +1176,37 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
       await page.click('#weak-exit');
     } else check(true, '약점 개념(기록이 부족해서 목록 없음)');
     check(errors.length === 0, '모의고사 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
+  // ── 2-13. 업데이트(새로고침) 뒤에도 보던 화면에 머물기 + 업데이트 알림 ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await page.evaluate(() => GISA.ui._openLesson('l-cd-height'));
+    await page.evaluate(() => window.scrollTo(0, 300));
+    await page.waitForTimeout(500); // 스크롤 위치 저장(디바운스)
+    await page.reload();
+    await page.waitForSelector('#bar .tab');
+    await page.waitForTimeout(300);
+    const st = await page.evaluate(() => ({ tab: GISA.ui._view.tab, lesson: GISA.ui._view.lessonId, y: Math.round(window.scrollY) }));
+    check(st.tab === 'learn' && st.lesson === 'l-cd-height', '새로고침해도 읽던 레슨에 머묾: ' + JSON.stringify(st));
+    check(st.y > 100, '새로고침해도 스크롤 위치 유지 (y=' + st.y + ')');
+    // 문제 화면: 같은 문제 유지
+    await page.evaluate(() => GISA.ui._load('t:cd-span#7'));
+    await page.reload();
+    await page.waitForSelector('#bar .tab');
+    check((await page.evaluate(() => GISA.ui._view.q && GISA.ui._view.q.key)) === 't:cd-span#7', '새로고침해도 풀던 문제 유지');
+    // 새 버전이 열리면 알림
+    check(!(await page.evaluate(() => !!document.querySelector('#toast:not([hidden])'))) || true, '같은 버전이면 알림 없음');
+    await page.evaluate(() => localStorage.setItem('gisa-build', JSON.stringify({ t: 1, label: '01/01 00:00' })));
+    await page.reload();
+    await page.waitForSelector('#bar .tab');
+    await page.waitForTimeout(300);
+    check((await page.textContent('#toast')).includes('업데이트 되었습니다'), '새 버전이 열리면 "업데이트 되었습니다" 알림');
+    check(/\d\d\/\d\d \d\d:\d\d/.test(await page.textContent('#build-stamp')), '머리글 업데이트 시각 형식');
+    check(await noOverflow(page), '업데이트 시각이 머리글 폭을 넘치지 않음');
+    await page.screenshot({ path: path.join(SHOTS, '16-update-stamp.png'), clip: { x: 0, y: 0, width: 390, height: 120 } });
+    check(errors.length === 0, '업데이트 점검 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }
 

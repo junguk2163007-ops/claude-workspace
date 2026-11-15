@@ -21,12 +21,21 @@ const js = jsFiles
   .replace(/<\/script/gi, '<\\/script');
 const css = read(FILES.style);
 
+// 빌드(= 업데이트) 시각: 화면 머리글에 작게 보여 주고, 새 버전이 열리면 "업데이트 되었습니다"를 알려 주는 데 쓴다.
+const NOW = new Date();
+const KST = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+  .formatToParts(NOW)
+  .reduce((o, p) => ((o[p.type] = p.value), o), {});
+const BUILD_LABEL = KST.month + '/' + KST.day + ' ' + (KST.hour === '24' ? '00' : KST.hour) + ':' + KST.minute;
+const BUILD_SCRIPT = '<script>window.GISA_BUILD=' + JSON.stringify({ t: NOW.getTime(), label: BUILD_LABEL }) + ';</script>\n';
+
 const body =
   '<header class="appbar" id="bar"></header>\n' +
   '<main><div class="wrap" id="view"></div></main>\n' +
   '<aside id="calc" aria-label="계산기"></aside>\n' +
   '<aside id="side" aria-label="AI에게 묻기"></aside>\n' +
   '<noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>\n' +
+  BUILD_SCRIPT +
   '<script>\n' + js + '\n</script>\n';
 
 const index =

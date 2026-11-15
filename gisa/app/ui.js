@@ -249,6 +249,75 @@
     window.scrollTo(0, 0);
   }
 
+  // ───────── 보던 화면 기억 · 업데이트 알림 ─────────
+  // 새 버전이 올라와서 페이지가 다시 열려도 보던 탭·레슨·단락·문제·스크롤 위치로 돌아오게 한다(이 브라우저 localStorage).
+  const VIEW_KEY = 'gisa-view';
+  const BUILD_KEY = 'gisa-build';
+  const lsGet = (k) => {
+    try {
+      return JSON.parse(localStorage.getItem(k));
+    } catch (e) {
+      return null;
+    }
+  };
+  const lsSet = (k, v) => {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch (e) {
+      /* 저장소를 못 쓰는 환경이면 기억하지 않음 */
+    }
+  };
+  let restoring = false;
+  function rememberView() {
+    if (restoring) return;
+    lsSet(VIEW_KEY, {
+      tab: view.tab,
+      lessonId: view.lessonId,
+      unitCid: view.unitCid,
+      unitSubject: view.unitSubject,
+      q: view.tab === 'practice' && view.mode === 'normal' && view.q ? view.q.key : null,
+      exam: view.mode === 'exam' && view.ex && !view.ex.result ? 1 : 0,
+      y: Math.round(window.scrollY || 0),
+      t: Date.now(),
+    });
+  }
+  // 불러온 값이 지금 데이터와 맞을 때만 복원(없어진 레슨·문제는 무시)
+  function restoreView() {
+    const r = lsGet(VIEW_KEY);
+    if (!r || typeof r !== 'object') return null;
+    const tabs = ['learn', 'units', 'practice', 'review', 'stats', 'settings'];
+    if (tabs.indexOf(r.tab) === -1) return null;
+    view.tab = r.tab;
+    if (r.unitSubject && G.subjects.some((x) => x.id === r.unitSubject)) view.unitSubject = r.unitSubject;
+    if (r.tab === 'learn' && r.lessonId && G.lessonMap[r.lessonId]) {
+      const l = G.lessonMap[r.lessonId];
+      view.lessonId = r.lessonId;
+      view.exampleKey = l && l.example ? 't:' + l.example : null;
+    }
+    if (r.tab === 'units' && r.unitCid && G.conceptMap[r.unitCid]) view.unitCid = r.unitCid;
+    if (r.tab === 'practice' && r.q) {
+      try {
+        view.q = G.fromKey(r.q);
+        resetCard();
+      } catch (e) {
+        view.q = null;
+      }
+    }
+    return r;
+  }
+  function buildStamp() {
+    const b = window.GISA_BUILD;
+    if (!b || !b.label) return null;
+    return h('span', { class: 'build-stamp', id: 'build-stamp', title: '이 버전이 만들어진 시각(한국 시간)' }, h('span', null, '업데이트'), h('span', null, b.label));
+  }
+  function announceUpdate() {
+    const b = window.GISA_BUILD;
+    if (!b) return;
+    const seen = lsGet(BUILD_KEY);
+    if (seen && seen.t && seen.t !== b.t) toast('업데이트 되었습니다 · ' + b.label);
+    lsSet(BUILD_KEY, { t: b.t, label: b.label });
+  }
+
   // ───────── 상단 바 ─────────
   function renderBar() {
     const due = P.dueReviews(S).length;
@@ -280,6 +349,7 @@
             onclick: goHome,
             html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 11 12 3.5 20.5 11"/><path d="M5.5 9.8V20h4.5v-5.5h4V20h4.5V9.8"/></svg>',
           }),
+          buildStamp(),
           h('span', { class: 'streak', title: '현재 연속 정답' }, '연속 ' + S.streak.cur, h('span', { class: 'syncdot', id: 'sync-dot' })),
           h('button', {
             class: 'wiki-open',
@@ -2196,7 +2266,13 @@
     if (G.mathUi) G.mathUi.typeset(root);
     if (G.wikiUi) G.wikiUi.link(root);
     if (G.aiTutor) G.aiTutor.updateSide();
+    rememberView();
   }
+  let scrollTimer = null;
+  window.addEventListener('scroll', () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(rememberView, 250);
+  }, { passive: true });
 
   // 맥 키보드: 1~4 고르기, Enter/N 다음 문제
   document.addEventListener('keydown', (e) => {
@@ -2249,8 +2325,14 @@
     if (!S.settings.theme) S.settings.theme = 'system';
     if (S.total.n === 0 && !Object.keys(S.lessons || {}).length) view.tab = 'learn';
     applyTheme();
-    nextQuestion();
+    restoring = true;
+    const back = restoreView();
+    if (!(back && back.tab === 'practice' && view.q)) nextQuestion();
     render();
+    restoring = false;
+    if (back && back.exam && G.exam && G.exam.cur.load() && G.exam.remaining(G.exam.cur.load()) > 0) startExam(true);
+    if (back && back.y) setTimeout(() => window.scrollTo(0, back.y), 60);
+    announceUpdate();
     if (G.sync) {
       G.sync.init({
         getState: () => S,
