@@ -417,6 +417,7 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(chips.includes('힌트만 줘'), '풀기 전 프리셋');
     await page.click('#side .ai-chip');
     await done(1);
+    check((await page.evaluate(() => GISA.aiqa.count())) === 1 && (await page.evaluate(() => GISA.aiqa.list()[0].a.length > 0)), 'AI에게 물은 질문·답이 저장됨(복습 알림용)');
     const p0 = await promptOf(0);
     check(p0.includes('정답 값이나 정답 번호를 절대') && p0.includes('개념: 옴의 법칙') && p0.includes('[화면 데이터]'), '풀기 전엔 정답 숨김 규칙 + 화면 데이터 전달');
 

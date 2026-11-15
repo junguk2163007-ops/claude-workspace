@@ -217,6 +217,8 @@
         out.classList.remove('pending');
         out.textContent = res.text + (res.truncated ? '\n(답이 길어서 중간에 끊겼어. 더 짧게 물어봐 줘.)' : '');
         turns.push({ role: 'assistant', content: res.text });
+        const cx = o.getCtx ? o.getCtx() : null;
+        if (G.aiqa) G.aiqa.save({ q: text, a: res.text, where: (cx && cx.label) || '', key: cx && cx.q && cx.q.key });
       } catch (e) {
         const code = (e && e.code) || 'upstream_error';
         out.classList.remove('pending');

@@ -2009,6 +2009,22 @@
     );
   }
 
+  // AI에게 물어본 내용 저장 현황(매일 복습 알림이 이걸 읽어 가)
+  function renderAiqaSettings(root) {
+    if (!G.aiqa) return;
+    const st = G.aiqa.status();
+    const n = G.aiqa.count();
+    root.appendChild(h('h3', { class: 'group-title eyebrow' }, 'AI 질문 복습'));
+    root.appendChild(
+      h(
+        'div',
+        { class: 'panel', id: 'aiqa-panel' },
+        h('p', { class: 'muted small' }, 'AI에게 물어본 질문과 답은 자동으로 저장돼. 저장된 질문 ' + n + '개' + (G.aiqa.pending() ? ' (클라우드에 올리는 중 ' + G.aiqa.pending() + '개)' : '') + '.'),
+        h('p', { class: 'muted small' }, st === 'cloud' ? '클라우드(내 계정에서만 보이는 저장소)에 같이 저장돼. 매일 한 번, 랜덤한 시간에 이 중에서 골라 복습 알림으로 보내 줄 수 있어.' : st === 'local' ? '지금은 이 브라우저에만 저장돼. claude.ai에서 열어야 클라우드에 저장되고 복습 알림이 이걸 읽을 수 있어.' : '저장소 연결을 확인하는 중이야…')
+      )
+    );
+  }
+
   function renderSyncSettings(root, sw) {
     const sy = G.sync ? G.sync.status() : { state: 'unavailable' };
     const canUse = G.sync && G.sync.available();
@@ -2078,6 +2094,7 @@
         h('div', { class: 'field' }, h('label', { for: 'theme-select' }, h('strong', null, '화면 테마')), themeSel)
       )
     );
+    renderAiqaSettings(root);
     renderSyncSettings(root, sw);
 
     const keyInput = h('input', { type: 'text', id: 'key-input', placeholder: '예: t:ohm-current#12345', autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false' });
