@@ -251,7 +251,7 @@
     const tabs = [
       ['learn', '배우기'],
       ['units', '과목별'],
-      ['practice', '연습'],
+      ['practice', '문제풀이'],
       ['review', '복습'],
       ['stats', '기록'],
       ['settings', '설정'],
@@ -699,7 +699,7 @@
         h('p', { class: 'muted small' }, kgFilterLabel(f) + ' · 풀 수 있는 문제 ' + sum.total + '개 · 푼 문제 ' + sum.tried + '개 중 마지막에 맞힌 것 ' + sum.right + '개. 안 푼 문제 → 틀린 문제 순으로 먼저 나와.'),
         h('div', { class: 'field kg-filters' }, subjSel, yearSel),
         f.cid ? h('div', { class: 'chips' }, h('button', { class: 'chip', id: 'kg-clear-cid', onclick: () => { f.cid = null; kigeumNext(); render(); } }, concept(f.cid).name + ' ✕')) : null,
-        h('div', { class: 'actions' }, h('button', { class: 'btn', id: 'kg-exit', onclick: exitKigeum }, '← 연습으로 돌아가기'))
+        h('div', { class: 'actions' }, h('button', { class: 'btn', id: 'kg-exit', onclick: exitKigeum }, '← 문제풀이로 돌아가기'))
       )
     );
     const q = k.q;
@@ -1395,7 +1395,7 @@
         ),
         recent.length
           ? h('div', { class: 'panel' }, h('h3', { class: 'eyebrow' }, '최근 ' + recent.length + '문제 (왼쪽이 오래된 것)'), h('div', { class: 'dots', 'aria-label': '최근 결과' }, recent.map((x) => h('i', { class: x.ok ? 'ok' : '', title: x.k }))))
-          : h('div', { class: 'empty' }, '아직 푼 문제가 없어. 연습 탭에서 첫 문제를 풀면 여기에 쌓여.')
+          : h('div', { class: 'empty' }, '아직 푼 문제가 없어. 문제풀이 탭에서 첫 문제를 풀면 여기에 쌓여.')
       )
     );
     root.appendChild(h('h3', { class: 'group-title eyebrow' }, '개념별 정답률'));
@@ -1689,7 +1689,7 @@
       const c = concept(view.unitCid);
       return { kind: 'unit', concept: c, points: G.pointsFor(c.id), label: '단락 · ' + c.name };
     }
-    const names = { learn: '배우기 목록', units: '과목별 단원 목록', practice: '연습', review: '복습', stats: '기록', settings: '설정' };
+    const names = { learn: '배우기 목록', units: '과목별 단원 목록', practice: '문제풀이', review: '복습', stats: '기록', settings: '설정' };
     return { kind: 'general', label: names[view.tab] || '', stats: statsSummary() };
   }
 
