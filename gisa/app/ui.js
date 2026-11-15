@@ -268,6 +268,37 @@
     window.scrollTo(0, 0);
   }
 
+  // ───────── 기출 빈출 별(★) ─────────
+  // 가져온 기출(2003~2022) 중 그 개념으로 이어진 문제가 과목 전체 문제의 몇 %인지로 등급을 매긴다.
+  //  ★★★ 8% 이상(아주 자주) / ★★ 3.5% 이상(자주) / ★ 1.5% 이상(가끔) / 별 없음 = 기출에서 드문 편
+  function kgStar(cid) {
+    const f = G.kgFreq;
+    const c = G.conceptMap[cid];
+    if (!f || !c || f.c[cid] === undefined || !f.subjectTotal[c.subject]) return null;
+    const n = f.c[cid];
+    const pc = (100 * n) / f.subjectTotal[c.subject];
+    const stars = pc >= 8 ? 3 : pc >= 3.5 ? 2 : pc >= 1.5 ? 1 : 0;
+    return { stars, n, pct: Math.round(pc * 10) / 10 };
+  }
+  function starBadge(cid) {
+    const k = kgStar(cid);
+    if (!k || !k.stars) return null;
+    return h(
+      'span',
+      { class: 'kgstar s' + k.stars, 'data-stars': String(k.stars), title: '기출 빈출 ' + '★'.repeat(k.stars) + ' · 기출 ' + k.n + '문제(과목의 ' + k.pct + '%)', 'aria-label': '기출 빈출 등급 ' + k.stars + '/3' },
+      '★'.repeat(k.stars)
+    );
+  }
+  function starLegend() {
+    const f = G.kgFreq;
+    if (!f) return null;
+    return h(
+      'p',
+      { class: 'kgstar-legend muted small', id: 'kgstar-legend' },
+      h('span', { class: 'kgstar s3' }, '★★★'), ' 아주 자주  ', h('span', { class: 'kgstar s2' }, '★★'), ' 자주  ', h('span', { class: 'kgstar s1' }, '★'), ' 가끔 — 기출 ' + f.meta.total.toLocaleString() + '문제(' + f.meta.from + '~' + f.meta.to + '년, 글로 된 문제)에서 이 개념이 나온 비율 기준이야. 별이 없으면 기출에서 드문 편이고, 기술기준은 아직 기출 자료가 없어.'
+    );
+  }
+
   // ───────── 개념 그림(도식·실물 일러스트) ─────────
   function conceptFigures(cid) {
     const figs = G.figuresFor ? G.figuresFor(cid) : [];
@@ -1676,6 +1707,7 @@
         { class: 'panel' },
         h('h2', null, '배우기'),
         h('p', { class: 'muted small' }, '아무것도 모르는 상태에서 시작해서 한 단계씩 나아가는 순서야. 읽고 → 예제를 따라가고 → 확인 문제를 풀어. 레슨을 읽으면 그 개념의 문제도 열려.'),
+        starLegend(),
         h(
           'div',
           { class: 'tile progress-tile' },
@@ -1705,7 +1737,7 @@
                   'span',
                   { class: 'row-head' },
                   h('span', { class: 'lesson-no' }, lessonIndex(l.id) + 1),
-                  h('span', { class: 'name' }, l.title),
+                  h('span', { class: 'name' }, c ? starBadge(c.id) : null, l.title),
                   h('span', { class: 'right' }, read ? h('span', { class: 'state open' }, '읽음') : null)
                 ),
                 h('span', { class: 'stat-line' }, h('span', null, l.goal)),
@@ -1922,6 +1954,7 @@
         { class: 'panel' },
         h('h2', null, '과목별 단원'),
         h('p', { class: 'muted small' }, '과목 → 단원 → 세부 단락 순서로 들어가. 단락마다 "문제 포인트 → 개념 설명 → 그 포인트 문제만 반복"으로 공부해. 한 포인트에서 연속 ' + P.MASTER_STREAK + '문제를 맞히면 익숙해진 걸로 쳐.'),
+        starLegend(),
         h(
           'div',
           { class: 'chips', role: 'group', 'aria-label': '과목' },
@@ -1958,7 +1991,7 @@
               return h(
                 'button',
                 { class: 'row lesson-row', 'data-unit': c.id, onclick: () => openUnit(c.id) },
-                h('span', { class: 'row-head' }, h('span', { class: 'name' }, c.name), h('span', { class: 'right' }, h('span', { class: 'state ' + (cp.total && cp.mastered === cp.total ? 'open' : 'locked') }, '포인트 ' + cp.mastered + '/' + cp.total))),
+                h('span', { class: 'row-head' }, h('span', { class: 'name' }, starBadge(c.id), c.name), h('span', { class: 'right' }, h('span', { class: 'state ' + (cp.total && cp.mastered === cp.total ? 'open' : 'locked') }, '포인트 ' + cp.mastered + '/' + cp.total))),
                 h('span', { class: 'bar' + (cp.mastered === 0 ? '' : '') }, h('i', { style: 'width:' + (cp.total ? Math.round((100 * cp.mastered) / cp.total) : 0) + '%' })),
                 h('span', { class: 'stat-line' }, h('span', null, st.n + '문제 풀이'), h('span', null, '정답률 ' + pct(st.c, st.n)))
               );
@@ -2008,7 +2041,11 @@
     root.appendChild(h('button', { class: 'btn small back', id: 'unit-back', onclick: () => { view.unitCid = null; render(); window.scrollTo(0, 0); } }, '← ' + sj.short + ' 단원 목록'));
     const kids = [
       h('span', { class: 'eyebrow' }, sj.name + ' · ' + c.group),
-      h('h2', null, c.name),
+      h('h2', null, starBadge(c.id), c.name),
+      (() => {
+        const k = kgStar(c.id);
+        return k && k.stars ? h('p', { class: 'muted small', id: 'kgstar-line' }, '기출 빈출 ' + '★'.repeat(k.stars) + ' · 가져온 기출 중 ' + k.n + '문제(과목의 ' + k.pct + '%)가 이 개념이야.') : null;
+      })(),
       l ? h('p', { class: 'goal' }, '이번 목표: ' + l.goal) : null,
       progressTile('익숙해진 포인트', cp.mastered, cp.total),
       h('div', { class: 'actions' }, h('button', { class: 'btn primary', id: 'drill-all', onclick: () => startDrill(c.id, null) }, '이 단락 전부 섞어서 반복')),

@@ -66,4 +66,33 @@
   };
 
   G.kgRules = rules;
+
+  // 문제 하나를 개념에 이어 붙인다(최대 2개). x: { s: 과목 1~4, q: 본문, c: 보기 4개 }
+  const SUBJECT_KEY = { 1: 'em', 2: 'power', 3: 'machine', 4: 'circuit' };
+  const MIN_SCORE = 3.5;
+  G.kgClassify = function (x) {
+    const stem = x.q;
+    const ch = x.c.join(' ');
+    const sc = {};
+    Object.keys(rules).forEach((cid) => {
+      const c = G.conceptMap && G.conceptMap[cid];
+      if (!c || c.subject === 'base') return;
+      if (SUBJECT_KEY[x.s] && c.subject !== SUBJECT_KEY[x.s]) return;
+      let v = 0;
+      rules[cid].s.forEach((re) => {
+        if (re.test(stem)) v += 3;
+        else if (re.test(ch)) v += 1.5;
+      });
+      rules[cid].w.forEach((re) => {
+        if (re.test(stem)) v += 1;
+        else if (re.test(ch)) v += 0.5;
+      });
+      if (v) sc[cid] = v;
+    });
+    const best = Math.max(0, ...Object.values(sc));
+    return Object.keys(sc)
+      .filter((c) => sc[c] >= MIN_SCORE && sc[c] >= 0.6 * best)
+      .sort((a, b) => sc[b] - sc[a])
+      .slice(0, 2);
+  };
 })(globalThis.GISA);

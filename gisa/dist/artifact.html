@@ -2805,13 +2805,41 @@ a.term:focus-visible {
   font-size: 14.5px;
 }
 
+/* ── 기출 빈출 별 ── */
+.kgstar {
+  display: inline-block;
+  margin-right: 6px;
+  color: #c98a00;
+  font-size: 0.85em;
+  letter-spacing: -1px;
+  white-space: nowrap;
+}
+.kgstar.s1 {
+  color: #b9a36a;
+}
+.kgstar.s3 {
+  color: #d9480f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .kgstar { color: #f2b73d; }
+  :root:not([data-theme="light"]) .kgstar.s1 { color: #bfae7a; }
+  :root:not([data-theme="light"]) .kgstar.s3 { color: #ff8a4d; }
+}
+:root[data-theme="dark"] .kgstar { color: #f2b73d; }
+:root[data-theme="dark"] .kgstar.s1 { color: #bfae7a; }
+:root[data-theme="dark"] .kgstar.s3 { color: #ff8a4d; }
+.kgstar-legend {
+  margin: 4px 0 10px;
+  line-height: 1.7;
+}
+
 </style>
 <header class="appbar" id="bar"></header>
 <main><div class="wrap" id="view"></div></main>
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794708694586,"label":"11/15 11:11"};</script>
+<script>window.GISA_BUILD={"t":1794711118316,"label":"11/15 11:51"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -21233,6 +21261,14 @@ a.term:focus-visible {
   G.changelog = [
     {
       date: '11/15',
+      title: '기출 빈출 별(★) 등급',
+      items: [
+        '단락 이름 앞에 기출에서 얼마나 자주 나오는지 별 1~3개로 표시해. 과목별 단원·배우기 목록·단락 화면에 나와.',
+        '기준은 가져온 기출 3,102문제 중 그 개념이 나온 비율이야(★★★ 8% 이상, ★★ 3.5% 이상, ★ 1.5% 이상). 별이 없으면 기출에서 드문 편이야.',
+      ],
+    },
+    {
+      date: '11/15',
       title: '기출 연결 정확도 · 단락에서 바로 기출',
       items: [
         '기출문제를 개념에 이어 붙이는 방식을 새로 만들었어. 개념마다 정해 둔 말(권수비, 슬립, 이도처럼)이 문제에 나와야 이어 붙여서, "전압" 같은 흔한 말 때문에 엉뚱한 개념의 기출이 나오던 문제를 고쳤어.',
@@ -21343,6 +21379,105 @@ a.term:focus-visible {
   };
 
   G.kgRules = rules;
+
+  // 문제 하나를 개념에 이어 붙인다(최대 2개). x: { s: 과목 1~4, q: 본문, c: 보기 4개 }
+  const SUBJECT_KEY = { 1: 'em', 2: 'power', 3: 'machine', 4: 'circuit' };
+  const MIN_SCORE = 3.5;
+  G.kgClassify = function (x) {
+    const stem = x.q;
+    const ch = x.c.join(' ');
+    const sc = {};
+    Object.keys(rules).forEach((cid) => {
+      const c = G.conceptMap && G.conceptMap[cid];
+      if (!c || c.subject === 'base') return;
+      if (SUBJECT_KEY[x.s] && c.subject !== SUBJECT_KEY[x.s]) return;
+      let v = 0;
+      rules[cid].s.forEach((re) => {
+        if (re.test(stem)) v += 3;
+        else if (re.test(ch)) v += 1.5;
+      });
+      rules[cid].w.forEach((re) => {
+        if (re.test(stem)) v += 1;
+        else if (re.test(ch)) v += 0.5;
+      });
+      if (v) sc[cid] = v;
+    });
+    const best = Math.max(0, ...Object.values(sc));
+    return Object.keys(sc)
+      .filter((c) => sc[c] >= MIN_SCORE && sc[c] >= 0.6 * best)
+      .sort((a, b) => sc[b] - sc[a])
+      .slice(0, 2);
+  };
+})(globalThis.GISA);
+
+/* ── app/kigeum-freq.js ── */
+// 기출 빈출 빈도(자동 생성: node tools/build-kg-freq.js <기출 JSON>). 개념마다 기출에서 몇 문제가 이어졌는지 개수만 담았다.
+(function (G) {
+  'use strict';
+  G.kgFreq = {
+    "meta": {
+      "total": 3102,
+      "classified": 1889,
+      "from": 2003,
+      "to": 2022
+    },
+    "subjectTotal": {
+      "em": 696,
+      "power": 937,
+      "machine": 1020,
+      "circuit": 449
+    },
+    "c": {
+      "ohm": 2,
+      "series": 34,
+      "parallel": 5,
+      "divider": 0,
+      "power": 6,
+      "energy": 0,
+      "three-phase": 48,
+      "ac-basics": 23,
+      "rlc": 10,
+      "ac-power": 17,
+      "resonance": 9,
+      "y-delta": 11,
+      "laplace": 10,
+      "transfer": 44,
+      "em-coulomb": 31,
+      "em-efield": 134,
+      "em-capacitor": 61,
+      "em-magfield": 111,
+      "em-force": 8,
+      "em-induction": 6,
+      "em-inductance": 47,
+      "em-magcircuit": 29,
+      "pw-vdrop": 51,
+      "pw-loss": 42,
+      "pw-pctz": 8,
+      "pw-pfc": 38,
+      "pw-sag": 16,
+      "pw-line": 37,
+      "pw-gen": 95,
+      "pw-demand": 117,
+      "mc-dc-gen": 186,
+      "mc-dc-motor": 87,
+      "mc-tr-ratio": 62,
+      "mc-tr-eff": 42,
+      "mc-tr-reg": 68,
+      "mc-im-slip": 168,
+      "mc-im-power": 40,
+      "mc-sync": 95,
+      "mc-rectifier": 50,
+      "pw-breaker": 63,
+      "pw-neutral": 69,
+      "pw-stability": 25,
+      "cs-routh": 41,
+      "cs-response": 15,
+      "mc-thyristor": 24,
+      "mc-autotr": 12,
+      "mc-tr-parallel": 55,
+      "em-wave": 30
+    }
+  };
 })(globalThis.GISA);
 
 /* ── app/kigeum.js ── */
@@ -21405,32 +21540,8 @@ a.term:focus-visible {
   //  - 강한 말: 본문 3점 / 보기에만 있으면 1.5점,  약한 말: 본문 1점 / 보기 0.5점
   //  - 3.5점 이상이고 가장 높은 점수의 60% 이상인 개념만, 최대 2개. 과목이 다른 개념은 안 이어 붙인다.
   const CLS_VER = '2';
-  const CLS_MIN = 3.5;
   function classify(x) {
-    const rules = G.kgRules || {};
-    const stem = x.q;
-    const ch = x.c.join(' ');
-    const sc = {};
-    Object.keys(rules).forEach((cid) => {
-      const c = G.conceptMap && G.conceptMap[cid];
-      if (!c || c.subject === 'base') return;
-      if (SUBJECT_KEY[x.s] && c.subject !== SUBJECT_KEY[x.s]) return;
-      let v = 0;
-      rules[cid].s.forEach((re) => {
-        if (re.test(stem)) v += 3;
-        else if (re.test(ch)) v += 1.5;
-      });
-      rules[cid].w.forEach((re) => {
-        if (re.test(stem)) v += 1;
-        else if (re.test(ch)) v += 0.5;
-      });
-      if (v) sc[cid] = v;
-    });
-    const best = Math.max(0, ...Object.values(sc));
-    return Object.keys(sc)
-      .filter((c) => sc[c] >= CLS_MIN && sc[c] >= 0.6 * best)
-      .sort((a, b) => sc[b] - sc[a])
-      .slice(0, 2);
+    return G.kgClassify ? G.kgClassify(x) : [];
   }
 
   function valid(x) {
@@ -22042,6 +22153,37 @@ a.term:focus-visible {
     view.resetArmed = false;
     render();
     window.scrollTo(0, 0);
+  }
+
+  // ───────── 기출 빈출 별(★) ─────────
+  // 가져온 기출(2003~2022) 중 그 개념으로 이어진 문제가 과목 전체 문제의 몇 %인지로 등급을 매긴다.
+  //  ★★★ 8% 이상(아주 자주) / ★★ 3.5% 이상(자주) / ★ 1.5% 이상(가끔) / 별 없음 = 기출에서 드문 편
+  function kgStar(cid) {
+    const f = G.kgFreq;
+    const c = G.conceptMap[cid];
+    if (!f || !c || f.c[cid] === undefined || !f.subjectTotal[c.subject]) return null;
+    const n = f.c[cid];
+    const pc = (100 * n) / f.subjectTotal[c.subject];
+    const stars = pc >= 8 ? 3 : pc >= 3.5 ? 2 : pc >= 1.5 ? 1 : 0;
+    return { stars, n, pct: Math.round(pc * 10) / 10 };
+  }
+  function starBadge(cid) {
+    const k = kgStar(cid);
+    if (!k || !k.stars) return null;
+    return h(
+      'span',
+      { class: 'kgstar s' + k.stars, 'data-stars': String(k.stars), title: '기출 빈출 ' + '★'.repeat(k.stars) + ' · 기출 ' + k.n + '문제(과목의 ' + k.pct + '%)', 'aria-label': '기출 빈출 등급 ' + k.stars + '/3' },
+      '★'.repeat(k.stars)
+    );
+  }
+  function starLegend() {
+    const f = G.kgFreq;
+    if (!f) return null;
+    return h(
+      'p',
+      { class: 'kgstar-legend muted small', id: 'kgstar-legend' },
+      h('span', { class: 'kgstar s3' }, '★★★'), ' 아주 자주  ', h('span', { class: 'kgstar s2' }, '★★'), ' 자주  ', h('span', { class: 'kgstar s1' }, '★'), ' 가끔 — 기출 ' + f.meta.total.toLocaleString() + '문제(' + f.meta.from + '~' + f.meta.to + '년, 글로 된 문제)에서 이 개념이 나온 비율 기준이야. 별이 없으면 기출에서 드문 편이고, 기술기준은 아직 기출 자료가 없어.'
+    );
   }
 
   // ───────── 개념 그림(도식·실물 일러스트) ─────────
@@ -23452,6 +23594,7 @@ a.term:focus-visible {
         { class: 'panel' },
         h('h2', null, '배우기'),
         h('p', { class: 'muted small' }, '아무것도 모르는 상태에서 시작해서 한 단계씩 나아가는 순서야. 읽고 → 예제를 따라가고 → 확인 문제를 풀어. 레슨을 읽으면 그 개념의 문제도 열려.'),
+        starLegend(),
         h(
           'div',
           { class: 'tile progress-tile' },
@@ -23481,7 +23624,7 @@ a.term:focus-visible {
                   'span',
                   { class: 'row-head' },
                   h('span', { class: 'lesson-no' }, lessonIndex(l.id) + 1),
-                  h('span', { class: 'name' }, l.title),
+                  h('span', { class: 'name' }, c ? starBadge(c.id) : null, l.title),
                   h('span', { class: 'right' }, read ? h('span', { class: 'state open' }, '읽음') : null)
                 ),
                 h('span', { class: 'stat-line' }, h('span', null, l.goal)),
@@ -23698,6 +23841,7 @@ a.term:focus-visible {
         { class: 'panel' },
         h('h2', null, '과목별 단원'),
         h('p', { class: 'muted small' }, '과목 → 단원 → 세부 단락 순서로 들어가. 단락마다 "문제 포인트 → 개념 설명 → 그 포인트 문제만 반복"으로 공부해. 한 포인트에서 연속 ' + P.MASTER_STREAK + '문제를 맞히면 익숙해진 걸로 쳐.'),
+        starLegend(),
         h(
           'div',
           { class: 'chips', role: 'group', 'aria-label': '과목' },
@@ -23734,7 +23878,7 @@ a.term:focus-visible {
               return h(
                 'button',
                 { class: 'row lesson-row', 'data-unit': c.id, onclick: () => openUnit(c.id) },
-                h('span', { class: 'row-head' }, h('span', { class: 'name' }, c.name), h('span', { class: 'right' }, h('span', { class: 'state ' + (cp.total && cp.mastered === cp.total ? 'open' : 'locked') }, '포인트 ' + cp.mastered + '/' + cp.total))),
+                h('span', { class: 'row-head' }, h('span', { class: 'name' }, starBadge(c.id), c.name), h('span', { class: 'right' }, h('span', { class: 'state ' + (cp.total && cp.mastered === cp.total ? 'open' : 'locked') }, '포인트 ' + cp.mastered + '/' + cp.total))),
                 h('span', { class: 'bar' + (cp.mastered === 0 ? '' : '') }, h('i', { style: 'width:' + (cp.total ? Math.round((100 * cp.mastered) / cp.total) : 0) + '%' })),
                 h('span', { class: 'stat-line' }, h('span', null, st.n + '문제 풀이'), h('span', null, '정답률 ' + pct(st.c, st.n)))
               );
@@ -23784,7 +23928,11 @@ a.term:focus-visible {
     root.appendChild(h('button', { class: 'btn small back', id: 'unit-back', onclick: () => { view.unitCid = null; render(); window.scrollTo(0, 0); } }, '← ' + sj.short + ' 단원 목록'));
     const kids = [
       h('span', { class: 'eyebrow' }, sj.name + ' · ' + c.group),
-      h('h2', null, c.name),
+      h('h2', null, starBadge(c.id), c.name),
+      (() => {
+        const k = kgStar(c.id);
+        return k && k.stars ? h('p', { class: 'muted small', id: 'kgstar-line' }, '기출 빈출 ' + '★'.repeat(k.stars) + ' · 가져온 기출 중 ' + k.n + '문제(과목의 ' + k.pct + '%)가 이 개념이야.') : null;
+      })(),
       l ? h('p', { class: 'goal' }, '이번 목표: ' + l.goal) : null,
       progressTile('익숙해진 포인트', cp.mastered, cp.total),
       h('div', { class: 'actions' }, h('button', { class: 'btn primary', id: 'drill-all', onclick: () => startDrill(c.id, null) }, '이 단락 전부 섞어서 반복')),

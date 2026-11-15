@@ -2800,3 +2800,31 @@ a.term:focus-visible {
   line-height: 1.7;
   font-size: 14.5px;
 }
+
+/* ── 기출 빈출 별 ── */
+.kgstar {
+  display: inline-block;
+  margin-right: 6px;
+  color: #c98a00;
+  font-size: 0.85em;
+  letter-spacing: -1px;
+  white-space: nowrap;
+}
+.kgstar.s1 {
+  color: #b9a36a;
+}
+.kgstar.s3 {
+  color: #d9480f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .kgstar { color: #f2b73d; }
+  :root:not([data-theme="light"]) .kgstar.s1 { color: #bfae7a; }
+  :root:not([data-theme="light"]) .kgstar.s3 { color: #ff8a4d; }
+}
+:root[data-theme="dark"] .kgstar { color: #f2b73d; }
+:root[data-theme="dark"] .kgstar.s1 { color: #bfae7a; }
+:root[data-theme="dark"] .kgstar.s3 { color: #ff8a4d; }
+.kgstar-legend {
+  margin: 4px 0 10px;
+  line-height: 1.7;
+}

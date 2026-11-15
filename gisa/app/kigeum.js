@@ -57,32 +57,8 @@
   //  - 강한 말: 본문 3점 / 보기에만 있으면 1.5점,  약한 말: 본문 1점 / 보기 0.5점
   //  - 3.5점 이상이고 가장 높은 점수의 60% 이상인 개념만, 최대 2개. 과목이 다른 개념은 안 이어 붙인다.
   const CLS_VER = '2';
-  const CLS_MIN = 3.5;
   function classify(x) {
-    const rules = G.kgRules || {};
-    const stem = x.q;
-    const ch = x.c.join(' ');
-    const sc = {};
-    Object.keys(rules).forEach((cid) => {
-      const c = G.conceptMap && G.conceptMap[cid];
-      if (!c || c.subject === 'base') return;
-      if (SUBJECT_KEY[x.s] && c.subject !== SUBJECT_KEY[x.s]) return;
-      let v = 0;
-      rules[cid].s.forEach((re) => {
-        if (re.test(stem)) v += 3;
-        else if (re.test(ch)) v += 1.5;
-      });
-      rules[cid].w.forEach((re) => {
-        if (re.test(stem)) v += 1;
-        else if (re.test(ch)) v += 0.5;
-      });
-      if (v) sc[cid] = v;
-    });
-    const best = Math.max(0, ...Object.values(sc));
-    return Object.keys(sc)
-      .filter((c) => sc[c] >= CLS_MIN && sc[c] >= 0.6 * best)
-      .sort((a, b) => sc[b] - sc[a])
-      .slice(0, 2);
+    return G.kgClassify ? G.kgClassify(x) : [];
   }
 
   function valid(x) {

@@ -1365,6 +1365,27 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-18. 기출 빈출 별(★) ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await page.click('#tab-units');
+    check(await page.isVisible('#kgstar-legend'), '과목별 단원 위에 별 등급 설명');
+    await page.click('.chip[data-subject="em"]');
+    const s3 = await page.getAttribute('.lesson-row[data-unit="em-efield"] .kgstar', 'data-stars');
+    check(s3 === '3', '전계와 전위는 별 3개 (' + s3 + ')');
+    check((await page.$$('.lesson-row[data-unit] .kgstar')).length >= 3, '단락 앞에 별 표시');
+    const none = await page.$$('.lesson-row[data-unit="em-induction"] .kgstar');
+    check(none.length === 0, '기출에서 드문 단락(전자유도)은 별 없음');
+    check(await noOverflow(page), '별 표시 때문에 가로로 넘치지 않음');
+    await page.screenshot({ path: path.join(SHOTS, '21-kgstars.png'), fullPage: false });
+    await page.click('.lesson-row[data-unit="em-efield"]');
+    check(await page.isVisible('#kgstar-line') && (await page.textContent('#kgstar-line')).includes('★★★'), '단락 화면에 기출 빈출 등급과 문제 수');
+    await page.click('#tab-learn');
+    check((await page.$$('.lesson-row[data-lesson] .kgstar')).length >= 5, '배우기 목록에도 별 표시');
+    check(errors.length === 0, '별 표시 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });
