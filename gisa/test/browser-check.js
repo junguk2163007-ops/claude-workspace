@@ -1421,6 +1421,27 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check((await page.evaluate((id) => GISA.kigeum.stat(id), peekId)).last === false, '해설 보기는 틀린 것으로 기록되어 나중에 다시 나옴');
     check(!(await page.isVisible('#kg-peek')), '풀고 난 뒤에는 해설 보기 버튼이 사라짐');
     check(await noOverflow(page), '해설 보기 화면이 가로로 넘치지 않음');
+    // 업데이트(새로고침) 뒤에도 보던 화면 그대로
+    await page.reload();
+    await page.waitForSelector('.kg-card');
+    check((await page.evaluate(() => GISA.ui._view.mode)) === 'kigeum' && (await page.getAttribute('.kg-card', 'data-kg')) === peekId, '새로고침 뒤에도 기출 풀던 문제 그대로(문제 ' + peekId + ')');
+    check(await page.isVisible('.kg-card .verdict'), '이미 해설을 보던 문제는 해설 화면 그대로');
+    await page.click('#kg-exit');
+    await page.evaluate(() => GISA.ui._startDrill('ac-power'));
+    await page.reload();
+    await page.waitForSelector('.qcard');
+    check((await page.evaluate(() => GISA.ui._view.mode)) === 'drill' && (await page.evaluate(() => GISA.ui._view.drill.cid)) === 'ac-power', '새로고침 뒤에도 단락 반복 화면 그대로');
+    await page.click('#tab-units');
+    await page.click('.chip[data-subject="power"]');
+    await page.click('.lesson-row[data-rest="p-line"]');
+    await page.reload();
+    await page.waitForSelector('#rest-detail');
+    check(await page.isVisible('#rest-detail'), '새로고침 뒤에도 단락 없는 기출 주제 화면 그대로');
+    await page.click('#tab-settings');
+    await page.click('#ulog-toggle');
+    await page.reload();
+    await page.waitForSelector('#update-log');
+    check((await page.$$('#update-log .ulog')).length >= 3, '새로고침 뒤에도 설정의 업데이트 내역 펼침 그대로');
     check(errors.length === 0, '단락 없는 기출 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }

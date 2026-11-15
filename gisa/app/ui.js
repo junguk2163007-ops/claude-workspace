@@ -377,7 +377,14 @@
       lessonId: view.lessonId,
       unitCid: view.unitCid,
       unitSubject: view.unitSubject,
-      q: view.tab === 'practice' && view.mode === 'normal' && view.q ? view.q.key : null,
+      q: view.tab === 'practice' && ['normal', 'drill', 'review', 'basics'].indexOf(view.mode) >= 0 && view.q ? view.q.key : null,
+      mode: view.tab === 'practice' ? view.mode : null,
+      drill: view.mode === 'drill' ? view.drill : null,
+      rq: view.mode === 'review' ? view.reviewQueue.slice(0, 200) : null,
+      basics: view.mode === 'basics' ? view.basics : null,
+      kg: view.tab === 'practice' && view.mode === 'kigeum' && view.kg && view.kg.q ? { f: view.kg.filter, id: view.kg.q.id, a: view.kg.answered, c: view.kg.chosen } : null,
+      rt: view.tab === 'units' && !view.unitCid ? view.restTopic : null,
+      ulog: view.tab === 'settings' ? !!view.ulogOpen : false,
       exam: view.mode === 'exam' && view.ex && !view.ex.result ? 1 : 0,
       y: Math.round(window.scrollY || 0),
       t: Date.now(),
@@ -399,6 +406,18 @@
       view.exampleKey = l && l.example ? 't:' + l.example : null;
     }
     if (r.tab === 'units' && r.unitCid && G.conceptMap[r.unitCid]) view.unitCid = r.unitCid;
+    if (r.tab === 'practice') {
+      if (r.mode === 'drill' && r.drill && G.conceptMap[r.drill.cid]) {
+        view.mode = 'drill';
+        view.drill = r.drill;
+      } else if (r.mode === 'review' && Array.isArray(r.rq)) {
+        view.mode = 'review';
+        view.reviewQueue = r.rq.filter((k) => typeof k === 'string');
+      } else if (r.mode === 'basics' && r.basics && G.conceptMap[r.basics.focus] && G.conceptMap[r.basics.from]) {
+        view.mode = 'basics';
+        view.basics = r.basics;
+      }
+    }
     if (r.tab === 'practice' && r.q) {
       try {
         view.q = G.fromKey(r.q);
@@ -407,6 +426,8 @@
         view.q = null;
       }
     }
+    if (r.tab === 'units' && !r.unitCid && r.rt && r.rt.s) view.restTopic = r.rt;
+    if (r.tab === 'settings' && r.ulog) view.ulogOpen = true;
     return r;
   }
   function buildStamp() {
@@ -2696,7 +2717,12 @@
     pendingBoot = false;
     restoring = true;
     const back = restoreView(rec);
-    if (!(back && back.tab === 'practice' && view.q)) nextQuestion();
+    if (back && back.kg && back.kg.id && KG() && KG().get(back.kg.id)) {
+      const q = KG().get(back.kg.id);
+      view.mode = 'kigeum';
+      view.kg = { filter: Object.assign({ s: 0, cid: null, from: 0 }, back.kg.f || {}), q, answered: !!back.kg.a, chosen: typeof back.kg.c === 'number' ? back.kg.c : -1, expl: null };
+      if (view.kg.answered) kgxLoad(q, view.kg.chosen);
+    } else if (!(back && back.tab === 'practice' && view.q)) nextQuestion();
     render();
     restoring = false;
     booting = false;
@@ -2712,11 +2738,27 @@
     if (S.total.n === 0 && !Object.keys(S.lessons || {}).length) view.tab = 'learn';
     applyTheme();
     const local = lsGet(VIEW_KEY);
-    const wantCloud = !local && G.sync && G.sync.peek && S.settings.syncOn !== false && typeof window.claude !== 'undefined' && window.claude && typeof window.claude.use === 'function';
+    const hasClaude = () => typeof window.claude !== 'undefined' && window.claude && typeof window.claude.use === 'function';
+    // 기출 CBT·단락 없는 기출 화면은 기출 보관함을 읽은 다음에 복원
+    const boot = (rec) => {
+      if (rec && ((rec.kg && rec.kg.id) || rec.rt) && G.kigeum) {
+        pendingBoot = true;
+        const done = () => finishBoot(rec);
+        G.kigeum.load().then(done, done);
+      } else finishBoot(rec);
+    };
+    const wantCloud = !local && G.sync && G.sync.peek && S.settings.syncOn !== false && (hasClaude() || location.protocol !== 'file:');
     if (wantCloud) {
       pendingBoot = true;
-      G.sync.peek('view', 1800).then((r) => finishBoot(r && Date.now() - (r.t || 0) < 7 * 24 * 3600 * 1000 ? r : null));
-    } else finishBoot(local);
+      // 업데이트 직후에는 계정 연결(window.claude)이 조금 늦게 붙을 수 있어서 최대 1.2초 기다린다
+      const waitClaude = (left) => (hasClaude() || left <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, 100)).then(() => waitClaude(left - 100)));
+      waitClaude(1200)
+        .then(() => (hasClaude() ? G.sync.peek('view', 1800) : null))
+        .then((r) => {
+          pendingBoot = false;
+          boot(r && Date.now() - (r.t || 0) < 7 * 24 * 3600 * 1000 ? r : null);
+        });
+    } else boot(local);
     if (G.sync) {
       G.sync.init({
         getState: () => S,
