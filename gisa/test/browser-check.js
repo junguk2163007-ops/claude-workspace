@@ -1349,11 +1349,17 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.click('#build-stamp');
     check((await page.evaluate(() => GISA.ui._view.tab)) === 'settings', '업데이트 시각을 누르면 설정 탭으로');
     check(await page.isVisible('#update-log') && (await page.textContent('#update-latest')).includes('최근 업데이트'), '설정에 업데이트 내역과 최근 업데이트 시각');
-    check((await page.$$('#update-log .ulog')).length >= 3, '업데이트 내역 목록');
-    check((await page.$$('#update-log details.ulog[open]')).length === 0, '업데이트 내역은 처음에 제목만 보이고 상세는 접혀 있음');
-    check(!(await page.isVisible('#update-log .ulog li')), '접힌 항목의 상세 글은 안 보임');
-    await page.click('#update-log .ulog summary');
-    check(await page.isVisible('#update-log .ulog[open] li'), '항목을 누르면 상세가 펼쳐짐');
+    check((await page.$$('#update-log .ulog')).length >= 3, '업데이트 시각을 눌러 오면 내역 목록이 바로 보임');
+    check(!(await page.isVisible('#update-log .ulog li')), '상세 글은 버튼을 누르기 전에는 안 보임');
+    await page.click('#update-log .ulog-more');
+    check(await page.isVisible('#update-log .ulog li'), '"상세 보기" 버튼을 누르면 상세가 펼쳐짐');
+    await page.click('#update-log .ulog-more');
+    check(!(await page.isVisible('#update-log .ulog li')), '다시 누르면 접힘');
+    await page.click('#tab-practice');
+    await page.click('#tab-settings');
+    check((await page.$$('#update-log .ulog')).length === 0 && (await page.textContent('#ulog-toggle')).includes('업데이트 내역 보기'), '설정 탭으로 그냥 들어오면 "업데이트 내역 보기" 버튼만 보이고 목록은 접혀 있음');
+    await page.click('#ulog-toggle');
+    check((await page.$$('#update-log .ulog')).length >= 3, '버튼을 누르면 내역 목록이 나옴');
     check(await noOverflow(page), '업데이트 내역 가로 넘침');
     await page.screenshot({ path: path.join(SHOTS, '20-update-log.png'), fullPage: false });
     // 단락 반복: 기출 버튼이 항상 보임
@@ -1407,6 +1413,14 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     const cids = await page.evaluate((id) => GISA.kigeum.get(id).cids, qid);
     check(cids.length === 0, '나오는 문제는 어떤 개념에도 안 이어진 것 (' + qid + ')');
     check((await page.textContent('#kg-clear-rest')).includes('단락 없는 기출'), '필터 칩');
+    // 아예 모를 때: 정답률 옆 "해설 보기"
+    check(await page.isVisible('#kg-peek'), '정답률 옆에 해설 보기 버튼');
+    const peekId = await page.getAttribute('.kg-card', 'data-kg');
+    await page.click('#kg-peek');
+    check(await page.isVisible('.kg-card .verdict') && (await page.textContent('.kg-card .verdict')).includes('정답은'), '해설 보기를 누르면 답을 고르지 않아도 정답이 나옴');
+    check((await page.evaluate((id) => GISA.kigeum.stat(id), peekId)).last === false, '해설 보기는 틀린 것으로 기록되어 나중에 다시 나옴');
+    check(!(await page.isVisible('#kg-peek')), '풀고 난 뒤에는 해설 보기 버튼이 사라짐');
+    check(await noOverflow(page), '해설 보기 화면이 가로로 넘치지 않음');
     check(errors.length === 0, '단락 없는 기출 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }

@@ -38,6 +38,8 @@
     unitSubject: 'circuit',
     unitCid: null,
     restTopic: null,
+    ulogOpen: false,
+    ulogItems: {},
     exSeeds: {},
     exOpen: {},
     scrollMemo: {}, // 읽던 단락·레슨의 스크롤 위치(문제를 풀고 돌아오면 거기로)
@@ -249,6 +251,10 @@
     if (leaving) view.scrollMemo[leaving] = window.scrollY;
     if (tab === 'learn' && view.tab === 'learn') view.lessonId = null;
     if (tab === 'units' && view.tab === 'units') { view.unitCid = null; view.restTopic = null; }
+    if (tab !== 'settings') {
+      view.ulogOpen = false;
+      view.ulogItems = {};
+    }
     view.tab = tab;
     view.resetArmed = false;
     render();
@@ -434,6 +440,7 @@
     }
   }
   function openUpdateLog() {
+    view.ulogOpen = true; // 업데이트 시각을 눌러서 온 거라 목록은 바로 펼친다(상세는 항목 버튼을 눌러야)
     goTab('settings');
     setTimeout(() => {
       const el = document.getElementById('update-log');
@@ -452,15 +459,28 @@
         h('h2', null, '업데이트 내역'),
         h('p', { class: 'muted small', id: 'update-latest' }, b && b.label ? '최근 업데이트: ' + b.label + ' (한국 시간)' : '이 화면은 파일로 열어서 업데이트 시각이 없어.'),
         log.length > 1 ? h('p', { class: 'muted small' }, '이 기기에서 열린 버전: ' + log.map((x) => x.label).join(' · ')) : null,
-        h('p', { class: 'muted small' }, '항목을 누르면 자세한 내용이 나와.'),
-        cl.map((e) =>
-          h(
-            'details',
-            { class: 'ulog' },
-            h('summary', { class: 'ulog-head' }, h('span', { class: 'tag plain' }, e.date), h('strong', null, e.title)),
-            h('ul', null, e.items.map((t) => h('li', null, t)))
-          )
-        )
+        h(
+          'button',
+          { class: 'btn small', id: 'ulog-toggle', 'aria-expanded': String(!!view.ulogOpen), onclick: () => { view.ulogOpen = !view.ulogOpen; render(); } },
+          view.ulogOpen ? '업데이트 내역 접기' : '업데이트 내역 보기 (' + cl.length + ')'
+        ),
+        view.ulogOpen
+          ? cl.map((e, i) => {
+              const open = !!(view.ulogItems && view.ulogItems[i]);
+              return h(
+                'div',
+                { class: 'ulog', 'data-open': String(open) },
+                h(
+                  'div',
+                  { class: 'ulog-head' },
+                  h('span', { class: 'tag plain' }, e.date),
+                  h('strong', null, e.title),
+                  h('button', { class: 'btn small soft ulog-more', 'aria-expanded': String(open), onclick: () => { view.ulogItems = view.ulogItems || {}; view.ulogItems[i] = !open; render(); } }, open ? '접기' : '상세 보기')
+                ),
+                open ? h('ul', null, e.items.map((t) => h('li', null, t))) : null
+              );
+            })
+          : null
       )
     );
   }
@@ -1367,6 +1387,19 @@
     const v = document.querySelector('.verdict');
     if (v && v.scrollIntoView) v.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
+  // 아예 모를 때: 보기를 고르지 않고 정답과 해설부터 본다(틀린 것으로 기록해서 나중에 다시 나옴)
+  function kigeumPeek() {
+    const k = view.kg;
+    if (!k || !k.q || k.answered) return;
+    k.answered = true;
+    k.chosen = -1;
+    if (k.set) k.set.done += 1;
+    KG().record(k.q.id, false);
+    kgxLoad(k.q, -1);
+    render();
+    const v = document.querySelector('.verdict');
+    if (v && v.scrollIntoView) v.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
   function kgFilterLabel(f) {
     const parts = [];
     if (f.cid) parts.push(concept(f.cid).name);
@@ -1407,7 +1440,7 @@
     ];
     q.c.forEach((c, i) => lines.push(NUMS[i] + ' ' + c));
     lines.push('정답(출처 자료 기준): ' + q.a + '번');
-    lines.push('학생이 고른 답: ' + (chosen + 1) + '번 (' + (chosen + 1 === q.a ? '맞혔어' : '틀렸어') + ')');
+    lines.push(chosen < 0 ? '학생은 문제를 전혀 몰라서 답을 고르지 않고 해설부터 보려고 해. 처음 배우는 사람 눈높이로 천천히 설명해 줘.' : '학생이 고른 답: ' + (chosen + 1) + '번 (' + (chosen + 1 === q.a ? '맞혔어' : '틀렸어') + ')');
     return lines.join('\n');
   }
   let kgxCtl = null;
@@ -1517,6 +1550,7 @@
           h('span', { class: 'tag' }, KG().SUBJECTS[q.s]),
           h('span', { class: 'tag plain' }, '기출 ' + q.exam + ' · ' + q.n + '번'),
           q.p !== null ? h('span', { class: 'tag plain' }, '정답률 ' + q.p + '%') : null,
+          !k.answered ? h('button', { class: 'btn small soft kg-peek', id: 'kg-peek', onclick: kigeumPeek }, '해설 보기') : null,
           q.f > 1 ? h('span', { class: 'tag plain' }, q.f + '회 출제') : null,
           st && !k.answered ? h('span', { class: 'tag review' }, st.last ? '전에 맞힘' : '전에 틀림') : null
         ),
@@ -1534,7 +1568,7 @@
           ? h(
               'div',
               null,
-              h('div', { class: 'verdict ' + (ok ? 'ok' : 'bad'), role: 'status' }, ok ? '정답!' : '아쉽다, 오답이야', h('small', null, '정답은 ' + NUMS[q.a - 1] + '번 · ' + q.c[q.a - 1])),
+              h('div', { class: 'verdict ' + (ok ? 'ok' : 'bad'), role: 'status' }, ok ? '정답!' : k.chosen < 0 ? '모르면 해설로 배우면 돼' : '아쉽다, 오답이야', h('small', null, '정답은 ' + NUMS[q.a - 1] + '번 · ' + q.c[q.a - 1])),
               kgExplainBlock(k, q),
               q.cids.length
                 ? h(
