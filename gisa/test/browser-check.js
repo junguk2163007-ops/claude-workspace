@@ -676,12 +676,12 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
       await page.evaluate(() => GISA.ui._load('t:parallel-two#9'));
       check(await page.isVisible('#calc-solve'), '계산기로 풀기: 문제 옆 버튼');
       await page.click('#calc-solve');
-      check(await page.isVisible('#calc-ask'), '계산기로 풀기: 풀기 전에는 정답이 드러난다고 먼저 물어봄');
-      await page.click('#calc-ask-no');
-      check(!(await page.isVisible('#calc-ask')) && !(await page.evaluate(() => GISA.calcDemo.active())), '계산기로 풀기: 거절하면 시작 안 함');
-      await page.click('#calc-solve');
-      await page.click('#calc-ask-yes');
+      check(!(await page.isVisible('#calc-ask')), '계산기로 풀기: 한 번 더 묻지 않고 바로 시작');
       check((await page.evaluate(() => GISA.calcDemo.active())) && (await page.isVisible('.demo')), '계산기로 풀기: 시연 시작');
+      check((await page.evaluate(() => GISA.calcDemo._state().auto)) === true, '계산기로 풀기: 자동 재생으로 바로 시작');
+      check((await page.inputValue('#demo-speed')) === 'slow', '계산기로 풀기: 자동 재생 기본 속도는 느리게');
+      await page.click('#demo-auto'); // 이하 수동 점검을 위해 멈추고 처음으로
+      await page.evaluate(() => { const b = document.getElementById('demo-reset'); if (b && !b.disabled) b.click(); });
       check(await page.evaluate(() => GISA.calcUi.calc.text() === ''), '계산기로 풀기: 계산기가 깨끗하게 시작');
       const wantAns = await page.evaluate(() => GISA.ui._view.q.answerValue);
       check((await page.$$('#calc .key.demo-next')).length === 1, '계산기로 풀기: 다음에 누를 키 하나만 표시');
@@ -940,6 +940,14 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.reload();
     await page.waitForSelector('#pad-canvas');
     check((await page.evaluate(() => GISA.pad.strokes().length)) === 2 && (await page.evaluate(() => GISA.pad.ink())) > 200, '메모판: 새로고침해도 그림이 남음');
+    // 다음 문제로 넘어가면 계산기 화면과 메모판이 비워짐
+    await page.evaluate(() => GISA.ui._load('t:ohm-current#4'));
+    await page.evaluate(() => GISA.calcUi.pressKeys(['7', '7']));
+    check((await page.evaluate(() => GISA.calcUi.calc.text())) === '77', '계산기에 입력해 둠');
+    await page.evaluate(() => GISA.ui._answer(0));
+    await page.click('#next');
+    check((await page.evaluate(() => GISA.calcUi.calc.text())) === '' && (await page.evaluate(() => GISA.pad.strokes().length)) === 0, '다음 문제로 넘어가면 계산기 화면·메모판이 초기화됨');
+    await page.click('#pad-undo');
     // 초기화 → 되돌리기로 복구
     await page.click('#pad-clear');
     check((await page.evaluate(() => GISA.pad.strokes().length)) === 0 && (await page.evaluate(() => GISA.pad.ink())) === 0, '메모판: 초기화하면 전부 지워짐');

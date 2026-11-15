@@ -48,10 +48,17 @@
     return steps.concat([{ say: '결과가 분수·근호·π 모양이야. S⇔D 키로 소수로 바꿔서 읽어', expr: 'S⇔D', keys: ['S<>D'] }]);
   }
 
-  function start(q) {
+  // opts.auto: 시작하자마자 자동 재생(기본 속도는 "느리게")
+  function start(q, opts) {
     const plan = G.calcPlan(q);
     if (!plan) return false;
-    return begin({ key: q.key, scope: 'question' }, plan);
+    const ok = begin({ key: q.key, scope: 'question' }, plan);
+    if (ok !== false && opts && opts.auto && demo) {
+      demo.auto = true;
+      update();
+      schedule();
+    }
+    return ok;
   }
 
   // 용어 사전의 예제: 계산식 하나를 계산기에서 눌러 보여 준다
@@ -67,7 +74,7 @@
     stop(true);
     const snap = calc.serialize();
     const steps = withDecimalStep(plan);
-    demo = { key: meta.key, scope: meta.scope, steps, flat: flatten(steps), idx: 0, auto: false, speed: 'normal', snap, timer: 0, dom: null };
+    demo = { key: meta.key, scope: meta.scope, steps, flat: flatten(steps), idx: 0, auto: false, speed: 'slow', snap, timer: 0, dom: null };
     resetCalc();
     U.setOpen(true);
     buildDom();
@@ -211,7 +218,7 @@
     SPEEDS.forEach((s) => {
       const o = h('option', null, s.label);
       o.value = s.id;
-      if (s.id === 'normal') o.selected = true;
+      if (s.id === demo.speed) o.selected = true;
       speed.appendChild(o);
     });
     speed.onchange = () => {

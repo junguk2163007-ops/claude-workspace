@@ -143,7 +143,26 @@
     view.kgNext = null;
   }
 
+  // 다음 문제로 넘어갈 때 계산기 화면과 메모판을 비워서 바로 쓰기 쉽게 한다(계산기 설정·메모리 값은 그대로).
+  // 새로고침으로 앱이 다시 열릴 때는 비우지 않는다.
+  let booting = true;
+  function resetTools() {
+    if (booting) return;
+    if (G.calcDemo && G.calcDemo.active()) return; // 계산기 시연 중에는 시연이 알아서 관리
+    try {
+      if (G.calcUi && G.calcUi.calc) {
+        G.calcUi.calc.press('AC');
+        if (G.calcUi.paint) G.calcUi.paint();
+        if (G.calcUi.save) G.calcUi.save();
+      }
+    } catch (e) {
+      /* 계산기를 못 쓰는 상태면 건너뜀 */
+    }
+    if (G.pad && G.pad.clear) G.pad.clear();
+  }
+
   function nextQuestion() {
+    resetTools();
     resetCard();
     if (view.mode === 'review') {
       while (view.reviewQueue.length) {
@@ -506,12 +525,9 @@
             render();
             return;
           }
-          if (!view.answered) {
-            view.calcAsk = !view.calcAsk;
-            render();
-            return;
-          }
-          G.calcDemo.start(q);
+          // 한 번 더 묻지 않고 바로 자동 재생(느리게)으로 보여 준다
+          view.calcAsk = false;
+          G.calcDemo.start(q, { auto: true });
           render();
         },
         html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><rect x="8" y="5.5" width="8" height="3.5" rx="0.8"/><path d="M8.5 13h.01M12 13h.01M15.5 13h.01M8.5 16.5h.01M12 16.5h.01M15.5 16.5h.01"/></svg>',
@@ -786,6 +802,7 @@
     X().cur.save(view.ex.c);
   }
   function examGo(n) {
+    resetTools();
     const ex = view.ex;
     ex.c.idx = Math.max(0, Math.min(ex.c.answers.length - 1, n));
     ex.grid = false;
@@ -1202,6 +1219,7 @@
     window.scrollTo(0, 0);
   }
   function kigeumNext() {
+    resetTools();
     const k = view.kg;
     k.q = KG().pick(k.filter, null, k.q && k.q.id);
     k.answered = false;
@@ -2360,6 +2378,7 @@
     if (!(back && back.tab === 'practice' && view.q)) nextQuestion();
     render();
     restoring = false;
+    booting = false;
     if (back && back.exam && G.exam && G.exam.cur.load() && G.exam.remaining(G.exam.cur.load()) > 0) startExam(true);
     if (back && back.y) setTimeout(() => window.scrollTo(0, back.y), 60);
     announceUpdate();
