@@ -1406,7 +1406,7 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.goto(FILE);
     await page.waitForSelector('#side .side-head');
     check((await page.textContent('#side .side-head')).includes('서연 쌤') && (await page.isVisible('#side img.side-avatar')), '서연 쌤 이름과 사진이 머리에 보임');
-    check((await page.textContent('#side .ai-hint')).includes('서연 쌤이야'), '인사말');
+    check((await page.textContent('#side .ai-hint')).includes('막히는 거 있어?') && !(await page.textContent('#side .ai-hint')).includes('쌤이야'), '자기소개 없이 친구처럼 먼저 말을 건넴');
     await page.fill('#ai-side-input', '임피던스가 뭐야?');
     await page.keyboard.press('Enter');
     await page.waitForSelector('#side .ai-reply-btn');

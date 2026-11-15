@@ -3108,7 +3108,7 @@ body.why-open {
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794731463126,"label":"11/15 17:31"};</script>
+<script>window.GISA_BUILD={"t":1794734945675,"label":"11/15 18:29"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -25494,7 +25494,8 @@ body.why-open {
   const RULES = [
     '너는 "서연 쌤"이야. 전기기사 필기시험을 함께 준비하는, 아주 다정하고 자상하고 따뜻한 여자 선생님이야. 학생은 이론을 거의 몰라.',
     '말투와 태도:',
-    '- 반말(~야, ~해, ~할까?)로 부드럽고 다정하게 말해. 다정한 선생님이 옆에서 직접 이야기해 주는 느낌으로.',
+    '- 자기소개는 하지 마. 이름이나 역할을 소개하거나 "나는 ~야" 같은 인사로 시작하지 말고, 바로 질문에 대한 이야기로 들어가.',
+    '- 반말(~야, ~해, ~할까?)로 친한 사람이 옆에서 말 걸듯 자연스럽고 편하게 말해. 메신저로 대화하는 것처럼 짧은 문장으로, 딱딱한 설명문이나 안내문 투는 피해.',
     '- 질문을 받으면 먼저 짧게 공감하거나 칭찬해("좋은 질문이야", "잘하고 있어"). 틀렸거나 모르는 것도 "괜찮아, 누구나 헷갈려"처럼 먼저 다독여 줘.',
     '- 어려운 건 천천히, 한 단계씩, 일상 비유로. 마지막에는 "여기까지 이해됐어?"처럼 다정하게 이어 가도 좋아. 이모지는 하트나 별 정도를 가끔만(과하지 않게) 써.',
     '- 학생을 부를 때는 "너"나 "우리 학생"이라고 해. 이름은 쓰지 마. 연애나 성적인 말투·표현은 쓰지 않고, 따뜻하고 매력적인 다정함으로만 대해.',
@@ -25957,7 +25958,7 @@ body.why-open {
     act.append(clear, photo, reset);
     head.append(who, act, file);
     const ctxLine = el('div', 'side-ctx');
-    const chat = buildChat({ getCtx, multiline: true, side: true, persist: THREAD_KEY, hint: '안녕, 서연 쌤이야 😊 모르는 건 뭐든 편하게 물어봐. 지금 보고 있는 문제·레슨·단락을 같이 보면서 차근차근 알려 줄게.' });
+    const chat = buildChat({ getCtx, multiline: true, side: true, persist: THREAD_KEY, hint: '막히는 거 있어? 편하게 말해 줘. 지금 보고 있는 문제랑 같이 보면서 천천히 알려 줄게 😊' });
     clear.onclick = () => chat.clear();
     host.append(head, ctxLine, chat.el);
     side = {
@@ -27649,6 +27650,13 @@ body.why-open {
 (function (G) {
   'use strict';
   G.changelog = [
+    {
+      date: '11/15',
+      title: '서연 쌤이 친구처럼 말 걸기',
+      items: [
+        '인사말이 자기소개 없이 "막히는 거 있어? 편하게 말해 줘"로 바뀌었어. 답변도 이름이나 역할을 소개하지 않고, 친한 사람이 말 걸듯 짧고 자연스럽게 이어 가.',
+      ],
+    },
     {
       date: '11/15',
       title: '서연 쌤 · AI 대화 유지 · 전기자기학 기출 보강',
