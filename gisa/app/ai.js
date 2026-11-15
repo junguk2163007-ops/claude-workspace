@@ -67,7 +67,7 @@
     '</svg>';
   const AV_KEY = 'gisa-ai-avatar';
   const THREAD_KEY = 'gisa-ai-thread';
-  const TUTOR = '서연 쌤';
+  const TUTOR = '서연';
   const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(AVATAR_SVG);
   function customAvatar() {
     try {
@@ -87,12 +87,12 @@
 
   // ───────── 프롬프트: 규칙 + 지금 화면의 검증된 데이터 ─────────
   const RULES = [
-    '너는 "서연 쌤"이야. 전기기사 필기시험을 함께 준비하는, 아주 다정하고 자상하고 따뜻한 여자 선생님이야. 학생은 이론을 거의 몰라.',
+    '너는 "서연"이야. 전기기사 필기시험을 함께 준비하는 친구 같은 사람이고, 아주 다정하고 자상하고 따뜻한 여자야. 가르쳐 줄 때는 좋은 선생님처럼 차근차근 해. 스스로를 "쌤"이나 "선생님"이라고 부르지 마. 학생은 이론을 거의 몰라.',
     '말투와 태도:',
     '- 자기소개는 하지 마. 이름이나 역할을 소개하거나 "나는 ~야" 같은 인사로 시작하지 말고, 바로 질문에 대한 이야기로 들어가.',
     '- 반말(~야, ~해, ~할까?)로 친한 사람이 옆에서 말 걸듯 자연스럽고 편하게 말해. 메신저로 대화하는 것처럼 짧은 문장으로, 딱딱한 설명문이나 안내문 투는 피해.',
     '- 질문을 받으면 먼저 짧게 공감하거나 칭찬해("좋은 질문이야", "잘하고 있어"). 틀렸거나 모르는 것도 "괜찮아, 누구나 헷갈려"처럼 먼저 다독여 줘.',
-    '- 어려운 건 천천히, 한 단계씩, 일상 비유로. 마지막에는 "여기까지 이해됐어?"처럼 다정하게 이어 가도 좋아. 이모지는 하트나 별 정도를 가끔만(과하지 않게) 써.',
+    '- 어려운 건 천천히, 한 단계씩, 일상 비유로. 마지막에는 "여기까지 이해됐어?"처럼 다정하게 이어 가도 좋아. 이모지·이모티콘·ㅎㅎ/ㅋㅋ 같은 표현, 물결(~)과 느낌표 남발은 쓰지 마. 글자만으로 차분하고 따뜻하게 말해.',
     '- 학생을 부를 때는 "너"나 "우리 학생"이라고 해. 이름은 쓰지 마. 연애나 성적인 말투·표현은 쓰지 않고, 따뜻하고 매력적인 다정함으로만 대해.',
     '규칙:',
     '- 쉬운 말로 설명하고, 전문용어는 처음 나올 때 한 번 풀어 줘.',
@@ -226,7 +226,7 @@
     const input = o.multiline ? el('textarea') : el('input');
     if (!o.multiline) input.type = 'text';
     else input.rows = 2;
-    input.placeholder = o.multiline ? '쌤한테 궁금한 걸 편하게 물어봐 (Enter로 보내기, Shift+Enter 줄바꿈)' : '쌤한테 이 문제에서 궁금한 걸 물어봐';
+    input.placeholder = o.multiline ? '서연한테 궁금한 걸 편하게 물어봐 (Enter로 보내기, Shift+Enter 줄바꿈)' : '서연한테 이 문제에서 궁금한 걸 물어봐';
     input.setAttribute('aria-label', TUTOR + '에게 질문');
     input.id = o.side ? 'ai-side-input' : 'ai-input';
     const send = el('button', 'btn small primary', '보내기');
@@ -354,7 +354,7 @@
       log.push({ role: 'user', text, content: sendText, quote: quote || null, kind });
       turns.push({ role: 'user', content: sendText });
       setReply(null);
-      const out = bubble('assistant', '쌤이 생각 중이야…');
+      const out = bubble('assistant', '서연이 생각 중이야…');
       out.classList.add('pending');
       toStart(asked);
       setBusy(true);
@@ -553,7 +553,7 @@
     act.append(clear, photo, reset);
     head.append(who, act, file);
     const ctxLine = el('div', 'side-ctx');
-    const chat = buildChat({ getCtx, multiline: true, side: true, persist: THREAD_KEY, hint: '막히는 거 있어? 편하게 말해 줘. 지금 보고 있는 문제랑 같이 보면서 천천히 알려 줄게 😊' });
+    const chat = buildChat({ getCtx, multiline: true, side: true, persist: THREAD_KEY, hint: '막히는 거 있어? 편하게 말해 줘. 지금 보고 있는 문제랑 같이 보면서 천천히 알려 줄게' });
     clear.onclick = () => chat.clear();
     host.append(head, ctxLine, chat.el);
     side = {

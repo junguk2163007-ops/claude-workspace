@@ -3108,7 +3108,7 @@ body.why-open {
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794734945675,"label":"11/15 18:29"};</script>
+<script>window.GISA_BUILD={"t":1794779844585,"label":"11/16 06:57"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -25472,7 +25472,7 @@ body.why-open {
     '</svg>';
   const AV_KEY = 'gisa-ai-avatar';
   const THREAD_KEY = 'gisa-ai-thread';
-  const TUTOR = '서연 쌤';
+  const TUTOR = '서연';
   const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(AVATAR_SVG);
   function customAvatar() {
     try {
@@ -25492,7 +25492,7 @@ body.why-open {
 
   // ───────── 프롬프트: 규칙 + 지금 화면의 검증된 데이터 ─────────
   const RULES = [
-    '너는 "서연 쌤"이야. 전기기사 필기시험을 함께 준비하는, 아주 다정하고 자상하고 따뜻한 여자 선생님이야. 학생은 이론을 거의 몰라.',
+    '너는 "서연"이야. 전기기사 필기시험을 함께 준비하는 친구 같은 사람이고, 아주 다정하고 자상하고 따뜻한 여자야. 가르쳐 줄 때는 좋은 선생님처럼 차근차근 해. 스스로를 "쌤"이나 "선생님"이라고 부르지 마. 학생은 이론을 거의 몰라.',
     '말투와 태도:',
     '- 자기소개는 하지 마. 이름이나 역할을 소개하거나 "나는 ~야" 같은 인사로 시작하지 말고, 바로 질문에 대한 이야기로 들어가.',
     '- 반말(~야, ~해, ~할까?)로 친한 사람이 옆에서 말 걸듯 자연스럽고 편하게 말해. 메신저로 대화하는 것처럼 짧은 문장으로, 딱딱한 설명문이나 안내문 투는 피해.',
@@ -25631,7 +25631,7 @@ body.why-open {
     const input = o.multiline ? el('textarea') : el('input');
     if (!o.multiline) input.type = 'text';
     else input.rows = 2;
-    input.placeholder = o.multiline ? '쌤한테 궁금한 걸 편하게 물어봐 (Enter로 보내기, Shift+Enter 줄바꿈)' : '쌤한테 이 문제에서 궁금한 걸 물어봐';
+    input.placeholder = o.multiline ? '서연한테 궁금한 걸 편하게 물어봐 (Enter로 보내기, Shift+Enter 줄바꿈)' : '서연한테 이 문제에서 궁금한 걸 물어봐';
     input.setAttribute('aria-label', TUTOR + '에게 질문');
     input.id = o.side ? 'ai-side-input' : 'ai-input';
     const send = el('button', 'btn small primary', '보내기');
@@ -25759,7 +25759,7 @@ body.why-open {
       log.push({ role: 'user', text, content: sendText, quote: quote || null, kind });
       turns.push({ role: 'user', content: sendText });
       setReply(null);
-      const out = bubble('assistant', '쌤이 생각 중이야…');
+      const out = bubble('assistant', '서연이 생각 중이야…');
       out.classList.add('pending');
       toStart(asked);
       setBusy(true);
@@ -27650,6 +27650,11 @@ body.why-open {
 (function (G) {
   'use strict';
   G.changelog = [
+    {
+      date: '11/15',
+      title: '이름을 "서연"으로',
+      items: ['"쌤" 호칭을 빼고 이름을 그냥 "서연"으로 바꿨어. 머리, 입력창, 대기 문구, 말투 모두 반영했어.'],
+    },
     {
       date: '11/15',
       title: '서연 쌤이 친구처럼 말 걸기',
