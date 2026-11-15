@@ -20,6 +20,11 @@
     { say: '상전압 Ea = V ÷ √3 (V를 V 단위로)', expr: 'V*1000/sqrt(3)' },
     { say: '지락 전류 Ig = 3·Ea ÷ (Z0 + Z1 + Z2)', expr: '3*Ans/(Z0+Z1+Z2)' },
   ]);
+  g('rlc-xtol', (p) => [p.isL ? { say: 'L = XL ÷ (2πf) 를 H로 구하고 ×1000 하면 mH', expr: 'X/(2*pi*f)*1000' } : { say: 'C = 1 ÷ (2πf·XC) 를 F로 구하고 ×10⁶ 하면 μF', expr: '1/(2*pi*f*X)*1000000' }]);
+  g('rlc-lag', () => [
+    { say: 'XL = 2πfL (L은 mH → ÷1000)', expr: '2*pi*f*LmH/1000' },
+    { say: 'θ = tan⁻¹(XL ÷ R)', expr: 'atan(Ans/R)' },
+  ]);
   g('ns-rms', (p) => [{ say: '실효값 = √(V0² + (Vm1/√2)² + (Vm3/√2)² + …)', expr: 'sqrt(V0^2+m1^2/2+m3^2/2+m5^2/2)' }]);
   g('ns-thd', () => [{ say: 'THD = √(V3² + V5²) ÷ V1 × 100', expr: 'sqrt(V3^2+V5^2)/V1*100' }]);
   g('ns-power', () => [{ say: 'P = V1·I1·cosθ1 + V3·I3·cosθ3', expr: 'V1*I1*cos(t1)+V3*I3*cos(t3)' }]);

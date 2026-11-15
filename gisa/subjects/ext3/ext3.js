@@ -946,6 +946,84 @@
     },
   });
 
+
+  // ───────── R-L-C 보강: 리액턴스에서 거꾸로 L·C 구하기, 전류의 위상 ─────────
+  T({
+    id: 'rlc-xtol',
+    concept: 'rlc',
+    gen(r) {
+      const f = r.pick([50, 60, 100, 400, 1000]);
+      const X = r.pick([3, 5, 8, 10, 20, 40, 50, 100, 200]);
+      const isL = r.chance(0.5);
+      const w = 2 * Math.PI * f;
+      const L = (X / w) * 1000; // mH
+      const C = (1 / (w * X)) * 1e6; // μF
+      const ans = isL ? L : C;
+      const dis = isL
+        ? [
+            { v: (X / f) * 1000, why: 'ω = 2πf 로 바꾸지 않고 주파수 f를 그대로 썼어. XL = ωL 에서 ω는 2πf야.' },
+            { v: X / w, why: '단위를 안 바꿨어. 이 값은 H 단위라서 mH로 바꾸려면 1000을 곱해야 해.' },
+            { v: X * w * 1000, why: '곱했어. XL = ωL 이라서 L = XL ÷ ω (나눠야 해).' },
+            { v: 1e6 / (w * X), why: '이건 콘덴서 쪽 식(C = 1/(ωXC))이야. 코일은 L = XL/ω.' },
+            { v: (X / (w * w)) * 1000, why: 'ω를 두 번 나눴어. L = XL ÷ ω 에서 ω는 한 번만 나눠.' },
+          ]
+        : [
+            { v: 1e6 / (f * X), why: 'ω = 2πf 로 바꾸지 않고 주파수 f를 그대로 썼어. XC = 1/(ωC) 에서 ω는 2πf야.' },
+            { v: 1 / (w * X), why: '단위를 안 바꿨어. 이 값은 F 단위라서 μF로 바꾸려면 10⁶을 곱해야 해.' },
+            { v: (X / w) * 1000, why: '이건 코일 쪽 식(L = XL/ω)이야. 콘덴서는 C = 1/(ωXC).' },
+            { v: (w / X) * 1e6, why: '거꾸로 썼어. XC = 1/(ωC) 에서 C = 1/(ωXC)이야.' },
+            { v: (1 / (w * w * X)) * 1e6, why: 'ω를 두 번 나눴어. C = 1/(ωXC) 에서 ω는 한 번만 들어가.' },
+          ];
+      const unit = isL ? 'mH' : 'μF';
+      return {
+        params: { f, X, isL },
+        text: q(f, 'Hz') + '에서 ' + q(X, 'Ω') + '의 ' + (isL ? '유도 리액턴스를 갖는 코일의 자기 인덕턴스 L' : '용량 리액턴스를 갖는 콘덴서의 정전용량 C') + '는 약 얼마야? (' + unit + ' 단위)',
+        formula: isL ? 'XL = ωL = 2πfL  →  L = XL / (2πf)' : 'XC = 1/(ωC) = 1/(2πfC)  →  C = 1 / (2πf·XC)',
+        unit,
+        decimals: 3,
+        answer: ans,
+        distractors: dis,
+        conclusion: isL ? 'L = XL ÷ (2πf) = ' + n(X) + ' ÷ (2π × ' + n(f) + ') = ' + q(ans, 'mH', 3) : 'C = 1 ÷ (2πf·XC) = 1 ÷ (2π × ' + n(f) + ' × ' + n(X) + ') = ' + q(ans, 'μF', 3),
+        steps: isL
+          ? ['각주파수부터: ω = 2πf = 2π × ' + n(f) + ' = ' + n(w, 3) + ' rad/s.', 'XL = ωL 이니까 L = XL ÷ ω = ' + n(X) + ' ÷ ' + n(w, 3) + ' = ' + n(X / w, 6) + ' H.', 'mH로 바꾸면 ' + q(ans, 'mH', 3) + '.']
+          : ['각주파수부터: ω = 2πf = 2π × ' + n(f) + ' = ' + n(w, 3) + ' rad/s.', 'XC = 1/(ωC) 이니까 C = 1 ÷ (ω·XC) = 1 ÷ (' + n(w, 3) + ' × ' + n(X) + ') = ' + n(1 / (w * X), 9) + ' F.', 'μF로 바꾸면 ' + q(ans, 'μF', 3) + '.'],
+        check: isL ? 'ωL = ' + n(w, 3) + ' × ' + n(ans / 1000, 6) + ' = ' + n(w * (ans / 1000), 4) + ' Ω 로 XL과 같아.' : '1/(ωC) = 1 ÷ (' + n(w, 3) + ' × ' + n(ans / 1e6, 9) + ') = ' + n(1 / (w * (ans / 1e6)), 4) + ' Ω 로 XC와 같아.',
+        traps: ['주파수 f가 주어지면 ω = 2πf 부터 만들어.', isL ? '코일은 L = XL/ω, 콘덴서는 C = 1/(ω·XC)로 서로 달라.' : '콘덴서는 C = 1/(ω·XC)로 ω와 XC 둘 다 분모에 들어가.'],
+      };
+    },
+  });
+
+  T({
+    id: 'rlc-lag',
+    concept: 'rlc',
+    gen(r) {
+      const R = r.pick([3, 4, 5, 6, 8, 10, 12, 20, 30, 40]);
+      const f = r.pick([50, 60]);
+      const LmH = r.pick([10, 20, 30, 40, 50, 79.58, 100, 200]);
+      const X = 2 * Math.PI * f * (LmH / 1000);
+      const th = (Math.atan(X / R) * 180) / Math.PI;
+      return {
+        params: { R, f, LmH },
+        text: '저항 R = ' + q(R, 'Ω') + ', 인덕턴스 L = ' + q(LmH, 'mH') + '인 R-L 직렬회로에 ' + q(f, 'Hz') + ' 교류 전압을 걸었어. 전류는 전압보다 몇 도 늦어?',
+        formula: 'XL = 2πfL,   θ = tan⁻¹(XL / R)',
+        unit: '°',
+        decimals: 2,
+        answer: th,
+        distractors: [
+          { v: (Math.atan(R / X) * 180) / Math.PI, why: 'R과 XL을 거꾸로 나눴어. 위상각은 tanθ = XL/R (리액턴스 ÷ 저항)이야.' },
+          { v: (Math.atan(((LmH / 1000) * 1) / R) * 180) / Math.PI, why: 'XL을 구하지 않고 L 값을 그대로 썼어. XL = 2πfL 로 리액턴스부터 구해야 해.' },
+          { v: (Math.atan(X / (R + X)) * 180) / Math.PI, why: '분모를 R + XL 로 잡았어. tanθ = XL ÷ R 이야(더하지 않아).' },
+          { v: (Math.atan((X * 2 * Math.PI) / R) * 180) / Math.PI, why: '2π를 두 번 곱했어. XL = 2πfL 에서 2π는 한 번만 들어가.' },
+          { v: (Math.atan(X / R / 2) * 180) / Math.PI, why: '비를 2로 나눠 버렸어. tanθ = XL/R 그대로 써.' },
+        ],
+        conclusion: 'XL = 2π × ' + n(f) + ' × ' + n(LmH / 1000, 5) + ' = ' + n(X, 3) + ' Ω → θ = tan⁻¹(' + n(X, 3) + ' ÷ ' + n(R) + ') = ' + q(th, '°', 2),
+        steps: ['유도 리액턴스 XL = 2πfL = 2π × ' + n(f) + ' × ' + n(LmH / 1000, 5) + ' = ' + n(X, 3) + ' Ω.', 'tanθ = XL ÷ R = ' + n(X, 3) + ' ÷ ' + n(R) + ' = ' + n(X / R, 4) + '.', 'θ = tan⁻¹(' + n(X / R, 4) + ') = ' + q(th, '°', 2) + ' (코일이니까 전류가 늦어).'],
+        check: '0°(저항만)와 90°(코일만) 사이이고, ' + (X > R ? 'XL이 R보다 크니까 45°보다 커.' : 'XL이 R보다 작으니까 45°보다 작아.'),
+        traps: ['R-L 직렬에서는 전류가 전압보다 θ만큼 늦어(지상).', '각을 구할 때는 XL/R, 거꾸로 R/XL이 아니야.'],
+      };
+    },
+  });
+
   // ───────── 이론형 ─────────
   S({
     id: 'st-fp-sym',

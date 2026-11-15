@@ -162,7 +162,8 @@
     stop.type = 'button';
     stop.hidden = true;
     // 답글: 앞선 AI 답변 하나를 골라 그 답변에 대해 이어서 묻는다
-    let replyTo = null; // 답글 대상 AI 답변 글
+    let replyTo = null; // 답글 대상 AI 답변 글(또는 그 안의 문장 하나)
+    let replyKind = 'answer'; // 'answer' | 'sentence'
     const snippet = (t, n) => {
       const one = String(t).replace(/\s+/g, ' ').trim();
       return one.length > n ? one.slice(0, n) + '…' : one;
@@ -174,19 +175,57 @@
     replyX.type = 'button';
     replyX.setAttribute('aria-label', '답글 취소');
     replyX.onclick = () => setReply(null);
-    replyBar.append(el('strong', null, '↩ 이 답변에 답글'), replyText, replyX);
-    function setReply(t) {
+    const replyLabel = el('strong', null, '↩ 이 답변에 답글');
+    replyBar.append(replyLabel, replyText, replyX);
+    function setReply(t, kind) {
       replyTo = t ? String(t) : null;
+      replyKind = replyTo && kind === 'sentence' ? 'sentence' : 'answer';
       replyBar.hidden = !replyTo;
+      replyLabel.textContent = replyKind === 'sentence' ? '↩ 이 문장에 질문' : '↩ 이 답변에 답글';
       replyText.textContent = replyTo ? snippet(replyTo, 70) : '';
+      thread.querySelectorAll('.ai-sent.on').forEach((s) => s.classList.remove('on'));
       if (replyTo) input.focus();
     }
+    // AI 답변을 문장 단위로 쪼개서, 문장을 누르면 그 문장에 대해 이어서 물을 수 있게 한다
+    function makeTappable(msgEl, text) {
+      const parts = String(text).split(/(?<=[.!?。…])(\s+)/);
+      if (parts.filter((_, i) => i % 2 === 0 && parts[i].trim()).length < 1) return;
+      msgEl.textContent = '';
+      parts.forEach((p, i) => {
+        if (i % 2 === 1 || !p.trim()) {
+          msgEl.append(document.createTextNode(p));
+          return;
+        }
+        const s = el('span', 'ai-sent', p);
+        s.tabIndex = 0;
+        s.setAttribute('role', 'button');
+        s.setAttribute('aria-label', '이 문장에 질문: ' + snippet(p, 40));
+        const pick = () => {
+          if (busy) return;
+          if (s.classList.contains('on')) {
+            setReply(null);
+            return;
+          }
+          setReply(p.trim(), 'sentence');
+          s.classList.add('on');
+        };
+        s.addEventListener('click', pick);
+        s.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            pick();
+          }
+        });
+        msgEl.append(s);
+      });
+    }
     function addReplyButton(msgEl, t) {
+      makeTappable(msgEl, t);
       const row = el('div', 'ai-reply-row');
       const b = el('button', 'ai-reply-btn', '↩ 이 답변에 답글');
       b.type = 'button';
       b.onclick = () => setReply(t);
-      row.append(b);
+      row.append(b, el('span', 'ai-sent-hint', '문장을 누르면 그 문장에 질문할 수 있어'));
       msgEl.after(row);
     }
     const note = el('p', 'ai-note', '답은 AI가 써. 이 앱의 정답·해설을 기준으로 설명하게 해 뒀지만, 이상하면 해설을 믿어 줘.');
@@ -213,12 +252,12 @@
     function toBottom() {
       if (o.side) thread.scrollTop = thread.scrollHeight;
     }
-    function bubble(role, text, quote) {
+    function bubble(role, text, quote, kind) {
       if (hint && hint.parentNode) hint.remove();
       const b = el('div', 'ai-msg ' + (role === 'user' ? 'me' : 'ai'), text);
       if (quote) {
         b.textContent = '';
-        b.append(el('div', 'ai-quote', '↩ ' + snippet(quote, 90)), document.createTextNode(text));
+        b.append(el('div', 'ai-quote', (kind === 'sentence' ? '↩ 문장: ' : '↩ ') + snippet(quote, 90)), document.createTextNode(text));
       }
       thread.append(b);
       toBottom();
@@ -229,8 +268,13 @@
       text = String(text || '').trim();
       if (!text || busy || !sample) return;
       const quote = replyTo;
-      const sendText = quote ? '[앞선 AI 답변에 대한 질문]\n앞선 답변: "' + String(quote).slice(0, 700) + '"\n질문: ' + text : text;
-      bubble('user', text, quote);
+      const kind = replyKind;
+      const sendText = quote
+        ? kind === 'sentence'
+          ? '[앞선 AI 답변 중 이 문장에 대한 질문]\n문장: "' + String(quote).slice(0, 500) + '"\n(이 문장은 바로 위 대화의 네 답변 안에 있어. 그 흐름을 이어서 이 문장에 대해서만 답해 줘.)\n질문: ' + text
+          : '[앞선 AI 답변에 대한 질문]\n앞선 답변: "' + String(quote).slice(0, 700) + '"\n질문: ' + text
+        : text;
+      bubble('user', text, quote, kind);
       turns.push({ role: 'user', content: sendText });
       setReply(null);
       const out = bubble('assistant', '생각 중…');
@@ -254,7 +298,7 @@
         turns.push({ role: 'assistant', content: res.text });
         addReplyButton(out, res.text);
         const cx = o.getCtx ? o.getCtx() : null;
-        if (G.aiqa) G.aiqa.save({ q: (quote ? '(답글: "' + snippet(quote, 40) + '") ' : '') + text, a: res.text, where: (cx && cx.label) || '', key: cx && cx.q && cx.q.key });
+        if (G.aiqa) G.aiqa.save({ q: (quote ? '(' + (kind === 'sentence' ? '문장 질문' : '답글') + ': "' + snippet(quote, 40) + '") ' : '') + text, a: res.text, where: (cx && cx.label) || '', key: cx && cx.q && cx.q.key });
       } catch (e) {
         const code = (e && e.code) || 'upstream_error';
         out.classList.remove('pending');

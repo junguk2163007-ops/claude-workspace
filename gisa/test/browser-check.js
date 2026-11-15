@@ -1548,8 +1548,8 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
       window.__calls = [];
       const fake = async (input, opts) => {
         window.__calls.push(JSON.stringify(input));
-        opts.onText({ text: '첫 답변 본문이야', delta: '' });
-        return { text: '첫 답변 본문이야', truncated: false, modelTierApplied: 'default' };
+        opts.onText({ text: '첫 답변 본문이야. 둘째 문장은 이거야! 셋째 문장도 있어.', delta: '' });
+        return { text: '첫 답변 본문이야. 둘째 문장은 이거야! 셋째 문장도 있어.', truncated: false, modelTierApplied: 'default' };
       };
       window.claude = { use: async (n) => (n === 'sample' ? fake : null) };
     });
@@ -1575,6 +1575,21 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.click('#side .ai-reply-btn >> nth=1');
     await page.click('#side .ai-reply button');
     check(!(await page.isVisible('#side .ai-reply')), '답글 취소');
+    // 문장을 눌러 그 문장에 질문
+    check((await page.$$('#side .ai-msg.ai .ai-sent')).length >= 3, 'AI 답변이 문장 단위로 눌러지게 나뉨');
+    await page.click('#side .ai-msg.ai >> nth=0 >> .ai-sent >> nth=1');
+    check(await page.isVisible('#side .ai-reply') && (await page.textContent('#side .ai-reply strong')).includes('이 문장에 질문') && (await page.textContent('#side .ai-reply-text')).includes('둘째 문장'), '문장을 누르면 그 문장이 질문 대상으로 표시됨');
+    check((await page.$$('#side .ai-sent.on')).length === 1, '고른 문장이 강조됨');
+    await page.fill('#ai-side-input', '이게 무슨 뜻이야?');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelectorAll('#side .ai-reply-btn').length === 3);
+    const lastS = await page.evaluate(() => JSON.parse(window.__calls[window.__calls.length - 1]).pop().content);
+    check(lastS.includes('이 문장에 대한 질문') && lastS.includes('둘째 문장은 이거야!') && !lastS.includes('셋째 문장도 있어') && lastS.includes('이게 무슨 뜻이야?'), '문장 질문을 보내면 그 문장만 대상으로 전달됨');
+    check((await page.textContent('#side .ai-msg.me >> nth=2 >> .ai-quote')).includes('문장:'), '내 말풍선에 "문장:" 인용');
+    // 같은 문장을 다시 누르면 취소
+    await page.click('#side .ai-msg.ai >> nth=0 >> .ai-sent >> nth=0');
+    await page.click('#side .ai-msg.ai >> nth=0 >> .ai-sent >> nth=0');
+    check(!(await page.isVisible('#side .ai-reply')), '고른 문장을 다시 누르면 취소');
     check(errors.length === 0, '답글 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }

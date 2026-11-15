@@ -45,6 +45,23 @@ const near = (x) => Math.round(x * 1e6) / 1e6;
 
 module.exports = {
   // ───────── 기출 보강 3차 ─────────
+  // R-L-C 보강: 리액턴스 정의식을 거꾸로 풀어 찾는다(이분법), 위상은 복소 임피던스의 편각
+  'rlc-xtol': (p) => {
+    const w = 2 * Math.PI * p.f;
+    let lo = 1e-12;
+    let hi = 1e3;
+    for (let i = 0; i < 300; i++) {
+      const mid = Math.sqrt(lo * hi);
+      const x = p.isL ? w * mid : 1 / (w * mid); // 기본 단위 H 또는 F
+      if (p.isL ? x < p.X : x > p.X) lo = mid;
+      else hi = mid;
+    }
+    return Math.sqrt(lo * hi) * (p.isL ? 1e3 : 1e6);
+  },
+  'rlc-lag': (p) => {
+    const z = [p.R, 2 * Math.PI * p.f * (p.LmH / 1000)]; // R + jXL
+    return (Math.atan2(z[1], z[0]) * 180) / Math.PI;
+  },
   // 4단자: 소자별 행렬을 직접 곱한다
   'fp-t': (p) => {
     const mul = (m, n) => [
