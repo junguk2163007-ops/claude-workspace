@@ -161,9 +161,37 @@
     const stop = el('button', 'btn small', '멈추기');
     stop.type = 'button';
     stop.hidden = true;
+    // 답글: 앞선 AI 답변 하나를 골라 그 답변에 대해 이어서 묻는다
+    let replyTo = null; // 답글 대상 AI 답변 글
+    const snippet = (t, n) => {
+      const one = String(t).replace(/\s+/g, ' ').trim();
+      return one.length > n ? one.slice(0, n) + '…' : one;
+    };
+    const replyBar = el('div', 'ai-reply');
+    replyBar.hidden = true;
+    const replyText = el('span', 'ai-reply-text');
+    const replyX = el('button', 'btn small', '✕');
+    replyX.type = 'button';
+    replyX.setAttribute('aria-label', '답글 취소');
+    replyX.onclick = () => setReply(null);
+    replyBar.append(el('strong', null, '↩ 이 답변에 답글'), replyText, replyX);
+    function setReply(t) {
+      replyTo = t ? String(t) : null;
+      replyBar.hidden = !replyTo;
+      replyText.textContent = replyTo ? snippet(replyTo, 70) : '';
+      if (replyTo) input.focus();
+    }
+    function addReplyButton(msgEl, t) {
+      const row = el('div', 'ai-reply-row');
+      const b = el('button', 'ai-reply-btn', '↩ 이 답변에 답글');
+      b.type = 'button';
+      b.onclick = () => setReply(t);
+      row.append(b);
+      msgEl.after(row);
+    }
     const note = el('p', 'ai-note', '답은 AI가 써. 이 앱의 정답·해설을 기준으로 설명하게 해 뒀지만, 이상하면 해설을 믿어 줘.');
     form.append(input, send, stop);
-    body.append.apply(body, o.side ? [thread, presets, form, note] : [presets, thread, form, note]);
+    body.append.apply(body, o.side ? [thread, presets, replyBar, form, note] : [presets, thread, replyBar, form, note]);
 
     function refresh() {
       presets.textContent = '';
@@ -185,9 +213,13 @@
     function toBottom() {
       if (o.side) thread.scrollTop = thread.scrollHeight;
     }
-    function bubble(role, text) {
+    function bubble(role, text, quote) {
       if (hint && hint.parentNode) hint.remove();
       const b = el('div', 'ai-msg ' + (role === 'user' ? 'me' : 'ai'), text);
+      if (quote) {
+        b.textContent = '';
+        b.append(el('div', 'ai-quote', '↩ ' + snippet(quote, 90)), document.createTextNode(text));
+      }
       thread.append(b);
       toBottom();
       return b;
@@ -196,8 +228,11 @@
     async function ask(text) {
       text = String(text || '').trim();
       if (!text || busy || !sample) return;
-      bubble('user', text);
-      turns.push({ role: 'user', content: text });
+      const quote = replyTo;
+      const sendText = quote ? '[앞선 AI 답변에 대한 질문]\n앞선 답변: "' + String(quote).slice(0, 700) + '"\n질문: ' + text : text;
+      bubble('user', text, quote);
+      turns.push({ role: 'user', content: sendText });
+      setReply(null);
       const out = bubble('assistant', '생각 중…');
       out.classList.add('pending');
       setBusy(true);
@@ -217,14 +252,18 @@
         out.classList.remove('pending');
         out.textContent = res.text + (res.truncated ? '\n(답이 길어서 중간에 끊겼어. 더 짧게 물어봐 줘.)' : '');
         turns.push({ role: 'assistant', content: res.text });
+        addReplyButton(out, res.text);
         const cx = o.getCtx ? o.getCtx() : null;
-        if (G.aiqa) G.aiqa.save({ q: text, a: res.text, where: (cx && cx.label) || '', key: cx && cx.q && cx.q.key });
+        if (G.aiqa) G.aiqa.save({ q: (quote ? '(답글: "' + snippet(quote, 40) + '") ' : '') + text, a: res.text, where: (cx && cx.label) || '', key: cx && cx.q && cx.q.key });
       } catch (e) {
         const code = (e && e.code) || 'upstream_error';
         out.classList.remove('pending');
         if (code === 'cancelled') {
           out.textContent = (e.text || '') + (e.text ? '\n' : '') + '(멈췄어)';
-          if (e.text) turns.push({ role: 'assistant', content: e.text });
+          if (e.text) {
+            turns.push({ role: 'assistant', content: e.text });
+            addReplyButton(out, e.text);
+          }
         } else if (HIDE.indexOf(code) !== -1) {
           sample = null;
           out.textContent = 'AI 질문을 쓸 수 없는 상태야(허용하지 않았거나 이 계정에서 꺼져 있어).';
@@ -260,6 +299,7 @@
     function clear() {
       if (ctl) ctl.abort();
       turns.length = 0;
+      setReply(null);
       thread.textContent = '';
       if (hint) thread.append(hint);
     }

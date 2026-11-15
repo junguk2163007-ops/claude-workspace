@@ -2828,3 +2828,51 @@ a.term:focus-visible {
   margin: 4px 0 10px;
   line-height: 1.7;
 }
+
+/* ── AI 답글 ── */
+.ai-reply-row {
+  display: flex;
+  justify-content: flex-start;
+  margin: -2px 0 6px 4px;
+}
+.ai-reply-btn {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.ai-reply {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+.ai-reply strong {
+  flex: none;
+  color: var(--accent);
+}
+.ai-reply-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.ai-quote {
+  margin-bottom: 4px;
+  padding-left: 8px;
+  border-left: 3px solid rgba(127, 127, 127, 0.5);
+  font-size: 12px;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}

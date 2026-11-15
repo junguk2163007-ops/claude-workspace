@@ -1386,6 +1386,45 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-19. AI 답변에 답글로 이어서 묻기 ──
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await ctx.addInitScript(() => {
+      window.__calls = [];
+      const fake = async (input, opts) => {
+        window.__calls.push(JSON.stringify(input));
+        opts.onText({ text: '첫 답변 본문이야', delta: '' });
+        return { text: '첫 답변 본문이야', truncated: false, modelTierApplied: 'default' };
+      };
+      window.claude = { use: async (n) => (n === 'sample' ? fake : null) };
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(FILE);
+    await page.waitForSelector('#side .side-head');
+    await page.fill('#ai-side-input', '질문 하나');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#side .ai-reply-btn');
+    check((await page.$$('#side .ai-reply-btn')).length === 1, 'AI 답변 아래에 답글 버튼');
+    await page.click('#side .ai-reply-btn');
+    check(await page.isVisible('#side .ai-reply') && (await page.textContent('#side .ai-reply-text')).includes('첫 답변'), '답글 대상 표시줄');
+    await page.fill('#ai-side-input', '더 쉽게 설명해 줘');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelectorAll('#side .ai-reply-btn').length === 2);
+    const last = await page.evaluate(() => JSON.parse(window.__calls[window.__calls.length - 1]).pop().content);
+    check(last.includes('앞선 AI 답변에 대한 질문') && last.includes('첫 답변 본문이야') && last.includes('더 쉽게 설명해 줘'), '답글을 보내면 앞선 답변이 같이 전달됨');
+    check((await page.$$('#side .ai-msg.me .ai-quote')).length === 1, '내 말풍선에 인용 표시');
+    check(!(await page.isVisible('#side .ai-reply')), '보낸 뒤 답글 표시줄이 사라짐');
+    // 취소
+    await page.click('#side .ai-reply-btn >> nth=1');
+    await page.click('#side .ai-reply button');
+    check(!(await page.isVisible('#side .ai-reply')), '답글 취소');
+    check(errors.length === 0, '답글 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 3. 맥 화면 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1280, height: 860 }, colorScheme: 'light' });
