@@ -65,6 +65,7 @@
 
 ## 기출 빈출 보강 (1차)
 - 가져온 기출에서 우리 개념과 이어지지 않던 주제를 골라 개념 9개·문제 템플릿 15개를 추가했다(`concepts/ext1.js`, `subjects/ext1/ext1.js`, `lessons/ext1.js`, `glossary/ext1.js`, `calc-guides/ext1.js`). 공식은 전부 교재 표준식이고, 새 템플릿마다 `test/reference.js`에 따로 짠 검산기(페이저 계산·근 직접 계산·파형 직접 적분 등)가 있다.
+- 기출 3,102문제를 개념과 대조해 비어 있던 주제 13개를 더 채웠다(`concepts/ext2.js`, `ext3.js`, `subjects/ext2·ext3`, `lessons/ext2·ext3.js`, `glossary/ext2·ext3.js`, `calc-guides/ext2·ext3.js`): 과도현상 · 4단자망 · 분포정수 선로 · 대칭좌표법 · 비정현파 · 정상 편차 · 주파수 응답(dB) · 유전체 경계조건 · 철손 · 동기발전기 출력·단락비 · 보호계전기·CT · 진행파(서지) · 배전 방식별 전선량. 템플릿마다 `test/reference-code.js`에 따로 짠 검산기(행렬 곱·RK4 적분·파형 직접 적분·복소수 대칭분·정의대로 계산)가 있다.
 - 계산기로 풀 게 아닌 문제(개수 세기)는 템플릿에 `noCalc: true`를 둔다(계산기 풀이 버튼이 안 나옴).
 
 ## 전기설비기술기준 (1차)

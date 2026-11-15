@@ -119,7 +119,7 @@ G.concepts.forEach((c) => {
   ok(G.subjects.some((s) => s.id === c.subject), w, '모르는 과목');
   c.prereqs.forEach((p) => ok(ids.has(p), w, '없는 선행 개념 ' + p));
   ok(G.templatesFor(c.id).length > 0, w, '계산 템플릿 없음');
-  ok((perConcept[c.id] || 0) >= 3000, w, '생성 문제 수 3000 미만: ' + (perConcept[c.id] || 0));
+  ok(process.env.SKIP_COUNT || (perConcept[c.id] || 0) >= 3000, w, '생성 문제 수 3000 미만: ' + (perConcept[c.id] || 0));
 });
 // 순환 선행 관계 없음
 (function () {

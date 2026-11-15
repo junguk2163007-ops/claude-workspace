@@ -44,6 +44,150 @@ const byKey = (p) => {
 const near = (x) => Math.round(x * 1e6) / 1e6;
 
 module.exports = {
+  // ───────── 기출 보강 3차 ─────────
+  // 4단자: 소자별 행렬을 직접 곱한다
+  'fp-t': (p) => {
+    const mul = (m, n) => [
+      [m[0][0] * n[0][0] + m[0][1] * n[1][0], m[0][0] * n[0][1] + m[0][1] * n[1][1]],
+      [m[1][0] * n[0][0] + m[1][1] * n[1][0], m[1][0] * n[0][1] + m[1][1] * n[1][1]],
+    ];
+    const M = mul(mul([[1, p.Z1], [0, 1]], [[1, 0], [p.Y, 1]]), [[1, p.Z2], [0, 1]]);
+    return p.ask === 'A' ? M[0][0] : p.ask === 'B' ? M[0][1] : M[1][1];
+  },
+  'fp-det': (p) => {
+    // A·D − B·C = 1 을 만족하는 D 를 이분법으로 찾는다
+    let lo = 0;
+    let hi = 1000;
+    for (let i = 0; i < 200; i++) {
+      const mid = (lo + hi) / 2;
+      if (p.A * mid - p.B * p.C > 1) hi = mid;
+      else lo = mid;
+    }
+    return (lo + hi) / 2;
+  },
+  'tx-z0': (p) => {
+    const L = p.L * 1e-3;
+    const C = p.C * 1e-6;
+    return p.mode === 'v' ? 1 / Math.sqrt(L * C) / 1e5 : Math.sqrt(1e3 * p.L / p.C);
+  },
+  'tx-gamma': (p) => (p.mode === 'vswr' ? Math.max(p.ZL, p.Z0) / Math.min(p.ZL, p.Z0) : Math.abs(p.ZL - p.Z0) / (p.ZL + p.Z0)),
+  'sc-comp': (p) => {
+    const cis = (d) => [Math.cos((d * Math.PI) / 180), Math.sin((d * Math.PI) / 180)];
+    const mul = (u, v) => [u[0] * v[0] - u[1] * v[1], u[0] * v[1] + u[1] * v[0]];
+    const sc = (k, u) => [k * u[0], k * u[1]];
+    const add = (...us) => us.reduce((s, u) => [s[0] + u[0], s[1] + u[1]], [0, 0]);
+    const a = cis(120);
+    const a2 = mul(a, a);
+    const Va = sc(p.Ma, cis(0));
+    const Vb = sc(p.Mb, cis(-120));
+    const Vc = sc(p.Mc, cis(120));
+    const V0 = sc(1 / 3, add(Va, Vb, Vc));
+    const V1 = sc(1 / 3, add(Va, mul(a, Vb), mul(a2, Vc)));
+    const V2 = sc(1 / 3, add(Va, mul(a2, Vb), mul(a, Vc)));
+    const V = p.which === '0' ? V0 : p.which === '1' ? V1 : V2;
+    return Math.hypot(V[0], V[1]);
+  },
+  'sc-slg': (p) => {
+    // 대칭분 회로를 직렬로 잇고 Ia = I0 + I1 + I2
+    const Ea = (p.V * 1000) / Math.sqrt(3);
+    const I = Ea / (p.Z0 + p.Z1 + p.Z2);
+    return I + I + I;
+  },
+  // 비정현파: 한 주기를 쪼개 직접 적분
+  'ns-rms': (p) => {
+    const N = 720;
+    let s = 0;
+    for (let i = 0; i < N; i++) {
+      const w = ((i + 0.5) / N) * 2 * Math.PI;
+      const v = p.V0 + p.m1 * Math.sin(w) + p.m3 * Math.sin(3 * w) + p.m5 * Math.sin(5 * w);
+      s += v * v;
+    }
+    return Math.sqrt(s / N);
+  },
+  'ns-thd': (p) => (Math.hypot(p.V3, p.V5) / p.V1) * 100,
+  'ns-power': (p) => {
+    const N = 720;
+    const d = (x) => (x * Math.PI) / 180;
+    let s = 0;
+    for (let i = 0; i < N; i++) {
+      const w = ((i + 0.5) / N) * 2 * Math.PI;
+      const v = Math.SQRT2 * p.V1 * Math.sin(w) + Math.SQRT2 * p.V3 * Math.sin(3 * w);
+      const c = Math.SQRT2 * p.I1 * Math.sin(w - d(p.t1)) + Math.SQRT2 * p.I3 * Math.sin(3 * w - d(p.t3));
+      s += v * c;
+    }
+    return s / N;
+  },
+  // 정상 편차: G(s)를 직접 만들어 s→0 극한을 수치로 구한다
+  'ce-kind': (p) => {
+    const s = 1e-9;
+    const G =
+      p.kind === 0 ? p.K / ((1 + p.T1 * s) * (1 + p.T2 * s)) : p.kind === 1 ? p.K / (s * (s + p.a)) : p.K / (s * s * (s + p.a));
+    const lim = p.kind === 0 ? G : p.kind === 1 ? s * G : s * s * G;
+    return p.kind === 0 ? p.A / (1 + lim) : p.A / lim;
+  },
+  'bd-db': (p) => 20 * Math.log10(p.g1) + 20 * Math.log10(p.g2),
+  'bd-lag': (p) => 20 * Math.log10(Math.hypot(1, p.w / p.w0)),
+  // 2층 유전체: 각 층의 정전용량을 구해 직렬로 합성
+  'di-two': (p) => {
+    const e0 = 8.855e-12;
+    const S = p.S * 1e-4;
+    const c1 = (e0 * p.e1 * S) / (p.d1 * 1e-3);
+    const c2 = (e0 * p.e2 * S) / (p.d2 * 1e-3);
+    return ((c1 * c2) / (c1 + c2)) * 1e12;
+  },
+  // 경계: E 접선 성분 연속, D 법선 성분 연속에서 직접 각을 구한다
+  'di-angle': (p) => {
+    const t1 = (p.th1 * Math.PI) / 180;
+    const Et = Math.sin(t1);
+    const Dn = p.e1 * Math.cos(t1);
+    const En2 = Dn / p.e2;
+    return (Math.atan2(Et, En2) * 180) / Math.PI;
+  },
+  'cl-loss': (p) => {
+    // f, Bm 이 바뀌는 비로 계산(전압 일정이면 Bm ∝ 1/f)
+    const fr = p.mode === 'f' ? p.k : 1;
+    const Br = p.mode === 'B' ? p.k : 1 / p.k;
+    const Bratio = p.mode === 'B' ? Br : 1 / fr;
+    return p.kind === 'hys' ? p.P1 * fr * Math.pow(Bratio, 1.6) : p.P1 * fr * fr * Bratio * Bratio;
+  },
+  // 동기발전기: 상전압(선간/√3)으로 1상 전력을 구해 3배
+  'so-power': (p) => 3 * ((p.V / Math.sqrt(3)) * (p.E / Math.sqrt(3)) / p.Xs) * Math.sin((p.d * Math.PI) / 180),
+  'so-scr': (p) => (p.mode === 'z' ? 1 / (p.z / 100) : p.If1 / p.If2),
+  'rl-tap': (p) => (p.IL / (p.I1n / 5)) * p.k,
+  'rl-ct': (p) => p.I1 / (p.I1n / 5),
+  'sg-wave': (p) => {
+    const er = ((p.Z2 - p.Z1) / (p.Z2 + p.Z1)) * p.Ei;
+    return p.refl ? Math.abs(er) : p.Ei + er;
+  },
+  'sg-time': (p) => ((p.d * 1000) / (3e8 / Math.sqrt(p.er))) * 1e6,
+  // 전선량: 부하 전압·전력·손실·길이 동일 → 전류와 도체 수로 직접 비교
+  'wr-ratio': (p) => {
+    // [도체 수, 전류가 흐르는 도체 수, 전선 하나의 전류(단상 2선 = 1)]
+    const cfg = { '1p2w': [2, 2, 1], '1p3w': [3, 2, 0.5], '3p3w': [3, 3, 1 / Math.sqrt(3)], '3p4w': [4, 3, 1 / 3] };
+    const weight = ([wires, loaded, I]) => wires * loaded * I * I; // 손실 일정 → 단면적 ∝ (전류가 흐르는 선 수)·I²
+    return (p.W * weight(cfg[p.meth])) / weight(cfg['1p2w']);
+  },
+  // 과도현상: 시정수는 정의대로, 전류·전압은 미분방정식을 직접 적분(RK4)
+  'tr-tau': (p) => (p.mode === 'rl' ? p.X / p.R : (p.R * p.X) / 1000),
+  'tr-step': (p) => {
+    const rl = p.mode === 'rl';
+    const L = (p.X || 0) / 1000; // H
+    const C = (p.X || 0) / 1e6; // F
+    const T = p.t / 1000; // s
+    const N = 20000;
+    const h = T / N;
+    // rl: di/dt = (V − R i)/L ,  rc: dv/dt = (V − v)/(R C)
+    const f = (y) => (rl ? (p.V - p.R * y) / L : (p.V - y) / (p.R * C));
+    let y = 0;
+    for (let i = 0; i < N; i++) {
+      const k1 = f(y);
+      const k2 = f(y + (h / 2) * k1);
+      const k3 = f(y + (h / 2) * k2);
+      const k4 = f(y + h * k3);
+      y += (h / 6) * (k1 + 2 * k2 + 2 * k3 + k4);
+    }
+    return y;
+  },
   'cd-ocpd-time': byKey,
   'cd-bldg-lvhv': byKey,
   'cd-lps-fact': byKey,

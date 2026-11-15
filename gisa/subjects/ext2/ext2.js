@@ -83,7 +83,7 @@
       const t = nn * tau;
       const fin = rl ? V / R : V;
       const frac = 1 - Math.exp(-nn);
-      const ans = r3(fin * frac);
+      const ans = fin * frac;
       const unit = rl ? 'A' : 'V';
       const lab = (v) => q(v, unit, 3);
       const dis = [
