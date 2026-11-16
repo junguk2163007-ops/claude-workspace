@@ -1529,6 +1529,19 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.click('.lesson-row[data-unit="ohm"]');
     const pointBtns = await page.$$('.point-card .anim-point');
     check(pointBtns.length >= 3, '포인트 카드 제목마다 옆에 ▶ 버튼 (' + pointBtns.length + '개)');
+    check((await page.textContent('.point-card .anim-point')).includes('3D'), '포인트 버튼에 "3D" 글자가 보임');
+    // 목록에서 찾기: 과목별 목록의 ▶3D 표시 + 장면 모아보기
+    await page.click('#tab-units');
+    await page.click('#tab-units');
+    check(await page.isVisible('#anim-gallery'), '과목별 목록 위에 "3D 장면 모아보기"');
+    check((await page.$$('.anim-chip')).length >= 8, '장면 칩이 8개 이상');
+    check((await page.$$('.anim-badge')).length >= 1, '3D 장면이 있는 단락 줄에 ▶3D 표시');
+    await page.click('.anim-chip[data-scene="ohm-water"]');
+    await page.waitForSelector('#anim-overlay');
+    check(await page.isVisible('#anim-bigplay'), '장면 칩을 누르면 바로 3D 팝업');
+    await page.keyboard.press('Escape');
+    await page.click('.chip[data-subject="circuit"]');
+    await page.click('.lesson-row[data-unit="ohm"]');
     await page.click('[data-anim="ohm-voltage"]');
     await page.waitForSelector('#anim-overlay');
     check((await page.textContent('#anim-overlay .anim-head strong')).includes('전압을 높이면') && (await page.textContent('#anim-cap')).includes('2배로 올리면'), '"전압 구하기" ▶ 는 전압을 높이는 구간부터');

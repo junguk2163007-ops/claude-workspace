@@ -492,6 +492,11 @@
     openPoint,
     open,
     close,
+    scenesFor: (cid) => (byConcept[cid] || []).map((id) => scenes[id]),
+    openScene: (id) => {
+      const sc = scenes[id];
+      if (sc) open((sc.concepts || [])[0], id);
+    },
     has: (cid) => !!(byConcept[cid] && byConcept[cid].length),
     count: (cid) => (byConcept[cid] || []).length,
     list: () => Object.keys(scenes),
