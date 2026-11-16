@@ -378,6 +378,7 @@
         addReplyButton(out, res.text);
         const cx = o.getCtx ? o.getCtx() : null;
         if (G.aiqa) G.aiqa.save({ q: (quote ? '(' + (kind === 'sentence' ? '문장 질문' : '답글') + ': "' + snippet(quote, 40) + '") ' : '') + text, a: res.text, where: (cx && cx.label) || '', key: cx && cx.q && cx.q.key });
+        if (side) side.refresh();
       } catch (e) {
         const code = (e && e.code) || 'upstream_error';
         out.classList.remove('pending');
@@ -505,14 +506,30 @@
     av.height = 44;
     const nm = el('div', 'side-name');
     nm.append(el('strong', null, TUTOR), el('span', 'side-sub', '전기기사 필기 담당 · 언제든 편하게 물어봐'));
-    who.append(av, nm);
+    // 사진 자체가 버튼(글자 없음): 누르면 내 사진으로 바꿀 수 있어
+    const photo = el('button', 'side-photo');
+    photo.type = 'button';
+    photo.title = '사진 바꾸기';
+    photo.setAttribute('aria-label', '사진 바꾸기');
+    photo.append(av);
+    // 사진 오른쪽: 지금까지 질문한 목록 버튼
+    const listBtn = el('button', 'side-list-btn');
+    listBtn.type = 'button';
+    listBtn.id = 'ai-history-btn';
+    listBtn.title = '질문했던 목록';
+    listBtn.setAttribute('aria-label', '질문했던 목록 보기');
+    listBtn.setAttribute('aria-expanded', 'false');
+    const listIcon = el('span', 'side-list-icon', '☰');
+    const listCount = el('span', 'side-list-count');
+    listBtn.append(listIcon, listCount);
+    who.append(photo, listBtn, nm);
     const act = el('div', 'side-act');
     const clear = el('button', 'btn small', '대화 지우기');
     clear.type = 'button';
-    const photo = el('button', 'btn small soft', '사진 바꾸기');
-    photo.type = 'button';
-    const reset = el('button', 'btn small soft ai-avatar-reset', '기본 사진');
+    const reset = el('button', 'side-reset ai-avatar-reset', '↺');
     reset.type = 'button';
+    reset.title = '기본 사진으로';
+    reset.setAttribute('aria-label', '기본 사진으로 되돌리기');
     reset.hidden = true;
     const file = el('input');
     file.type = 'file';
@@ -550,16 +567,66 @@
       img.src = url;
       file.value = '';
     };
-    act.append(clear, photo, reset);
+    act.append(clear, reset);
     head.append(who, act, file);
     const ctxLine = el('div', 'side-ctx');
     const chat = buildChat({ getCtx, multiline: true, side: true, persist: THREAD_KEY, hint: '막히는 거 있어? 편하게 말해 줘. 지금 보고 있는 문제랑 같이 보면서 천천히 알려 줄게' });
     clear.onclick = () => chat.clear();
-    host.append(head, ctxLine, chat.el);
+    // 질문했던 목록: 질문마다 눌러서 그때의 답을 다시 볼 수 있어
+    const hist = el('div', 'ai-history');
+    hist.id = 'ai-history';
+    hist.hidden = true;
+    const when = (ts) => {
+      const d = new Date(ts);
+      return d.getMonth() + 1 + '월 ' + d.getDate() + '일 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    };
+    const fillHistory = () => {
+      const list = G.aiqa && G.aiqa.list ? G.aiqa.list().slice().reverse() : [];
+      hist.textContent = '';
+      const top = el('div', 'ai-history-head');
+      top.append(el('strong', null, '질문했던 목록 (' + list.length + ')'));
+      const back = el('button', 'btn small', '대화로 돌아가기');
+      back.type = 'button';
+      back.id = 'ai-history-back';
+      back.onclick = () => toggleHistory(false);
+      top.append(back);
+      hist.append(top);
+      if (!list.length) {
+        hist.append(el('p', 'muted small', '아직 질문한 게 없어. 궁금한 걸 물어보면 여기에 차곡차곡 쌓여.'));
+        return;
+      }
+      list.forEach((r) => {
+        const d = el('details', 'ai-history-item');
+        const sm = el('summary');
+        sm.append(el('span', 'ai-history-q', r.q));
+        sm.append(el('span', 'ai-history-meta', when(r.ts) + (r.where ? ' · ' + r.where : '')));
+        d.append(sm, el('div', 'ai-history-a', r.a));
+        hist.append(d);
+      });
+    };
+    const updateCount = () => {
+      const n = G.aiqa && G.aiqa.count ? G.aiqa.count() : 0;
+      listCount.textContent = n ? String(n) : '';
+      listBtn.setAttribute('aria-label', '질문했던 목록 보기 (' + n + '개)');
+    };
+    function toggleHistory(show) {
+      const open = show == null ? hist.hidden : show;
+      if (open) fillHistory();
+      hist.hidden = !open;
+      ctxLine.hidden = open;
+      chat.el.hidden = open;
+      listBtn.setAttribute('aria-expanded', String(open));
+      listBtn.classList.toggle('on', open);
+      updateCount();
+    }
+    listBtn.onclick = () => toggleHistory();
+    host.append(head, ctxLine, chat.el, hist);
     side = {
       refresh() {
         ctxLine.textContent = '지금 보는 화면: ' + getCtx().label;
         chat.refresh();
+        updateCount();
+        if (!hist.hidden) fillHistory();
       },
     };
     document.body.classList.add('has-side');

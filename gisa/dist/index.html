@@ -532,6 +532,8 @@ select {
 .ai-thread {
   display: grid;
   gap: 8px;
+  /* 칸 높이를 항상 글 길이에 맞춘다(높이가 정해진 옆 창에서 긴 답변이 52px 칸에 갇혀 다음 글 위에 겹쳐 보이던 문제) */
+  grid-auto-rows: max-content;
 }
 .ai-thread:empty {
   display: none;
@@ -3291,6 +3293,119 @@ body.anim-open {
   accent-color: #c98a00;
 }
 
+/* ── AI: 사진 버튼(글자 없음), 질문했던 목록 ── */
+.side-photo {
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+.side-photo:hover .side-avatar,
+.side-photo:focus-visible .side-avatar {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+}
+.side-list-btn {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 16px;
+  cursor: pointer;
+}
+.side-list-btn:hover,
+.side-list-btn.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.side-list-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+.side-list-count:empty {
+  display: none;
+}
+.side-reset {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.ai-history {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+.ai-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ai-history-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.ai-history-item summary {
+  display: grid;
+  gap: 2px;
+  padding: 9px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.ai-history-item summary::-webkit-details-marker {
+  display: none;
+}
+.ai-history-q {
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.ai-history-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ai-history-item[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+.ai-history-a {
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface-2);
+  border-radius: 0 0 10px 10px;
+}
+
 </style>
 </head>
 <body>
@@ -3299,7 +3414,7 @@ body.anim-open {
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794817097056,"label":"11/16 17:18"};</script>
+<script>window.GISA_BUILD={"t":1794834872362,"label":"11/16 22:14"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -25981,6 +26096,7 @@ body.anim-open {
         addReplyButton(out, res.text);
         const cx = o.getCtx ? o.getCtx() : null;
         if (G.aiqa) G.aiqa.save({ q: (quote ? '(' + (kind === 'sentence' ? '문장 질문' : '답글') + ': "' + snippet(quote, 40) + '") ' : '') + text, a: res.text, where: (cx && cx.label) || '', key: cx && cx.q && cx.q.key });
+        if (side) side.refresh();
       } catch (e) {
         const code = (e && e.code) || 'upstream_error';
         out.classList.remove('pending');
@@ -26108,14 +26224,30 @@ body.anim-open {
     av.height = 44;
     const nm = el('div', 'side-name');
     nm.append(el('strong', null, TUTOR), el('span', 'side-sub', '전기기사 필기 담당 · 언제든 편하게 물어봐'));
-    who.append(av, nm);
+    // 사진 자체가 버튼(글자 없음): 누르면 내 사진으로 바꿀 수 있어
+    const photo = el('button', 'side-photo');
+    photo.type = 'button';
+    photo.title = '사진 바꾸기';
+    photo.setAttribute('aria-label', '사진 바꾸기');
+    photo.append(av);
+    // 사진 오른쪽: 지금까지 질문한 목록 버튼
+    const listBtn = el('button', 'side-list-btn');
+    listBtn.type = 'button';
+    listBtn.id = 'ai-history-btn';
+    listBtn.title = '질문했던 목록';
+    listBtn.setAttribute('aria-label', '질문했던 목록 보기');
+    listBtn.setAttribute('aria-expanded', 'false');
+    const listIcon = el('span', 'side-list-icon', '☰');
+    const listCount = el('span', 'side-list-count');
+    listBtn.append(listIcon, listCount);
+    who.append(photo, listBtn, nm);
     const act = el('div', 'side-act');
     const clear = el('button', 'btn small', '대화 지우기');
     clear.type = 'button';
-    const photo = el('button', 'btn small soft', '사진 바꾸기');
-    photo.type = 'button';
-    const reset = el('button', 'btn small soft ai-avatar-reset', '기본 사진');
+    const reset = el('button', 'side-reset ai-avatar-reset', '↺');
     reset.type = 'button';
+    reset.title = '기본 사진으로';
+    reset.setAttribute('aria-label', '기본 사진으로 되돌리기');
     reset.hidden = true;
     const file = el('input');
     file.type = 'file';
@@ -26153,16 +26285,66 @@ body.anim-open {
       img.src = url;
       file.value = '';
     };
-    act.append(clear, photo, reset);
+    act.append(clear, reset);
     head.append(who, act, file);
     const ctxLine = el('div', 'side-ctx');
     const chat = buildChat({ getCtx, multiline: true, side: true, persist: THREAD_KEY, hint: '막히는 거 있어? 편하게 말해 줘. 지금 보고 있는 문제랑 같이 보면서 천천히 알려 줄게' });
     clear.onclick = () => chat.clear();
-    host.append(head, ctxLine, chat.el);
+    // 질문했던 목록: 질문마다 눌러서 그때의 답을 다시 볼 수 있어
+    const hist = el('div', 'ai-history');
+    hist.id = 'ai-history';
+    hist.hidden = true;
+    const when = (ts) => {
+      const d = new Date(ts);
+      return d.getMonth() + 1 + '월 ' + d.getDate() + '일 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    };
+    const fillHistory = () => {
+      const list = G.aiqa && G.aiqa.list ? G.aiqa.list().slice().reverse() : [];
+      hist.textContent = '';
+      const top = el('div', 'ai-history-head');
+      top.append(el('strong', null, '질문했던 목록 (' + list.length + ')'));
+      const back = el('button', 'btn small', '대화로 돌아가기');
+      back.type = 'button';
+      back.id = 'ai-history-back';
+      back.onclick = () => toggleHistory(false);
+      top.append(back);
+      hist.append(top);
+      if (!list.length) {
+        hist.append(el('p', 'muted small', '아직 질문한 게 없어. 궁금한 걸 물어보면 여기에 차곡차곡 쌓여.'));
+        return;
+      }
+      list.forEach((r) => {
+        const d = el('details', 'ai-history-item');
+        const sm = el('summary');
+        sm.append(el('span', 'ai-history-q', r.q));
+        sm.append(el('span', 'ai-history-meta', when(r.ts) + (r.where ? ' · ' + r.where : '')));
+        d.append(sm, el('div', 'ai-history-a', r.a));
+        hist.append(d);
+      });
+    };
+    const updateCount = () => {
+      const n = G.aiqa && G.aiqa.count ? G.aiqa.count() : 0;
+      listCount.textContent = n ? String(n) : '';
+      listBtn.setAttribute('aria-label', '질문했던 목록 보기 (' + n + '개)');
+    };
+    function toggleHistory(show) {
+      const open = show == null ? hist.hidden : show;
+      if (open) fillHistory();
+      hist.hidden = !open;
+      ctxLine.hidden = open;
+      chat.el.hidden = open;
+      listBtn.setAttribute('aria-expanded', String(open));
+      listBtn.classList.toggle('on', open);
+      updateCount();
+    }
+    listBtn.onclick = () => toggleHistory();
+    host.append(head, ctxLine, chat.el, hist);
     side = {
       refresh() {
         ctxLine.textContent = '지금 보는 화면: ' + getCtx().label;
         chat.refresh();
+        updateCount();
+        if (!hist.hidden) fillHistory();
       },
     };
     document.body.classList.add('has-side');
@@ -27855,6 +28037,15 @@ body.anim-open {
 (function (G) {
   'use strict';
   G.changelog = [
+    {
+      date: '11/16',
+      title: 'AI 답변 겹침 수정, 사진·질문 목록 버튼',
+      items: [
+        '옆 AI 창에서 긴 답변이 작은 칸에 갇혀서 다음 글 위에 겹쳐 보이던 걸 고쳤어.',
+        '"사진 바꾸기" 글자를 없애고 서연 사진 자체를 눌러서 바꾸게 했어. 사진을 바꿨으면 작은 ↺ 버튼으로 기본 사진으로 되돌릴 수 있어.',
+        '사진 오른쪽에 ☰ 버튼이 생겼어(질문 수가 숫자로 보여). 누르면 지금까지 질문했던 목록이 최근 순으로 나오고, 질문을 누르면 그때의 답변이 펼쳐져. "대화 지우기"를 눌러도 이 목록은 남아.',
+      ],
+    },
     {
       date: '11/16',
       title: 'ElevenLabs 배경음악, 오피스빌딩 배경·설비, 날짜 표시 수정',

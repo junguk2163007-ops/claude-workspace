@@ -1428,6 +1428,19 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => document.querySelectorAll('#side .ai-reply-btn').length === 2);
     const sent = await page.evaluate(() => (window.__lastTurns = null, true));
+    // 사진은 글자 없이 그림만, 그 오른쪽에 질문했던 목록 버튼
+    check((await page.textContent('#side .side-photo')).trim() === '' && (await page.isVisible('#side .side-photo img.side-avatar')), '사진 바꾸기는 글자 없이 사진만 보임');
+    check(!(await page.textContent('#side .side-head')).includes('사진 바꾸기'), '머리에 "사진 바꾸기" 글자가 없음');
+    const order = await page.evaluate(() => { const a = document.querySelector('#side .side-photo').getBoundingClientRect(); const b = document.querySelector('#ai-history-btn').getBoundingClientRect(); return b.left > a.right - 1; });
+    check(order && (await page.isVisible('#ai-history-btn')), '사진 오른쪽에 질문 목록 버튼');
+    await page.click('#ai-history-btn');
+    check(await page.isVisible('#ai-history') && !(await page.isVisible('#side .ai-thread')), '목록 버튼을 누르면 질문 목록이 열림');
+    const hq = await page.$$eval('#ai-history .ai-history-item .ai-history-q', (els) => els.map((e) => e.textContent));
+    check(hq.length === 2 && hq.some((x) => x.includes('임피던스가 뭐야?')) && hq.some((x) => x.includes('이어서 하나 더')), '질문했던 것이 최근 순으로 쌓임: ' + JSON.stringify(hq));
+    await page.click('#ai-history .ai-history-item summary');
+    check(await page.isVisible('#ai-history .ai-history-item[open] .ai-history-a') && (await page.textContent('#ai-history .ai-history-item[open] .ai-history-a')).includes('좋은 질문이야'), '질문을 누르면 그때의 답변이 펼쳐짐');
+    await page.click('#ai-history-back');
+    check(!(await page.isVisible('#ai-history')) && (await page.isVisible('#side .ai-thread')), '"대화로 돌아가기"로 대화 화면으로 돌아옴');
     await page.click('#side .side-head .btn');
     check((await page.$$('#side .ai-msg')).length === 0, '대화 지우기');
     await page.reload();
@@ -1470,6 +1483,8 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     const s0 = await page.evaluate(() => document.querySelector('#side .ai-thread').scrollTop);
     await page.waitForSelector('#side .ai-reply-btn', { timeout: 20000 });
     const m = await page.evaluate(() => { const t = document.querySelector('#side .ai-thread'); return { top: t.scrollTop, max: t.scrollHeight - t.clientHeight }; });
+    const clipped = await page.evaluate(() => [...document.querySelectorAll('#side .ai-thread .ai-msg')].filter((e) => e.scrollHeight > e.clientHeight + 2).length);
+    check(clipped === 0, '긴 AI 답변이 칸 안에 다 들어가서 다음 글과 겹치지 않음 (잘린 칸 ' + clipped + '개)');
     check(m.max > 200 && Math.abs(m.top - s0) <= 2 && m.top < m.max - 100, 'AI 답변이 길어도 화면이 따라 내려가지 않음 (처음 ' + s0 + ' → 끝 ' + m.top + ', 맨 아래 ' + m.max + ')');
     check(errors.length === 0, '자동 스크롤 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
