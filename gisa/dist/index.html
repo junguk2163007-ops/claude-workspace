@@ -3196,15 +3196,16 @@ body.anim-open {
 
 .anim-badge {
   display: inline-block;
-  margin-right: 6px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.7;
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted, #888);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.5;
   vertical-align: middle;
+  opacity: 0.85;
 }
 .anim-gallery {
   margin: 10px 0 6px;
@@ -3252,7 +3253,7 @@ body.anim-open {
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794806431363,"label":"11/16 14:20"};</script>
+<script>window.GISA_BUILD={"t":1794811045649,"label":"11/16 15:37"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -27805,8 +27806,8 @@ body.anim-open {
       date: '11/16',
       title: '3D 버튼 찾기 쉽게',
       items: [
-        '과목별·배우기 목록 맨 위에 "3D로 볼 수 있는 장면" 칩이 생겼어. 칩을 누르면 바로 재생 화면이 열려.',
-        '3D 장면이 있는 단락 줄 앞에 "▶3D" 표시가 붙어. 이 표시가 없는 단락은 아직 장면이 없는 거야.',
+        '배우기 목록 맨 위에 "3D로 볼 수 있는 장면" 칩이 생겼어. 칩을 누르면 바로 재생 화면이 열려. (과목별 목록 상단에는 안 보여.)',
+        '3D 장면이 있는 단원 제목 오른쪽에 아주 작은 "3D" 표시가 붙어. 표시가 없는 단원은 아직 장면이 없는 거야.',
         '포인트 카드의 작은 ▶ 가 "▶ 3D" 글자 버튼으로 바뀌었어.',
       ],
     },
@@ -31767,7 +31768,7 @@ body.anim-open {
                   'span',
                   { class: 'row-head' },
                   h('span', { class: 'lesson-no' }, lessonIndex(l.id) + 1),
-                  h('span', { class: 'name' }, c ? starBadge(c.id) : null, c ? animBadge(c.id) : null, l.title),
+                  h('span', { class: 'name' }, c ? starBadge(c.id) : null, l.title, c ? animBadge(c.id) : null),
                   h('span', { class: 'right' }, read ? h('span', { class: 'state open' }, '읽음') : null)
                 ),
                 h('span', { class: 'stat-line' }, h('span', null, l.goal)),
@@ -31987,7 +31988,6 @@ body.anim-open {
         h('h2', null, '과목별 단원'),
         h('p', { class: 'muted small' }, '과목 → 단원 → 세부 단락 순서로 들어가. 단락마다 "문제 포인트 → 개념 설명 → 그 포인트 문제만 반복"으로 공부해. 한 포인트에서 연속 ' + P.MASTER_STREAK + '문제를 맞히면 익숙해진 걸로 쳐.'),
         starLegend(),
-        animGallery(),
         h(
           'div',
           { class: 'chips', role: 'group', 'aria-label': '과목' },
@@ -32024,7 +32024,7 @@ body.anim-open {
               return h(
                 'button',
                 { class: 'row lesson-row', 'data-unit': c.id, onclick: () => openUnit(c.id) },
-                h('span', { class: 'row-head' }, h('span', { class: 'name' }, starBadge(c.id), animBadge(c.id), c.name), h('span', { class: 'right' }, h('span', { class: 'state ' + (cp.total && cp.mastered === cp.total ? 'open' : 'locked') }, '포인트 ' + cp.mastered + '/' + cp.total))),
+                h('span', { class: 'row-head' }, h('span', { class: 'name' }, starBadge(c.id), c.name, animBadge(c.id)), h('span', { class: 'right' }, h('span', { class: 'state ' + (cp.total && cp.mastered === cp.total ? 'open' : 'locked') }, '포인트 ' + cp.mastered + '/' + cp.total))),
                 h('span', { class: 'bar' + (cp.mastered === 0 ? '' : '') }, h('i', { style: 'width:' + (cp.total ? Math.round((100 * cp.mastered) / cp.total) : 0) + '%' })),
                 h('span', { class: 'stat-line' }, h('span', null, st.n + '문제 풀이'), h('span', null, '정답률 ' + pct(st.c, st.n)))
               );
@@ -32074,7 +32074,7 @@ body.anim-open {
 
   // 목록 줄 앞의 "▶3D" 표시: 이 단락에는 3D 장면이 있다는 뜻
   function animBadge(cid) {
-    return G.anim3d && G.anim3d.has(cid) ? h('span', { class: 'anim-badge', title: '3D 설명 장면이 있어' }, '▶3D') : null;
+    return G.anim3d && G.anim3d.has(cid) ? h('span', { class: 'anim-badge', title: '3D 설명 장면이 있어' }, '3D') : null;
   }
   // 3D 장면 모아보기: 어떤 장면이 있는지 한눈에 보고 바로 재생
   function animGallery() {

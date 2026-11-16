@@ -3184,15 +3184,16 @@ body.anim-open {
 
 .anim-badge {
   display: inline-block;
-  margin-right: 6px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.7;
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted, #888);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.5;
   vertical-align: middle;
+  opacity: 0.85;
 }
 .anim-gallery {
   margin: 10px 0 6px;

@@ -1827,7 +1827,7 @@
                   'span',
                   { class: 'row-head' },
                   h('span', { class: 'lesson-no' }, lessonIndex(l.id) + 1),
-                  h('span', { class: 'name' }, c ? starBadge(c.id) : null, c ? animBadge(c.id) : null, l.title),
+                  h('span', { class: 'name' }, c ? starBadge(c.id) : null, l.title, c ? animBadge(c.id) : null),
                   h('span', { class: 'right' }, read ? h('span', { class: 'state open' }, '읽음') : null)
                 ),
                 h('span', { class: 'stat-line' }, h('span', null, l.goal)),
@@ -2047,7 +2047,6 @@
         h('h2', null, '과목별 단원'),
         h('p', { class: 'muted small' }, '과목 → 단원 → 세부 단락 순서로 들어가. 단락마다 "문제 포인트 → 개념 설명 → 그 포인트 문제만 반복"으로 공부해. 한 포인트에서 연속 ' + P.MASTER_STREAK + '문제를 맞히면 익숙해진 걸로 쳐.'),
         starLegend(),
-        animGallery(),
         h(
           'div',
           { class: 'chips', role: 'group', 'aria-label': '과목' },
@@ -2084,7 +2083,7 @@
               return h(
                 'button',
                 { class: 'row lesson-row', 'data-unit': c.id, onclick: () => openUnit(c.id) },
-                h('span', { class: 'row-head' }, h('span', { class: 'name' }, starBadge(c.id), animBadge(c.id), c.name), h('span', { class: 'right' }, h('span', { class: 'state ' + (cp.total && cp.mastered === cp.total ? 'open' : 'locked') }, '포인트 ' + cp.mastered + '/' + cp.total))),
+                h('span', { class: 'row-head' }, h('span', { class: 'name' }, starBadge(c.id), c.name, animBadge(c.id)), h('span', { class: 'right' }, h('span', { class: 'state ' + (cp.total && cp.mastered === cp.total ? 'open' : 'locked') }, '포인트 ' + cp.mastered + '/' + cp.total))),
                 h('span', { class: 'bar' + (cp.mastered === 0 ? '' : '') }, h('i', { style: 'width:' + (cp.total ? Math.round((100 * cp.mastered) / cp.total) : 0) + '%' })),
                 h('span', { class: 'stat-line' }, h('span', null, st.n + '문제 풀이'), h('span', null, '정답률 ' + pct(st.c, st.n)))
               );
@@ -2134,7 +2133,7 @@
 
   // 목록 줄 앞의 "▶3D" 표시: 이 단락에는 3D 장면이 있다는 뜻
   function animBadge(cid) {
-    return G.anim3d && G.anim3d.has(cid) ? h('span', { class: 'anim-badge', title: '3D 설명 장면이 있어' }, '▶3D') : null;
+    return G.anim3d && G.anim3d.has(cid) ? h('span', { class: 'anim-badge', title: '3D 설명 장면이 있어' }, '3D') : null;
   }
   // 3D 장면 모아보기: 어떤 장면이 있는지 한눈에 보고 바로 재생
   function animGallery() {
