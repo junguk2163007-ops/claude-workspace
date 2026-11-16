@@ -1797,6 +1797,7 @@
         h('h2', null, '배우기'),
         h('p', { class: 'muted small' }, '아무것도 모르는 상태에서 시작해서 한 단계씩 나아가는 순서야. 읽고 → 예제를 따라가고 → 확인 문제를 풀어. 레슨을 읽으면 그 개념의 문제도 열려.'),
         starLegend(),
+        animGallery(),
         h(
           'div',
           { class: 'tile progress-tile' },
