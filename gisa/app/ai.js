@@ -184,12 +184,96 @@
   };
   const HIDE = ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'];
 
+  // ───────── 답변이 나오는 속도(천천히 읽을 수 있게) ─────────
+  // AI 가 한꺼번에 빨리 보내도 글자를 일정한 속도로 나눠서 보여 준다. 설정에서 "천천히 / 보통 / 바로" 를 고른다.
+  const SPEED_KEY = 'gisa-ai-speed';
+  const SPEEDS = { slow: 20, normal: 36, fast: 0 }; // 초당 글자 수(0 = 오는 대로 바로)
+  function speedName() {
+    let v = null;
+    try {
+      v = localStorage.getItem(SPEED_KEY);
+    } catch (e) {
+      /* 저장소를 못 쓰면 기본값 */
+    }
+    if (!SPEEDS.hasOwnProperty(v)) v = typeof navigator !== 'undefined' && navigator.webdriver ? 'fast' : 'normal'; // 자동 시험은 기다리지 않게
+    return v;
+  }
+  // emit(보여 줄 글)을 일정한 속도로 부른다. set(전체 글) → finish() 로 끝까지 보여 준 뒤 이어서, flush() 는 즉시 전부 보여 줌, cancel() 은 멈춤
+  function makePacer(emit) {
+    const cps = SPEEDS[speedName()];
+    let target = '';
+    let shown = 0;
+    let raf = 0;
+    let last = 0;
+    let waiter = null;
+    let dead = false;
+    const wake = () => {
+      if (waiter) {
+        const w = waiter;
+        waiter = null;
+        w();
+      }
+    };
+    const tick = (now) => {
+      raf = 0;
+      if (dead) return;
+      const dt = Math.min(0.2, Math.max(0, (now - last) / 1000));
+      last = now;
+      const lag = target.length - shown;
+      const rate = cps * (lag > 600 ? 2.5 : lag > 300 ? 1.6 : 1); // 너무 밀리면 조금 서둘러서 따라잡음
+      shown = Math.min(target.length, shown + rate * dt);
+      emit(target.slice(0, Math.floor(shown)));
+      if (shown < target.length) raf = requestAnimationFrame(tick);
+      else wake();
+    };
+    const start = () => {
+      if (!raf && !dead) {
+        last = performance.now();
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    return {
+      set(t) {
+        target = String(t);
+        if (!cps) {
+          shown = target.length;
+          emit(target);
+          return;
+        }
+        if (target.length < shown) shown = target.length;
+        start();
+      },
+      finish() {
+        return new Promise((res) => {
+          if (dead || shown >= target.length) return res();
+          waiter = res;
+          start();
+        });
+      },
+      flush() {
+        if (dead) return;
+        shown = target.length;
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        emit(target);
+        wake();
+      },
+      cancel() {
+        dead = true;
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        wake();
+      },
+    };
+  }
+
   // ───────── 대화 상자(인라인·사이드 공통) ─────────
   // o = { getCtx, multiline, side, hint }
   function buildChat(o) {
     const turns = []; // {role, content}. 규칙+화면 데이터는 보낼 때마다 새로 만들어 맨 앞에 붙임
     let ctl = null;
     let busy = false;
+    let pacer = null; // 지금 글자를 나눠 보여 주는 중이면 그 도구
     // 대화는 이 브라우저(와 계정)에 저장해 두고, 업데이트로 화면이 다시 열려도 이어서 보여 준다
     const log = []; // {role, text, content, quote, kind}
     let cloudT = null;
@@ -361,16 +445,19 @@
       ctl = new AbortController();
       const recent = turns.slice(-12);
       const history = recent[0].role === 'user' ? recent : recent.slice(1);
+      pacer = makePacer((t) => (out.textContent = t));
       try {
         const res = await sample([{ role: 'user', content: promptFor(o.getCtx()) }].concat(history), {
           cache: false,
           signal: ctl.signal,
           onText: ({ text: t }) => {
             out.classList.remove('pending');
-            out.textContent = t;
+            pacer.set(t);
           },
         });
         out.classList.remove('pending');
+        pacer.set(res.text + (res.truncated ? '\n(답이 길어서 중간에 끊겼어. 더 짧게 물어봐 줘.)' : ''));
+        await pacer.finish(); // 느리게 보여 주는 중이면 끝까지 보여 준 다음에 이어간다
         out.textContent = res.text + (res.truncated ? '\n(답이 길어서 중간에 끊겼어. 더 짧게 물어봐 줘.)' : '');
         turns.push({ role: 'assistant', content: res.text });
         log.push({ role: 'assistant', text: res.text });
@@ -380,6 +467,7 @@
         if (G.aiqa) G.aiqa.save({ q: (quote ? '(' + (kind === 'sentence' ? '문장 질문' : '답글') + ': "' + snippet(quote, 40) + '") ' : '') + text, a: res.text, where: (cx && cx.label) || '', key: cx && cx.q && cx.q.key });
         if (side) side.refresh();
       } catch (e) {
+        if (pacer) pacer.cancel();
         const code = (e && e.code) || 'upstream_error';
         out.classList.remove('pending');
         if (code === 'cancelled') {
@@ -400,6 +488,7 @@
         }
       } finally {
         ctl = null;
+        pacer = null;
         setBusy(false);
         refresh();
       }
@@ -420,8 +509,13 @@
         }
       });
     }
-    stop.onclick = () => ctl && ctl.abort();
+    // 멈추기: 글자가 천천히 나오는 중이면 지금까지 온 답을 바로 다 보여 주고, 아직 받는 중이면 받기를 멈춘다
+    stop.onclick = () => {
+      if (pacer) pacer.flush();
+      if (ctl) ctl.abort();
+    };
     function clear() {
+      if (pacer) pacer.cancel();
       if (ctl) ctl.abort();
       turns.length = 0;
       log.length = 0;
@@ -647,14 +741,35 @@
     // 대화가 아니라 한 번 물어서 답만 받는다(기출 해설 같은 용도). onText는 지금까지 받은 전체 글을 넘겨 준다.
     async ask(content, o) {
       if (!sample) throw { code: 'unavailable' };
-      const res = await sample([{ role: 'user', content }], {
-        cache: false,
-        signal: o && o.signal,
-        onText: ({ text }) => o && o.onText && o.onText(text),
-      });
-      return res;
+      const pc = makePacer((t) => o && o.onText && o.onText(t));
+      const sig = o && o.signal;
+      if (sig) sig.addEventListener('abort', () => pc.cancel());
+      try {
+        const res = await sample([{ role: 'user', content }], {
+          cache: false,
+          signal: sig,
+          onText: ({ text }) => pc.set(text),
+        });
+        pc.set(res.text);
+        await pc.finish();
+        if (sig && sig.aborted) throw { code: 'cancelled', text: '' };
+        return res;
+      } catch (e) {
+        pc.cancel();
+        throw e;
+      }
     },
     available: () => !!sample,
+    speeds: () => Object.keys(SPEEDS),
+    getSpeed: speedName,
+    setSpeed(v) {
+      if (!SPEEDS.hasOwnProperty(v)) return;
+      try {
+        localStorage.setItem(SPEED_KEY, v);
+      } catch (e) {
+        /* 저장 못 해도 이번엔 적용됨 */
+      }
+    },
     onReady(fn) {
       readyFns.push(fn);
       if (sample) fn();

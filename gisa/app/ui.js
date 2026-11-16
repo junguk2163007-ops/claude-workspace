@@ -2579,6 +2579,19 @@
   }
 
   // ───────── 설정 탭 ─────────
+  // AI 답변이 나오는 속도(천천히 읽을 수 있게 글자를 나눠서 보여 줌)
+  function aiSpeedField() {
+    if (!G.aiTutor || !G.aiTutor.getSpeed) return null;
+    const sel = h(
+      'select',
+      { id: 'ai-speed-select', onchange: (e) => G.aiTutor.setSpeed(e.target.value) },
+      h('option', { value: 'slow' }, '천천히 (읽기 편하게)'),
+      h('option', { value: 'normal' }, '보통'),
+      h('option', { value: 'fast' }, '바로 (오는 대로)')
+    );
+    sel.value = G.aiTutor.getSpeed();
+    return h('div', { class: 'field' }, h('label', { for: 'ai-speed-select' }, h('strong', null, 'AI 답변이 나오는 속도')), sel);
+  }
   function renderSettings(root) {
     const m = view.msg;
     renderUpdateLog(root);
@@ -2625,7 +2638,8 @@
         { class: 'rows' },
         sw('skip-order', 'skipOrder', '순서 건너뛰기 (전부 열기)', '선행 개념 조건 없이 모든 개념을 열어.'),
         sw('mix-static', 'mixStatic', '이론형 문제 섞기', '숫자 계산이 아닌 개념 문제도 가끔(약 20%) 섞어서 내.'),
-        h('div', { class: 'field' }, h('label', { for: 'theme-select' }, h('strong', null, '화면 테마')), themeSel)
+        h('div', { class: 'field' }, h('label', { for: 'theme-select' }, h('strong', null, '화면 테마')), themeSel),
+        aiSpeedField()
       )
     );
     renderAiqaSettings(root);

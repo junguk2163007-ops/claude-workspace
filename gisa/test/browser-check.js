@@ -1490,6 +1490,45 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-17y. AI 답변을 천천히 보여 주기(속도 설정, 멈추기로 바로 전부) ──
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await ctx.addInitScript(() => {
+      try { localStorage.setItem('gisa-ai-speed', 'slow'); } catch (e) { /* 무시 */ }
+      const full = '가나다라마바사아자차카타파하 '.repeat(20) + '끝.';
+      window.__full = full;
+      const fake = async (input, opts) => {
+        opts.onText({ text: full, delta: '' });
+        return { text: full, truncated: false, modelTierApplied: 'default' };
+      };
+      window.claude = { use: async (n) => (n === 'sample' ? fake : null) };
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(FILE);
+    await page.waitForSelector('#side .side-head');
+    await page.fill('#ai-side-input', '천천히 보여 줘');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#side .ai-msg.ai:not(.pending)');
+    await page.waitForTimeout(700);
+    const part = await page.evaluate(() => document.querySelector('#side .ai-msg.ai').textContent.length);
+    const total = await page.evaluate(() => window.__full.length);
+    check(part > 0 && part < 60 && part < total, 'AI 답변이 한꺼번에 나오지 않고 천천히 나옴 (0.7초 뒤 ' + part + '/' + total + '자)');
+    check(await page.isVisible('#side .stop, #side button:has-text("멈추기")'), '나오는 중에는 멈추기 버튼이 보임');
+    await page.click('#side button:has-text("멈추기")');
+    await page.waitForSelector('#side .ai-reply-btn', { timeout: 5000 });
+    const done = await page.evaluate(() => document.querySelector('#side .ai-msg.ai').textContent.length);
+    check(done >= total - 2, '멈추기를 누르면 지금까지 온 답을 바로 전부 보여 줌 (' + done + '/' + total + '자)');
+    await page.click('#tab-settings');
+    check((await page.$$('#ai-speed-select option')).length === 3 && (await page.inputValue('#ai-speed-select')) === 'slow', '설정에 AI 답변 속도(천천히/보통/바로) 선택이 있음');
+    await page.selectOption('#ai-speed-select', 'fast');
+    check((await page.evaluate(() => localStorage.getItem('gisa-ai-speed'))) === 'fast', '속도 선택이 기억됨');
+    check(errors.length === 0, 'AI 속도 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 2-17v. 3D 설명 애니메이션 ──
   {
     const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1000, height: 900 }, colorScheme: 'light' });
