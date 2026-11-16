@@ -1940,6 +1940,7 @@
       h('span', { class: 'eyebrow' }, l.part + ' · ' + (idx + 1) + '/' + G.lessons.length),
       h('h2', null, l.title),
       h('p', { class: 'goal' }, '이번 목표: ' + l.goal),
+      animButton(l.concept),
       c ? conceptFigures(c.id) : null,
       l.sections.map((sec) =>
         h('section', { class: 'lesson-sec' }, h('h3', null, sec.h), (sec.p || []).map((t) => h('p', null, t)), sec.list ? h('ul', null, sec.list.map((t) => h('li', null, t))) : null)
@@ -2121,6 +2122,12 @@
     );
   }
 
+  // 이 개념에 3D 설명 애니메이션이 있으면 레슨 위에 재생 버튼을 보여 준다
+  function animButton(cid) {
+    if (!cid || !G.anim3d || !G.anim3d.has(cid)) return null;
+    return h('div', { class: 'actions' }, h('button', { class: 'btn', id: 'anim-btn-lesson', type: 'button', onclick: () => G.anim3d.open(cid) }, '▶ 3D로 보기'));
+  }
+
   // ───────── Why?: 풀이 핵심이 왜 그렇게 되는지 원리를 팝업으로 자세히 ─────────
   const WHY_KEY = 'gisa-why';
   const whyRead = () => lsGet(WHY_KEY) || {};
@@ -2275,7 +2282,7 @@
       })(),
       l ? h('p', { class: 'goal' }, '이번 목표: ' + l.goal) : null,
       progressTile('익숙해진 포인트', cp.mastered, cp.total),
-      h('div', { class: 'actions' }, h('button', { class: 'btn primary', id: 'drill-all', onclick: () => startDrill(c.id, null) }, '이 단락 전부 섞어서 반복')),
+      h('div', { class: 'actions' }, h('button', { class: 'btn primary', id: 'drill-all', onclick: () => startDrill(c.id, null) }, '이 단락 전부 섞어서 반복'), G.anim3d && G.anim3d.has(c.id) ? h('button', { class: 'btn', id: 'anim-btn', type: 'button', onclick: () => G.anim3d.open(c.id) }, '▶ 3D로 보기') : null),
 
       // 1) 문제 포인트 한눈에
       h(

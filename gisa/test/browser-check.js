@@ -1467,6 +1467,65 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-17v. 3D 설명 애니메이션 ──
+  {
+    const { ctx, page, errors } = await newPage(browser, { viewport: { width: 1000, height: 900 }, colorScheme: 'light' });
+    const res = await page.evaluate(() => {
+      const out = [];
+      GISA.anim3d.list().forEach((id) => {
+        const sc = GISA.anim3d.scene(id);
+        [0, 2.5, 7, 11, 15, 19, sc.duration - 0.5].forEach((t) => {
+          try {
+            const cv = GISA.anim3d._render(id, t);
+            const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+            let n = 0;
+            for (let i = 0; i < d.length; i += 4) if (d[i] > 70 || d[i + 1] > 80 || d[i + 2] > 90) n++;
+            out.push([id, t, n]);
+          } catch (e) {
+            out.push([id, t, -1, e.message]);
+          }
+        });
+      });
+      return out;
+    });
+    const bad = res.filter((r) => r[2] < 400);
+    check(res.length >= 8 * 7 && bad.length === 0, '3D 장면 8개를 여러 시점에서 그려도 오류 없이 내용이 보임' + (bad.length ? ': ' + JSON.stringify(bad.slice(0, 3)) : ' (' + res.length + '장면컷)'));
+    await page.click('#tab-units');
+    await page.click('.chip[data-subject="circuit"]');
+    await page.click('.lesson-row[data-unit="ohm"]');
+    check(await page.isVisible('#anim-btn'), '단락 화면에 "▶ 3D로 보기" 버튼');
+    await page.click('#anim-btn');
+    await page.waitForSelector('#anim-overlay');
+    check(await page.isVisible('#anim-bigplay') && (await page.textContent('#anim-cap')).length > 10, '팝업이 열리고 재생 버튼을 눌러야 시작함(처음엔 정지)');
+    const hash = () => page.evaluate(() => { const c = document.getElementById('anim-canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let h = 0; for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) | 0; return h; });
+    const h0 = await hash();
+    await page.waitForTimeout(500);
+    check((await hash()) === h0, '재생 전에는 화면이 멈춰 있음');
+    await page.click('#anim-bigplay');
+    await page.waitForTimeout(900);
+    const h1 = await hash();
+    check(h1 !== h0 && !(await page.isVisible('#anim-bigplay')), '재생 버튼을 누르면 움직임');
+    const cap0 = await page.textContent('#anim-cap');
+    await page.click('#anim-play');
+    check((await page.textContent('#anim-play')).includes('재생'), '멈춤 버튼으로 일시정지');
+    const box = await page.evaluate(() => { const r = document.querySelector('.anim-bar').getBoundingClientRect(); return { x: r.left, w: r.width, y: r.top + r.height / 2 }; });
+    await page.mouse.click(box.x + box.w * 0.6, box.y);
+    check((await page.textContent('#anim-cap')) !== cap0, '진행 막대를 눌러 다른 장면으로 이동하면 설명 글이 바뀜');
+    const yaw0 = await hash();
+    const cv = await page.evaluate(() => { const r = document.getElementById('anim-canvas').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await page.mouse.move(cv.x, cv.y);
+    await page.mouse.down();
+    await page.mouse.move(cv.x + 120, cv.y + 30, { steps: 5 });
+    await page.mouse.up();
+    check((await hash()) !== yaw0, '화면을 끌면 3D 시점이 돌아감');
+    check(await noOverflow(page), '3D 팝업이 가로로 넘치지 않음');
+    await page.screenshot({ path: path.join(SHOTS, '24-anim3d.png'), fullPage: false });
+    await page.keyboard.press('Escape');
+    check(!(await page.$('#anim-overlay')), 'Esc 로 닫힘');
+    check(errors.length === 0, '3D 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 2-17w. 풀이 핵심 복사(가로 원문), Why? 팝업, 목록 스크롤 기억 ──
   {
     const ctx = await browser.newContext({ viewport: { width: 1000, height: 900 }, colorScheme: 'light' });
