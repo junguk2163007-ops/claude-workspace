@@ -571,6 +571,10 @@
     registerEnv: (name, fn) => {
       envs[name] = fn;
     },
+    // 이미 등록된 장면의 그림·설명 등을 새 것으로 바꾼다(anim-equip.js: 건물 설비로 교체)
+    override: (id, patch) => {
+      if (scenes[id]) Object.assign(scenes[id], patch);
+    },
     mapPoint,
     pointInfo,
     openPoint,
