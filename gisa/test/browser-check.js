@@ -1512,10 +1512,11 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(h1 !== h0 && !(await page.isVisible('#anim-bigplay')), '재생 버튼을 누르면 움직임');
     const cap0 = await page.textContent('#anim-cap');
     // 효과음: 재생하면 소리가 만들어지고, 멈추면 꺼지고, 소리 버튼으로 켜고 끔(선택은 기억)
-    check(await page.isVisible('#anim-sound') && (await page.textContent('#anim-sound')).includes('켜짐'), '소리 버튼이 있고 기본은 켜짐');
+    check(await page.isVisible('#anim-sound') && (await page.textContent('#anim-sound')).includes('켜짐'), '배경음악 버튼이 있고 기본은 켜짐');
     const cnt = await page.evaluate(() => GISA.animSound._count());
-    check(cnt.voices + cnt.events >= 10, '효과음 종류 ' + (cnt.voices + cnt.events) + '가지');
-    check((await page.evaluate(() => GISA.animSound._state())).cur === 'ohm-water', '재생 중에는 이 장면의 효과음이 만들어짐');
+    check(cnt.tracks >= 10, '배경음악 ' + cnt.tracks + '곡');
+    check((await page.evaluate(() => GISA.animSound._state())).cur === 'ohm-water', '재생 중에는 이 장면의 배경음악이 연주됨');
+    check((await page.evaluate(() => GISA.animSound._state())).steps >= 1, '배경음악이 실제로 연주를 시작함');
     await page.click('#anim-sound');
     check((await page.textContent('#anim-sound')).includes('꺼짐') && (await page.evaluate(() => GISA.animSound._state())).cur === null, '소리를 끄면 바로 조용해짐');
     check((await page.evaluate(() => localStorage.getItem('gisa-anim-sound'))) === 'off', '소리 끔 선택이 기억됨');
@@ -1556,8 +1557,13 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check(!!bd && (await bd.evaluate((e) => e.textContent === '3D' && !!e.previousSibling)), '단원 제목 뒤(오른쪽)에 작은 3D 표시');
     await page.click('#tab-learn');
     check(await page.isVisible('#anim-gallery'), '배우기 목록 위에 "3D 장면 모아보기"');
-    check((await page.$$('.anim-chip')).length >= 8, '장면 칩이 8개 이상');
-    await page.click('.anim-chip[data-scene="ohm-water"]');
+    check(!(await page.isVisible('#anim-list')), '3D 장면 목록은 처음엔 접혀 있음');
+    await page.click('.anim-gallery-title');
+    check(await page.isVisible('#anim-list') && (await page.$$('.anim-item')).length >= 8, '제목을 누르면 장면 목록이 쭉 나옴');
+    await page.click('.anim-gallery-title');
+    check(!(await page.isVisible('#anim-list')), '한 번 더 누르면 접힘');
+    await page.click('.anim-gallery-title');
+    await page.click('.anim-item[data-scene="ohm-water"]');
     await page.waitForSelector('#anim-overlay');
     check(await page.isVisible('#anim-bigplay'), '장면 칩을 누르면 바로 3D 팝업');
     await page.keyboard.press('Escape');

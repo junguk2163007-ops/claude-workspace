@@ -403,7 +403,7 @@
     const soundLabel = () => {
       const has = G.animSound && G.animSound.has(cur);
       const on = G.animSound && G.animSound.enabled();
-      soundB.textContent = on ? '🔊 소리 켜짐' : '🔇 소리 꺼짐';
+      soundB.textContent = on ? '🎵 배경음악 켜짐' : '🔇 배경음악 꺼짐';
       soundB.setAttribute('aria-pressed', String(!!on));
       soundB.hidden = !G.animSound || !has;
     };
@@ -588,8 +588,10 @@
     // 시험용: 장면을 한 프레임 그려서 캔버스를 돌려줌
     _render(id, t, canvas) {
       const cv = canvas || document.createElement('canvas');
-      cv.width = 480;
-      cv.height = 300;
+      if (!canvas) {
+        cv.width = 480;
+        cv.height = 300;
+      }
       renderFrame(cv, scenes[id], t, Object.assign({ yaw: 0.5, pitch: 0.32, dist: 6.2, sx: 0, sy: 0 }, scenes[id].view || {}));
       return cv;
     },

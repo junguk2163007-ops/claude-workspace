@@ -2138,12 +2138,34 @@
   // 3D 장면 모아보기: 어떤 장면이 있는지 한눈에 보고 바로 재생
   function animGallery() {
     if (!G.anim3d || !G.anim3d.list().length) return null;
-    return h(
-      'div',
-      { class: 'anim-gallery', id: 'anim-gallery' },
-      h('div', { class: 'anim-gallery-title' }, '▶ 3D로 볼 수 있는 장면 ' + G.anim3d.list().length + '개'),
-      h('div', { class: 'chips' }, G.anim3d.list().map((id) => h('button', { class: 'chip anim-chip', type: 'button', 'data-scene': id, onclick: () => G.anim3d.openScene(id) }, G.anim3d.scene(id).title)))
-    );
+    const ids = G.anim3d.list();
+    const list = h('div', { class: 'anim-list', id: 'anim-list', hidden: true });
+    ids.forEach((id) => {
+      const sc = G.anim3d.scene(id);
+      const names = (sc.concepts || []).map((cid) => (G.concepts.find((c) => c.id === cid) || {}).name).filter(Boolean);
+      const music = G.animSound && G.animSound.trackOf ? G.animSound.trackOf(id) : '';
+      list.appendChild(
+        h(
+          'button',
+          { class: 'anim-item', type: 'button', 'data-scene': id, onclick: () => G.anim3d.openScene(id) },
+          h('span', { class: 'anim-item-play' }, '▶'),
+          h(
+            'span',
+            { class: 'anim-item-text' },
+            h('strong', null, sc.title),
+            h('span', { class: 'muted small' }, names.slice(0, 4).join(' · ') + ' · ' + sc.duration + '초' + (music ? ' · 배경음악 ' + music : ''))
+          )
+        )
+      );
+    });
+    const head = h('button', { class: 'anim-gallery-title', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'anim-list' }, '▶ 3D로 볼 수 있는 장면 ' + ids.length + '개  ▾');
+    head.onclick = () => {
+      const open = list.hidden;
+      list.hidden = !open;
+      head.setAttribute('aria-expanded', String(open));
+      head.textContent = '▶ 3D로 볼 수 있는 장면 ' + ids.length + '개  ' + (open ? '▴' : '▾');
+    };
+    return h('div', { class: 'anim-gallery', id: 'anim-gallery' }, head, list);
   }
 
   // 이 개념에 3D 설명 애니메이션이 있으면 레슨 위에 재생 버튼을 보여 준다

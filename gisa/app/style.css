@@ -3203,10 +3203,56 @@ body.anim-open {
   background: var(--surface-2);
 }
 .anim-gallery-title {
-  margin-bottom: 6px;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
   font-size: 13.5px;
   font-weight: 700;
-  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+}
+.anim-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.anim-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.anim-item:hover {
+  border-color: var(--accent);
+}
+.anim-item-play {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 14px;
+}
+.anim-item-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 .anim-point {
   background: var(--accent);
