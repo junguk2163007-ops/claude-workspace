@@ -68,7 +68,7 @@
   const AV_KEY = 'gisa-ai-avatar';
   const THREAD_KEY = 'gisa-ai-thread';
   const TUTOR = '서연';
-  const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(AVATAR_SVG);
+  const DEFAULT_AVATAR = G.aiAvatarPhoto || 'data:image/svg+xml;utf8,' + encodeURIComponent(AVATAR_SVG); // 기본 사진은 앱 안에 있어서 어느 기기에서나 보임
   function customAvatar() {
     try {
       const v = JSON.parse(localStorage.getItem(AV_KEY));

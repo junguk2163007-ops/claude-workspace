@@ -1426,7 +1426,7 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.waitForSelector('#side .side-head');
     check((await page.$$('#side .ai-msg')).length === 0 && (await page.isVisible('#side .ai-hint')), '지운 대화는 새로고침해도 돌아오지 않음');
     const av = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ai-avatar'));
-    check(av.includes('data:image'), '쌤 사진(기본 일러스트)이 설정됨');
+    check(av.includes('data:image/jpeg'), '서연 기본 사진이 앱 안에 들어 있어서 새 기기에서도 보임');
     await page.screenshot({ path: path.join(SHOTS, '23-seoyeon.png'), fullPage: false });
     check(errors.length === 0, '서연 쌤 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
