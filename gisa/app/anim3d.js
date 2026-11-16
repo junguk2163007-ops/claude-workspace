@@ -27,6 +27,7 @@
   };
   G.vec3 = { add, sub, mul, dot, cross, len, norm, lerp, clamp, ease };
 
+  const TAU = Math.PI * 2;
   // 색: [r,g,b] 0~255
   const C = {
     wire: [210, 140, 70],
@@ -63,12 +64,16 @@
       const z = p[1] * sp + z0 * cp;
       return [x, y, z];
     };
+    const ox = W / 2 + (view.sx || 0) * W; // 장면을 화면에서 옆·아래로 옮기는 값(비율)
+    const oy = H / 2 + (view.sy || 0) * H;
     const proj = (p) => {
       const r = rot(p);
       const depth = view.dist - r[2];
       const s = f / Math.max(0.3, depth);
-      return { x: W / 2 + r[0] * s, y: H / 2 - r[1] * s, z: r[2], s };
+      return { x: ox + r[0] * s, y: oy - r[1] * s, z: r[2], s };
     };
+    const GROUND = -1e6; // 바닥·그림자는 항상 맨 먼저 그린다
+    let bias = 0; // 넓은 받침 같은 물체를 위에 놓인 물체보다 먼저 그리게 하는 값
     const light = norm([0.35, 0.55, 0.8]);
     const g = {
       W,
@@ -120,9 +125,61 @@
           ctx.fill();
         } });
       },
+      // 바닥 위에 깔리는 면(탁자 널빤지, 그림자): 다른 물체보다 먼저 그려진다
+      ground(pts, col, alpha) {
+        const P = pts.map(proj);
+        items.push({ z: GROUND, fn: () => {
+          ctx.fillStyle = rgba(col, alpha == null ? 1 : alpha);
+          ctx.beginPath();
+          P.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+          ctx.closePath();
+          ctx.fill();
+        } });
+      },
+      groundLine(a, b, col, w, alpha) {
+        const A = proj(a);
+        const B = proj(b);
+        items.push({ z: GROUND, fn: () => {
+          ctx.strokeStyle = rgba(col, alpha == null ? 1 : alpha);
+          ctx.lineWidth = Math.max(1, (w || 0.02) * (A.s + B.s) / 2);
+          ctx.beginPath();
+          ctx.moveTo(A.x, A.y);
+          ctx.lineTo(B.x, B.y);
+          ctx.stroke();
+        } });
+      },
+      shadow(c, rx, rz, a) {
+        const pts = [];
+        for (let i = 0; i < 22; i++) pts.push([c[0] + Math.cos((i / 22) * TAU) * rx, c[1], c[2] + Math.sin((i / 22) * TAU) * rz]);
+        g.ground(pts, [0, 0, 0], a == null ? 0.28 : a);
+      },
+      // 반투명 구(유리·빛무리)
+      orb(p, r, col, alpha, glow) {
+        const P = proj(p);
+        items.push({ z: P.z, fn: () => {
+          const rr = Math.max(2, r * P.s);
+          const gr = ctx.createRadialGradient(P.x, P.y, 0, P.x, P.y, rr);
+          gr.addColorStop(0, rgba(col, (alpha == null ? 0.5 : alpha) * (glow ? 1 : 0.7)));
+          gr.addColorStop(1, rgba(col, 0));
+          ctx.fillStyle = gr;
+          ctx.beginPath();
+          ctx.arc(P.x, P.y, rr, 0, Math.PI * 2);
+          ctx.fill();
+        } });
+      },
+      // 꺾이는 전선: 점들을 이어 둥근 관으로
+      tube(pts, r, col, n) {
+        for (let i = 0; i + 1 < pts.length; i++) g.cyl(pts[i], pts[i + 1], r, col, 1, n || 12);
+      },
+      hudDraw(fn) {
+        hud.push(() => fn(ctx, W, H));
+      },
+      setBias(b) {
+        bias = b || 0;
+      },
       poly(pts, col, alpha, edge) {
         const P = pts.map(proj);
-        const z = P.reduce((s, q) => s + q.z, 0) / P.length;
+        const z = P.reduce((s, q) => s + q.z, 0) / P.length + bias;
         items.push({ z, fn: () => {
           ctx.fillStyle = rgba(col, alpha == null ? 1 : alpha);
           ctx.beginPath();
@@ -245,8 +302,8 @@
   function renderFrame(canvas, scene, t, view) {
     const ctx = canvas.getContext('2d');
     const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    bg.addColorStop(0, '#16202c');
-    bg.addColorStop(1, '#0b1118');
+    bg.addColorStop(0, (scene.bg && scene.bg[0]) || '#16202c');
+    bg.addColorStop(1, (scene.bg && scene.bg[1]) || '#0b1118');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const g = makeG(canvas, view);
@@ -351,7 +408,7 @@
     document.body.classList.add('anim-open');
 
     const view = { yaw: 0.5, pitch: 0.32, dist: 7.5 };
-    const applyView = () => Object.assign(view, { yaw: 0.5, pitch: 0.32, dist: 6.2 }, scenes[cur].view || {});
+    const applyView = () => Object.assign(view, { yaw: 0.5, pitch: 0.32, dist: 6.2, sx: 0, sy: 0 }, scenes[cur].view || {});
     const st = { t: 0, playing: false, last: 0, speed: 1, started: false };
     let range = win && win.to > win.from ? { from: win.from, to: win.to, label: win.label || '' } : null; // 한 구간만 반복
     const onKey = (e) => {
@@ -506,7 +563,7 @@
       const cv = canvas || document.createElement('canvas');
       cv.width = 480;
       cv.height = 300;
-      renderFrame(cv, scenes[id], t, Object.assign({ yaw: 0.5, pitch: 0.32, dist: 6.2 }, scenes[id].view || {}));
+      renderFrame(cv, scenes[id], t, Object.assign({ yaw: 0.5, pitch: 0.32, dist: 6.2, sx: 0, sy: 0 }, scenes[id].view || {}));
       return cv;
     },
   };

@@ -20,49 +20,6 @@
   };
   const pick = (t, arr) => (arr.find((x) => t < x[0]) || arr[arr.length - 1])[1];
 
-  // ───────── 1) 옴의 법칙: 물탱크와 파이프 ─────────
-  G.anim3d.register({
-    id: 'ohm-water',
-    marks: { base: { label: '전압·저항·전류란', from: 0, to: 6 }, voltage: { label: '전압을 높이면', from: 6, to: 12 }, resistance: { label: '저항이 커지면', from: 12, to: 18 }, both: { label: 'I = V ÷ R', from: 18, to: 24 } },
-    view: { yaw: 0.35, pitch: 0.22, dist: 6.6 },
-    title: '옴의 법칙: 물 파이프 비유',
-    concepts: ['ohm', 'series', 'parallel', 'divider'],
-    duration: 24,
-    captions: [
-      { t0: 0, t1: 6, text: '물탱크의 높이가 전압, 좁은 관이 저항, 흐르는 물의 양이 전류라고 생각해 봐.' },
-      { t0: 6, t1: 12, text: '전압(물의 높이)을 2배로 올리면 전류도 2배가 돼. (전류 ∝ 전압)' },
-      { t0: 12, t1: 18, text: '관이 좁아져서 저항이 2배가 되면 전류는 절반으로 줄어. (전류 ∝ 1/저항)' },
-      { t0: 18, t1: 24, text: '그래서 I = V ÷ R. 전압도 2배, 저항도 2배이면 전류는 처음 그대로야.' },
-    ],
-    draw(g, t) {
-      const V = pick(t, [[6, 1], [12, 2], [18, 1], [24, 2]]);
-      const R = pick(t, [[6, 1], [12, 1], [18, 2], [24, 2]]);
-      const flow = V / R;
-      const phase = cum(t, [[6, 1], [6, 2], [6, 0.5], [6, 1]]) * 0.12;
-      const wide = 0.42;
-      const narrow = wide / R;
-      const hOf = 0.9 * V;
-      // 탱크
-      g.box([-3, 0.8, 0], [1.4, 1.8, 1.2], C.gray, 0.16);
-      g.box([-3, hOf / 2 - 0.1, 0], [1.3, hOf, 1.1], C.water, 0.55);
-      g.text([-3, 2.15, 0], '전압 V (물의 높이)', C.yellow, 0.2);
-      // 관
-      g.cyl([-2.3, 0, 0], [3.4, 0, 0], wide, C.gray, 0.22, 16);
-      g.cyl([0.9, 0, 0], [2, 0, 0], narrow + 0.001, C.red, 0.9, 16);
-      g.text([1.45, 0.85, 0], '저항 R (좁을수록 큼)', C.red, 0.2);
-      // 물방울(전류)
-      for (let i = 0; i < 28; i++) {
-        const x = -2.3 + frac(i / 28 + phase) * 5.7;
-        const r = x > 0.9 && x < 2 ? narrow * 0.55 : wide * 0.5;
-        const a = i * 2.4;
-        g.dot([x, Math.sin(a) * r, Math.cos(a) * r], 0.075, C.water, true);
-      }
-      g.arrow([3.0, -0.8, 0], [3.9, -0.8, 0], C.green, 0.05);
-      g.text([3.4, -1.15, 0], '전류 I', C.green, 0.2);
-      g.hud(0.04, 0.95, 'V = ' + V + '   R = ' + R + '   →   I = V ÷ R = ' + flow, C.white, 22);
-    },
-  });
-
   // ───────── 2) 전류가 만드는 자계: 앙페르 오른나사 ─────────
   G.anim3d.register({
     id: 'wire-field',
