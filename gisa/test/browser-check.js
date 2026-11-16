@@ -1054,6 +1054,13 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.waitForFunction(() => document.getElementById('kg-msg') && /5문제/.test(document.getElementById('kg-msg').textContent));
     check((await page.textContent('#kg-msg')).includes('쓸 수 없는 1개'), '기출: 5문제 가져오고 이상한 1개는 건너뜀');
     check((await page.evaluate(() => GISA.kigeum.count())) === 5, '기출: 보관함 5문제');
+    check((await page.textContent('#kg-msg')).includes('새로 5문제 추가') && (await page.textContent('#kg-msg')).includes('총 5문제'), '기출: 가져온 뒤 "새로 N문제 추가, 총 N문제" 안내');
+    check((await page.textContent('#kg-total')).includes('총 5문제') && (await page.isVisible('#kg-overview')), '기출: 설정에 보관함 총 문제 수와 현황');
+    const ov = await page.evaluate(() => GISA.kigeum.overview());
+    check(ov.total === 5 && Object.values(ov.bySubject).reduce((a, b) => a + b, 0) === 5 && ov.linked + ov.rest === 5, '기출: 과목별 합과 이어진/단락 없는 문제 수의 합이 총계와 같음');
+    await page.setInputFiles('#kg-file', { name: 'bank.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fake)) });
+    await page.waitForFunction(() => /이미 있던 5문제/.test(document.getElementById('kg-msg').textContent));
+    check((await page.evaluate(() => GISA.kigeum.count())) === 5 && (await page.textContent('#kg-msg')).includes('총 5문제'), '기출: 같은 파일을 또 가져와도 중복 없이 합쳐져 총 5문제');
     // 개념 연결
     const cids = await page.evaluate(() => GISA.kigeum.get('t-1').cids);
     check(cids.includes('ac-power'), '기출: 글 속 용어로 개념에 이어 붙임 (' + cids.join(',') + ')');

@@ -118,6 +118,7 @@
       else skipped++;
     });
     if (!good.length) throw new Error('쓸 수 있는 문제가 하나도 없어(' + arr.length + '개 중). 파일을 확인해 줘.');
+    const already = good.filter((g) => byId[g.id]).length; // 이전에 이미 넣어 둔 문제(같은 번호는 덮어써서 중복 없이 합쳐짐)
     const db = await open();
     await new Promise((resolve, reject) => {
       const t = db.transaction(STORE, 'readwrite');
@@ -128,7 +129,7 @@
     });
     db.close();
     await load();
-    return { added: good.length, skipped };
+    return { added: good.length, fresh: good.length - already, existing: already, skipped, total: items.length };
   }
 
   async function clear() {
@@ -229,6 +230,19 @@
     summary,
     get: (id) => byId[id] || null,
     count: () => items.length,
+    // 보관함 전체 현황: 과목별·연도별 문제 수, 개념에 이어진 문제 수
+    overview() {
+      const bySubject = { 1: 0, 2: 0, 3: 0, 4: 0 };
+      const byYear = {};
+      let linked = 0;
+      items.forEach((x) => {
+        bySubject[x.s] = (bySubject[x.s] || 0) + 1;
+        const y = year(x);
+        if (y) byYear[y] = (byYear[y] || 0) + 1;
+        if (x.cids && x.cids.length) linked++;
+      });
+      return { total: items.length, bySubject, byYear: Object.keys(byYear).sort().map((y) => [Number(y), byYear[y]]), linked, rest: items.length - linked };
+    },
     isLoaded: () => loaded,
     conceptCount: (cid) => pool({ cid }).length,
     stat: (id) => stats[id] || null,

@@ -1634,6 +1634,24 @@
   }
 
   // 설정: 내 기출 보관함
+  // 보관함 현황: 과목별·연도별 문제 수, 개념에 이어진 수(이전에 넣은 것과 합쳐서 같은 번호는 한 번만 센다)
+  function kigeumOverview() {
+    const o = KG().overview();
+    const SJ = { 1: '전기자기학', 2: '전력공학', 3: '전기기기', 4: '회로이론·제어공학' };
+    return h(
+      'div',
+      { class: 'kg-overview', id: 'kg-overview' },
+      h('div', { class: 'kg-subj' }, [1, 2, 3, 4].map((k) => h('span', { class: 'tag plain', 'data-subj': k }, SJ[k] + ' ' + (o.bySubject[k] || 0)))),
+      h('p', { class: 'muted small' }, '단락(개념)에 이어진 기출 ' + o.linked + '문제 · 단락이 없는 기출 ' + o.rest + '문제. 같은 문제를 여러 번 가져와도 한 번만 세어서 합쳐져.'),
+      h(
+        'details',
+        { class: 'kg-years' },
+        h('summary', null, '연도별로 보기'),
+        h('div', { class: 'kg-year-grid' }, o.byYear.map(([y, c]) => h('span', { class: 'kg-year' }, h('b', null, y + '년'), ' ' + c + '문제')))
+      )
+    );
+  }
+
   function kigeumSettings() {
     const n = KG().count();
     const yr = KG().years();
@@ -1648,7 +1666,11 @@
         try {
           const text = await f.text();
           const r = await KG().importText(text);
-          view.kgMsg = { ok: true, text: r.added + '문제를 보관함에 넣었어' + (r.skipped ? ' (쓸 수 없는 ' + r.skipped + '개는 건너뜀)' : '') + '.' };
+          view.kgMsg = {
+            ok: true,
+            text:
+              '파일에서 ' + r.added + '문제를 읽었어: 새로 ' + r.fresh + '문제 추가' + (r.existing ? ', 이미 있던 ' + r.existing + '문제는 그대로 합쳐짐' : '') + (r.skipped ? ' (쓸 수 없는 ' + r.skipped + '개는 건너뜀)' : '') + '. 보관함은 이제 총 ' + r.total + '문제야.',
+          };
         } catch (err) {
           view.kgMsg = { ok: false, text: err.message || String(err) };
         }
@@ -1659,7 +1681,8 @@
       'div',
       { class: 'panel kg-bank' },
       h('p', { class: 'muted small' }, '기출·CBT 문제 파일(JSON)을 가져오면 이 브라우저에만 저장돼. 사이트나 서버에는 올라가지 않고, 공유 링크로도 새지 않아. 다른 기기에서 쓰려면 거기서도 가져와야 해.'),
-      h('p', null, n ? h('strong', null, '보관함 ' + n + '문제' + (yr ? ' · ' + yr.min + '~' + yr.max + '년' : '')) : '보관함이 비어 있어.'),
+      h('p', { id: 'kg-total' }, n ? h('strong', null, '보관함 총 ' + n + '문제' + (yr ? ' · ' + yr.min + '~' + yr.max + '년' : '')) : '보관함이 비어 있어.'),
+      n ? kigeumOverview() : null,
       h('div', { class: 'field' }, h('label', { for: 'kg-file' }, '기출 문제 파일 가져오기'), file),
       m && m.text ? h('p', { class: 'msg ' + (m.ok ? 'ok' : 'err'), id: 'kg-msg', role: 'status' }, m.text) : null,
       n

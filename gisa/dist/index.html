@@ -3406,6 +3406,37 @@ body.anim-open {
   border-radius: 0 0 10px 10px;
 }
 
+/* ── 내 기출 보관함 현황 ── */
+.kg-overview {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.kg-subj {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.kg-years summary {
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.kg-year-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+.kg-year {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
 </style>
 </head>
 <body>
@@ -3414,7 +3445,7 @@ body.anim-open {
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794835209821,"label":"11/16 22:20"};</script>
+<script>window.GISA_BUILD={"t":1794836915267,"label":"11/16 22:48"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -28154,6 +28185,14 @@ body.anim-open {
   G.changelog = [
     {
       date: '11/16',
+      title: '기출 보관함 총 문제 수와 현황',
+      items: [
+        '설정 → 내 기출 보관함에 "보관함 총 N문제"와 과목별 문제 수, 단락에 이어진 기출·단락 없는 기출 수, 연도별 문제 수가 보여.',
+        '파일을 가져오면 "새로 N문제 추가, 이미 있던 M문제는 그대로 합쳐짐, 총 T문제"라고 알려 줘. 같은 문제는 번호가 같아서 여러 번 가져와도 중복으로 세지 않아.',
+      ],
+    },
+    {
+      date: '11/16',
       title: 'AI 답변을 천천히 보여 주기',
       items: [
         'AI 답변이 한꺼번에 쏟아지지 않고 글자를 일정한 속도로 나눠서 나와(기본 초당 36자). 설정의 "AI 답변이 나오는 속도"에서 천천히 / 보통 / 바로 를 고를 수 있어.',
@@ -31709,6 +31748,7 @@ body.anim-open {
       else skipped++;
     });
     if (!good.length) throw new Error('쓸 수 있는 문제가 하나도 없어(' + arr.length + '개 중). 파일을 확인해 줘.');
+    const already = good.filter((g) => byId[g.id]).length; // 이전에 이미 넣어 둔 문제(같은 번호는 덮어써서 중복 없이 합쳐짐)
     const db = await open();
     await new Promise((resolve, reject) => {
       const t = db.transaction(STORE, 'readwrite');
@@ -31719,7 +31759,7 @@ body.anim-open {
     });
     db.close();
     await load();
-    return { added: good.length, skipped };
+    return { added: good.length, fresh: good.length - already, existing: already, skipped, total: items.length };
   }
 
   async function clear() {
@@ -31820,6 +31860,19 @@ body.anim-open {
     summary,
     get: (id) => byId[id] || null,
     count: () => items.length,
+    // 보관함 전체 현황: 과목별·연도별 문제 수, 개념에 이어진 문제 수
+    overview() {
+      const bySubject = { 1: 0, 2: 0, 3: 0, 4: 0 };
+      const byYear = {};
+      let linked = 0;
+      items.forEach((x) => {
+        bySubject[x.s] = (bySubject[x.s] || 0) + 1;
+        const y = year(x);
+        if (y) byYear[y] = (byYear[y] || 0) + 1;
+        if (x.cids && x.cids.length) linked++;
+      });
+      return { total: items.length, bySubject, byYear: Object.keys(byYear).sort().map((y) => [Number(y), byYear[y]]), linked, rest: items.length - linked };
+    },
     isLoaded: () => loaded,
     conceptCount: (cid) => pool({ cid }).length,
     stat: (id) => stats[id] || null,
@@ -33647,6 +33700,24 @@ body.anim-open {
   }
 
   // 설정: 내 기출 보관함
+  // 보관함 현황: 과목별·연도별 문제 수, 개념에 이어진 수(이전에 넣은 것과 합쳐서 같은 번호는 한 번만 센다)
+  function kigeumOverview() {
+    const o = KG().overview();
+    const SJ = { 1: '전기자기학', 2: '전력공학', 3: '전기기기', 4: '회로이론·제어공학' };
+    return h(
+      'div',
+      { class: 'kg-overview', id: 'kg-overview' },
+      h('div', { class: 'kg-subj' }, [1, 2, 3, 4].map((k) => h('span', { class: 'tag plain', 'data-subj': k }, SJ[k] + ' ' + (o.bySubject[k] || 0)))),
+      h('p', { class: 'muted small' }, '단락(개념)에 이어진 기출 ' + o.linked + '문제 · 단락이 없는 기출 ' + o.rest + '문제. 같은 문제를 여러 번 가져와도 한 번만 세어서 합쳐져.'),
+      h(
+        'details',
+        { class: 'kg-years' },
+        h('summary', null, '연도별로 보기'),
+        h('div', { class: 'kg-year-grid' }, o.byYear.map(([y, c]) => h('span', { class: 'kg-year' }, h('b', null, y + '년'), ' ' + c + '문제')))
+      )
+    );
+  }
+
   function kigeumSettings() {
     const n = KG().count();
     const yr = KG().years();
@@ -33661,7 +33732,11 @@ body.anim-open {
         try {
           const text = await f.text();
           const r = await KG().importText(text);
-          view.kgMsg = { ok: true, text: r.added + '문제를 보관함에 넣었어' + (r.skipped ? ' (쓸 수 없는 ' + r.skipped + '개는 건너뜀)' : '') + '.' };
+          view.kgMsg = {
+            ok: true,
+            text:
+              '파일에서 ' + r.added + '문제를 읽었어: 새로 ' + r.fresh + '문제 추가' + (r.existing ? ', 이미 있던 ' + r.existing + '문제는 그대로 합쳐짐' : '') + (r.skipped ? ' (쓸 수 없는 ' + r.skipped + '개는 건너뜀)' : '') + '. 보관함은 이제 총 ' + r.total + '문제야.',
+          };
         } catch (err) {
           view.kgMsg = { ok: false, text: err.message || String(err) };
         }
@@ -33672,7 +33747,8 @@ body.anim-open {
       'div',
       { class: 'panel kg-bank' },
       h('p', { class: 'muted small' }, '기출·CBT 문제 파일(JSON)을 가져오면 이 브라우저에만 저장돼. 사이트나 서버에는 올라가지 않고, 공유 링크로도 새지 않아. 다른 기기에서 쓰려면 거기서도 가져와야 해.'),
-      h('p', null, n ? h('strong', null, '보관함 ' + n + '문제' + (yr ? ' · ' + yr.min + '~' + yr.max + '년' : '')) : '보관함이 비어 있어.'),
+      h('p', { id: 'kg-total' }, n ? h('strong', null, '보관함 총 ' + n + '문제' + (yr ? ' · ' + yr.min + '~' + yr.max + '년' : '')) : '보관함이 비어 있어.'),
+      n ? kigeumOverview() : null,
       h('div', { class: 'field' }, h('label', { for: 'kg-file' }, '기출 문제 파일 가져오기'), file),
       m && m.text ? h('p', { class: 'msg ' + (m.ok ? 'ok' : 'err'), id: 'kg-msg', role: 'status' }, m.text) : null,
       n

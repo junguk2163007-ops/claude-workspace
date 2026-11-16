@@ -3393,3 +3393,34 @@ body.anim-open {
   background: var(--surface-2);
   border-radius: 0 0 10px 10px;
 }
+
+/* ── 내 기출 보관함 현황 ── */
+.kg-overview {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.kg-subj {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.kg-years summary {
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.kg-year-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+.kg-year {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
