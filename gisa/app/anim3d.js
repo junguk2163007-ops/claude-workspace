@@ -448,7 +448,7 @@
       playB.textContent = v ? '⏸ 멈춤' : '▶ 재생';
       if (G.animSound) {
         if (v) G.animSound.unlock();
-        else G.animSound.stop();
+        else G.animSound.pause();
       }
       big.hidden = v || st.started;
       if (v) {

@@ -1367,6 +1367,9 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.click('#build-stamp');
     check((await page.evaluate(() => GISA.ui._view.tab)) === 'settings', '업데이트 시각을 누르면 설정 탭으로');
     check(await page.isVisible('#update-log') && (await page.textContent('#update-latest')).includes('최근 업데이트'), '설정에 업데이트 내역과 최근 업데이트 시각');
+    check((await page.$$('#update-log .mxo')).length === 0, '업데이트 내역 화면의 날짜(11/16 16:15)가 분수 모양으로 바뀌지 않음');
+    const dateTxt = await page.evaluate(() => { const d = document.createElement('p'); d.textContent = '열린 버전: 11/16 16:15 · 11/16 16:06'; document.body.appendChild(d); GISA.mathUi.typeset(d); const r = { n: d.querySelectorAll('.mxo').length, t: d.textContent }; d.remove(); return r; });
+    check(dateTxt.n === 0 && dateTxt.t.includes('11/16 16:15'), '다른 곳에서도 "11/16 16:15" 같은 날짜·시각은 분수로 바뀌지 않음');
     check((await page.$$('#update-log .ulog')).length >= 3, '업데이트 시각을 눌러 오면 내역 목록이 바로 보임');
     check(!(await page.isVisible('#update-log .ulog li')), '상세 글은 버튼을 누르기 전에는 안 보임');
     await page.click('#update-log .ulog-more');
@@ -1514,9 +1517,10 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     // 효과음: 재생하면 소리가 만들어지고, 멈추면 꺼지고, 소리 버튼으로 켜고 끔(선택은 기억)
     check(await page.isVisible('#anim-sound') && (await page.textContent('#anim-sound')).includes('켜짐'), '배경음악 버튼이 있고 기본은 켜짐');
     const cnt = await page.evaluate(() => GISA.animSound._count());
-    check(cnt.tracks >= 10, '배경음악 ' + cnt.tracks + '곡');
+    check(cnt.tracks >= 8, '배경음악(ElevenLabs 연주곡) ' + cnt.tracks + '곡이 들어 있음');
     check((await page.evaluate(() => GISA.animSound._state())).cur === 'ohm-water', '재생 중에는 이 장면의 배경음악이 연주됨');
-    check((await page.evaluate(() => GISA.animSound._state())).steps >= 1, '배경음악이 실제로 연주를 시작함');
+    check((await page.evaluate(() => GISA.animSound._state())).track === '모던 피아노', '이 장면에 맞는 곡(모던 피아노)이 걸림');
+    check(await page.evaluate(() => /^data:audio\/mpeg;base64,/.test(GISA.animMusicData.ohm) && GISA.animMusicData.ohm.length > 100000), '곡 파일이 앱 안에 내장되어 있음');
     await page.click('#anim-sound');
     check((await page.textContent('#anim-sound')).includes('꺼짐') && (await page.evaluate(() => GISA.animSound._state())).cur === null, '소리를 끄면 바로 조용해짐');
     check((await page.evaluate(() => localStorage.getItem('gisa-anim-sound'))) === 'off', '소리 끔 선택이 기억됨');

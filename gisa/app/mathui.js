@@ -8,7 +8,7 @@
   // (진행 표시 "16/44", "연속 2/3", "열린 개념 17/42" 같은 화면 장식 글자도 건드리지 않는다)
   const SKIP =
     'script,style,svg,input,textarea,select,option,#calc,#side,.ai-msg,.mxo,.mf,.mf-r,.mf-sup,.cele,.toast,.qid,code.expr,' +
-    '.eyebrow,.stat-line,.state,.banner,.lockbar,.tabs,.tag,.chip,.streak,.lesson-no,.bar,.progress-tile,.field,.switch,.msg,.stat-sub,.nowrap,button.row,.row-head,.ex-head,.ex-result,.ex-sec,.exam-entry,.ex-confirm,#bookmark-panel,#weak-panel,#exam-history,.bm-btn,.cfig';
+    '#update-log,.eyebrow,.stat-line,.state,.banner,.lockbar,.tabs,.tag,.chip,.streak,.lesson-no,.bar,.progress-tile,.field,.switch,.msg,.stat-sub,.nowrap,button.row,.row-head,.ex-head,.ex-result,.ex-sec,.exam-entry,.ex-confirm,#bookmark-panel,#weak-panel,#exam-history,.bm-btn,.cfig';
 
   const plain = (nodes) =>
     nodes
@@ -83,6 +83,7 @@
     while ((n = walker.nextNode())) {
       const v = n.nodeValue;
       if (!v || !/[/√∛^=≈∝]/.test(v)) continue;
+      if (/\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2}/.test(v)) continue; // "11/16 16:15" 같은 날짜·시각은 분수가 아님
       const p = n.parentElement;
       if (!p || p.closest(SKIP)) continue;
       targets.push(n);

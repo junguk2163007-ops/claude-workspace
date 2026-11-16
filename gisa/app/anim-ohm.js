@@ -43,7 +43,7 @@
       resistance: { label: '저항이 커지면', from: 16, to: 24 },
       both: { label: 'I = V ÷ R', from: 24, to: 32 },
     },
-    env: 'workshop',
+    env: 'controlroom',
     bg: ['#2b3442', '#0f141b'],
     view: { yaw: 0.14, pitch: 0.68, dist: 7.7, sx: -0.03, sy: 0.12 },
     poster: 4,
@@ -160,7 +160,7 @@
       g.text([0, 1.6, BZ], '직류 전원장치', C.white, 0.15);
       g.text([0, 1.3, FZ], 'R = ' + fmt(Math.round(R)) + ' Ω', [255, 140, 130], 0.3);
       g.text([0, 1.02, FZ], '방열 저항', C.white, 0.15);
-      g.text([XR - 0.2, 0.7, 1.05], '↓ 전류 방향', C.white, 0.14);
+      g.text([XR - 0.55, 0.7, 1.15], '↓ 전류 방향', C.white, 0.14);
 
       // ── 전류(움직이는 전하) ──
       const path = [[0.4, Y, -0.5], [XR, Y, -0.5], [XR, Y, FZ], [-XR, Y, FZ], [-XR, Y, -0.5], [-0.4, Y, -0.5]];

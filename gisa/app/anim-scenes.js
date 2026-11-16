@@ -23,7 +23,7 @@
   // ───────── 2) 전류가 만드는 자계: 앙페르 오른나사 ─────────
   G.anim3d.register({
     id: 'wire-field',
-    env: 'lab',
+    env: 'lobby',
     marks: { dir: { label: '자계의 방향', from: 0, to: 8 }, current: { label: '전류가 커지면', from: 8, to: 16 }, dist: { label: '거리가 멀어지면', from: 16, to: 24 } },
     view: { yaw: 0.45, pitch: 0.28, dist: 7.6 },
     title: '전류가 만드는 자계 (오른나사 법칙)',
@@ -60,7 +60,7 @@
   // ───────── 3) 플레밍의 왼손 법칙 ─────────
   G.anim3d.register({
     id: 'fleming-left',
-    env: 'lab',
+    env: 'elevatorroom',
     marks: { field: { label: '자계 방향', from: 0, to: 6 }, current: { label: '전류 방향', from: 6, to: 12 }, force: { label: '힘이 생기는 방향', from: 12, to: 20 }, hand: { label: '왼손 법칙', from: 20, to: 28 } },
     view: { yaw: 0.6, pitch: 0.3, dist: 6.6 },
     title: '플레밍의 왼손 법칙 (전자력)',
@@ -109,7 +109,7 @@
   // ───────── 4) 전자 유도 ─────────
   G.anim3d.register({
     id: 'induction',
-    env: 'lab',
+    env: 'lobby',
     marks: { move: { label: '자속이 변할 때', from: 0, to: 8 }, fast: { label: '더 빨리 변할 때', from: 8, to: 16 }, stop: { label: '멈췄을 때', from: 16, to: 24 } },
     view: { yaw: 0.3, pitch: 0.18, dist: 6.2 },
     title: '전자 유도 (패러데이 법칙)',
@@ -159,7 +159,7 @@
   // ───────── 5) 3상 교류와 회전 자계 ─────────
   G.anim3d.register({
     id: 'three-phase-field',
-    env: 'powerhouse',
+    env: 'electricalroom',
     marks: { wave: { label: '3상 파형', from: 0, to: 8 }, coils: { label: '세 코일의 자계', from: 8, to: 16 }, rot: { label: '회전 자계', from: 16, to: 24 } },
     view: { yaw: 0.15, pitch: 0.7, dist: 6.8 },
     title: '3상 교류와 회전 자계',
@@ -221,7 +221,7 @@
   // ───────── 6) 유도 전동기: 슬립 ─────────
   G.anim3d.register({
     id: 'im-slip',
-    env: 'factory',
+    env: 'rooftop',
     marks: { start: { label: '기동 때(슬립 큼)', from: 0, to: 8 }, run: { label: '운전 중(슬립 작음)', from: 8, to: 16 }, sync: { label: '동기 속도(슬립 0)', from: 16, to: 24 } },
     view: { yaw: 0.3, pitch: 0.7, dist: 6.0 },
     title: '유도 전동기의 회전 (슬립)',
@@ -259,7 +259,7 @@
   // ───────── 7) 변압기 ─────────
   G.anim3d.register({
     id: 'transformer',
-    env: 'substation',
+    env: 'electricalroom',
     marks: { flux: { label: '자속이 전압을 만드는 과정', from: 0, to: 8 }, down: { label: '강압(N2 < N1)', from: 8, to: 16 }, up: { label: '승압(N2 > N1)', from: 16, to: 24 } },
     view: { yaw: 0.25, pitch: 0.15, dist: 7.2 },
     title: '변압기: 권수비와 전압',
@@ -314,7 +314,7 @@
   // ───────── 8) 콘덴서의 충전 ─────────
   G.anim3d.register({
     id: 'capacitor',
-    env: 'workshop',
+    env: 'datacenter',
     marks: { charge: { label: '충전되는 중', from: 0, to: 10 }, full: { label: '충전이 끝났을 때', from: 10, to: 16 }, dielec: { label: '유전체를 넣으면', from: 16, to: 24 } },
     view: { yaw: 0.6, pitch: 0.15, dist: 6.6 },
     title: '콘덴서: 충전과 정전용량',
