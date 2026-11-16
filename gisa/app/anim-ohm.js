@@ -46,6 +46,7 @@
       resistance: { label: '저항이 커지면', from: 16, to: 24 },
       both: { label: 'I = V ÷ R', from: 24, to: 32 },
     },
+    env: 'workshop',
     bg: ['#2b3442', '#0f141b'],
     view: { yaw: 0.16, pitch: 0.72, dist: 8.9, sx: -0.07, sy: 0.15 },
     poster: 4,

@@ -7,6 +7,7 @@
   if (typeof document === 'undefined') return;
   const scenes = {};
   const byConcept = {};
+  const envs = {}; // 장면 뒤 배경(anim-env.js)
 
   // ───────── 벡터 ─────────
   const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -306,6 +307,7 @@
     bg.addColorStop(1, (scene.bg && scene.bg[1]) || '#0b1118');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (scene.env && envs[scene.env]) envs[scene.env](ctx, canvas.width, canvas.height, t, view);
     const g = makeG(canvas, view);
     scene.draw(g, t, view);
     g.flush();
@@ -324,6 +326,7 @@
   function close() {
     if (!modal) return;
     cancelAnimationFrame(modal.raf);
+    if (G.animSound) G.animSound.stop();
     document.removeEventListener('keydown', modal.onKey);
     modal.el.remove();
     document.body.classList.remove('anim-open');
@@ -396,7 +399,21 @@
       o.textContent = l;
       speed.append(o);
     });
-    ctl.append(playB, restartB, speed);
+    const soundB = mk('anim-sound', '');
+    const soundLabel = () => {
+      const has = G.animSound && G.animSound.has(cur);
+      const on = G.animSound && G.animSound.enabled();
+      soundB.textContent = on ? '🔊 소리 켜짐' : '🔇 소리 꺼짐';
+      soundB.setAttribute('aria-pressed', String(!!on));
+      soundB.hidden = !G.animSound || !has;
+    };
+    soundB.onclick = () => {
+      if (!G.animSound) return;
+      G.animSound.toggle();
+      G.animSound.unlock();
+      soundLabel();
+    };
+    ctl.append(playB, restartB, soundB, speed);
     const tabs = document.createElement('div');
     tabs.className = 'anim-tabs';
     const hint = document.createElement('p');
@@ -429,6 +446,10 @@
     const setPlaying = (v) => {
       st.playing = v;
       playB.textContent = v ? '⏸ 멈춤' : '▶ 재생';
+      if (G.animSound) {
+        if (v) G.animSound.unlock();
+        else G.animSound.stop();
+      }
       big.hidden = v || st.started;
       if (v) {
         st.started = true;
@@ -446,12 +467,15 @@
           if (st.t >= range.to || st.t < range.from) st.t = range.from;
         } else if (st.t >= sc().duration) st.t = 0;
         paint();
+        if (G.animSound) G.animSound.frame(cur, st.t, true);
       }
       modal.raf = requestAnimationFrame(loop);
     };
     const pick = (id) => {
       if (id !== cur) range = null; // 다른 장면으로 바꾸면 구간 제한을 푼다
       cur = id;
+      if (G.animSound) G.animSound.stop();
+      soundLabel();
       applyView();
       st.t = 0;
       st.started = false;
@@ -544,6 +568,9 @@
 
   G.anim3d = {
     register,
+    registerEnv: (name, fn) => {
+      envs[name] = fn;
+    },
     mapPoint,
     pointInfo,
     openPoint,

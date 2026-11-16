@@ -792,6 +792,11 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
       await page.click('#wiki-back');
       check((await page.textContent('#wiki .wiki-title')) === before, '용어 사전: 뒤로 가면 이전 용어');
       await page.screenshot({ path: path.join(SHOTS, '20-wiki-pc.png') });
+      // 열려 있는 용어를 한 번 더 누르면 해설 창이 꺼짐, 다시 누르면 켜짐
+      await page.click('.qtext .term');
+      check(!(await page.isVisible('#wiki')), '용어 사전: 같은 용어를 한 번 더 누르면 해설 창이 닫힘');
+      await page.click('.qtext .term');
+      check(await page.isVisible('#wiki'), '용어 사전: 다시 누르면 다시 열림');
       await page.keyboard.press('Escape');
       check(!(await page.isVisible('#wiki')), '용어 사전: Esc로 닫힘');
       // 전체 목록과 검색
@@ -1506,7 +1511,19 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     const h1 = await hash();
     check(h1 !== h0 && !(await page.isVisible('#anim-bigplay')), '재생 버튼을 누르면 움직임');
     const cap0 = await page.textContent('#anim-cap');
+    // 효과음: 재생하면 소리가 만들어지고, 멈추면 꺼지고, 소리 버튼으로 켜고 끔(선택은 기억)
+    check(await page.isVisible('#anim-sound') && (await page.textContent('#anim-sound')).includes('켜짐'), '소리 버튼이 있고 기본은 켜짐');
+    const cnt = await page.evaluate(() => GISA.animSound._count());
+    check(cnt.voices + cnt.events >= 10, '효과음 종류 ' + (cnt.voices + cnt.events) + '가지');
+    check((await page.evaluate(() => GISA.animSound._state())).cur === 'ohm-water', '재생 중에는 이 장면의 효과음이 만들어짐');
+    await page.click('#anim-sound');
+    check((await page.textContent('#anim-sound')).includes('꺼짐') && (await page.evaluate(() => GISA.animSound._state())).cur === null, '소리를 끄면 바로 조용해짐');
+    check((await page.evaluate(() => localStorage.getItem('gisa-anim-sound'))) === 'off', '소리 끔 선택이 기억됨');
+    await page.click('#anim-sound');
+    await page.waitForTimeout(300);
+    check((await page.evaluate(() => GISA.animSound._state())).cur === 'ohm-water', '소리를 다시 켜면 다시 들림');
     await page.click('#anim-play');
+    check((await page.evaluate(() => GISA.animSound._state())).cur === null, '일시정지하면 소리도 멈춤');
     check((await page.textContent('#anim-play')).includes('재생'), '멈춤 버튼으로 일시정지');
     const box = await page.evaluate(() => { const r = document.querySelector('.anim-bar').getBoundingClientRect(); return { x: r.left, w: r.width, y: r.top + r.height / 2 }; });
     await page.mouse.click(box.x + box.w * 0.6, box.y);

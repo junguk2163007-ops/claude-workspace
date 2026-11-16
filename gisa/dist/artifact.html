@@ -3243,7 +3243,7 @@ body.anim-open {
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794812220440,"label":"11/16 15:57"};</script>
+<script>window.GISA_BUILD={"t":1794812799074,"label":"11/16 16:06"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -27684,6 +27684,11 @@ body.anim-open {
     const t = e.target && e.target.closest ? e.target.closest('[data-term]') : null;
     if (!t) return;
     e.preventDefault();
+    // 지금 열려 있는 용어를 한 번 더 누르면 해설 창이 닫힌다
+    if (panel && !panel.hidden && stack[stack.length - 1] === 'term:' + t.dataset.term) {
+      close();
+      return;
+    }
     open(t.dataset.term);
   });
   document.addEventListener('keydown', (e) => {
@@ -27693,7 +27698,8 @@ body.anim-open {
     }
     if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('term')) {
       e.preventDefault();
-      open(e.target.dataset.term);
+      if (panel && !panel.hidden && stack[stack.length - 1] === 'term:' + e.target.dataset.term) close();
+      else open(e.target.dataset.term);
     }
   });
 
@@ -27792,6 +27798,16 @@ body.anim-open {
 (function (G) {
   'use strict';
   G.changelog = [
+    {
+      date: '11/16',
+      title: '3D 배경·효과음, 용어 창 토글',
+      items: [
+        '용어를 눌러 오른쪽에 뜬 해설을 같은 용어로 한 번 더 누르면 닫혀.',
+        '3D 장면 뒤에 실제 있을 법한 공간이 깔려: 전자 공작실(옴·콘덴서), 물리 실험실(자계·플레밍·유도), 발전소 배전반실(3상), 공장(유도전동기), 해질녘 변전소(변압기).',
+        '3D 장면마다 효과음이 나와: 전기 웅웅, 자기장 일렁임, 모터 윙, 변압기 웅, 낮은 우르릉, 충전음 같은 계속 나는 소리 6가지와 톡·딸깍·슉·딩동·똑·지직 6가지(총 12가지, 파일 없이 브라우저에서 바로 만들어). 장면 속 일(전압을 올리면 소리가 세지는 것 등)에 맞춰 달라져.',
+        '재생 화면의 "소리" 버튼으로 켜고 끌 수 있고, 선택은 기억해.',
+      ],
+    },
     {
       date: '11/16',
       title: '옴의 법칙 3D 다시 만듦',
@@ -28005,6 +28021,7 @@ body.anim-open {
   if (typeof document === 'undefined') return;
   const scenes = {};
   const byConcept = {};
+  const envs = {}; // 장면 뒤 배경(anim-env.js)
 
   // ───────── 벡터 ─────────
   const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -28304,6 +28321,7 @@ body.anim-open {
     bg.addColorStop(1, (scene.bg && scene.bg[1]) || '#0b1118');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (scene.env && envs[scene.env]) envs[scene.env](ctx, canvas.width, canvas.height, t, view);
     const g = makeG(canvas, view);
     scene.draw(g, t, view);
     g.flush();
@@ -28322,6 +28340,7 @@ body.anim-open {
   function close() {
     if (!modal) return;
     cancelAnimationFrame(modal.raf);
+    if (G.animSound) G.animSound.stop();
     document.removeEventListener('keydown', modal.onKey);
     modal.el.remove();
     document.body.classList.remove('anim-open');
@@ -28394,7 +28413,21 @@ body.anim-open {
       o.textContent = l;
       speed.append(o);
     });
-    ctl.append(playB, restartB, speed);
+    const soundB = mk('anim-sound', '');
+    const soundLabel = () => {
+      const has = G.animSound && G.animSound.has(cur);
+      const on = G.animSound && G.animSound.enabled();
+      soundB.textContent = on ? '🔊 소리 켜짐' : '🔇 소리 꺼짐';
+      soundB.setAttribute('aria-pressed', String(!!on));
+      soundB.hidden = !G.animSound || !has;
+    };
+    soundB.onclick = () => {
+      if (!G.animSound) return;
+      G.animSound.toggle();
+      G.animSound.unlock();
+      soundLabel();
+    };
+    ctl.append(playB, restartB, soundB, speed);
     const tabs = document.createElement('div');
     tabs.className = 'anim-tabs';
     const hint = document.createElement('p');
@@ -28427,6 +28460,10 @@ body.anim-open {
     const setPlaying = (v) => {
       st.playing = v;
       playB.textContent = v ? '⏸ 멈춤' : '▶ 재생';
+      if (G.animSound) {
+        if (v) G.animSound.unlock();
+        else G.animSound.stop();
+      }
       big.hidden = v || st.started;
       if (v) {
         st.started = true;
@@ -28444,12 +28481,15 @@ body.anim-open {
           if (st.t >= range.to || st.t < range.from) st.t = range.from;
         } else if (st.t >= sc().duration) st.t = 0;
         paint();
+        if (G.animSound) G.animSound.frame(cur, st.t, true);
       }
       modal.raf = requestAnimationFrame(loop);
     };
     const pick = (id) => {
       if (id !== cur) range = null; // 다른 장면으로 바꾸면 구간 제한을 푼다
       cur = id;
+      if (G.animSound) G.animSound.stop();
+      soundLabel();
       applyView();
       st.t = 0;
       st.started = false;
@@ -28542,6 +28582,9 @@ body.anim-open {
 
   G.anim3d = {
     register,
+    registerEnv: (name, fn) => {
+      envs[name] = fn;
+    },
     mapPoint,
     pointInfo,
     openPoint,
@@ -28565,6 +28608,538 @@ body.anim-open {
       return cv;
     },
   };
+})(globalThis.GISA);
+
+/* ── app/anim-env.js ── */
+// 3D 장면 뒤에 깔리는 배경(실제 있을 법한 공간). 캔버스 2D로 직접 그린다.
+// 장면은 env: '이름' 으로 고르고, 시간 t 에 따라 불빛이 깜빡이거나 시계 바늘이 움직인다.
+(function (G) {
+  'use strict';
+  if (!G.anim3d || !G.anim3d.registerEnv) return;
+  const TAU = Math.PI * 2;
+  const rnd = (n) => {
+    const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  const rr = (ctx, x, y, w, h, r) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  };
+  const lin = (ctx, x0, y0, x1, y1, stops) => {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    stops.forEach(([o, c]) => g.addColorStop(o, c));
+    return g;
+  };
+  const glow = (ctx, x, y, r, col, a) => {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, col.replace('A', a));
+    g.addColorStop(1, col.replace('A', 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  };
+  // 가운데를 살짝 어둡게 해서 앞의 3D 물체가 잘 보이게
+  const calm = (ctx, W, H, a) => {
+    const g = ctx.createRadialGradient(W / 2, H * 0.55, H * 0.15, W / 2, H * 0.55, W * 0.75);
+    g.addColorStop(0, 'rgba(6,10,16,' + a + ')');
+    g.addColorStop(1, 'rgba(6,10,16,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  };
+
+  // ───────── 전자 공작실: 구멍판 벽, 부품 서랍장, 창문, 스탠드 불빛 ─────────
+  G.anim3d.registerEnv('workshop', (ctx, W, H, t, view) => {
+    const px = (view.yaw || 0) * W * 0.03;
+    ctx.fillStyle = lin(ctx, 0, 0, 0, H, [[0, '#3e4a5c'], [0.6, '#2a3240'], [1, '#1a1f27']]);
+    ctx.fillRect(0, 0, W, H);
+    // 구멍판과 걸려 있는 공구
+    const bx = 0.02 * W + px;
+    const by = 0.05 * H;
+    const bw = 0.33 * W;
+    const bh = 0.36 * H;
+    ctx.fillStyle = '#5b4c3b';
+    rr(ctx, bx, by, bw, bh, 6);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    for (let i = 0; i < 18; i++) for (let j = 0; j < 9; j++) {
+      ctx.beginPath();
+      ctx.arc(bx + 12 + i * (bw - 24) / 17, by + 12 + j * (bh - 24) / 8, 1.8 * W / 960, 0, TAU);
+      ctx.fill();
+    }
+    const u = W / 960;
+    // 망치
+    ctx.fillStyle = '#8a6a44';
+    ctx.fillRect(bx + 40 * u, by + 30 * u, 9 * u, 92 * u);
+    ctx.fillStyle = '#9aa3ad';
+    rr(ctx, bx + 24 * u, by + 22 * u, 44 * u, 18 * u, 3);
+    ctx.fill();
+    // 니퍼(빨간 손잡이)
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 7 * u;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(bx + 100 * u, by + 120 * u);
+    ctx.lineTo(bx + 112 * u, by + 66 * u);
+    ctx.moveTo(bx + 128 * u, by + 120 * u);
+    ctx.lineTo(bx + 114 * u, by + 66 * u);
+    ctx.stroke();
+    ctx.strokeStyle = '#b8c0c8';
+    ctx.lineWidth = 5 * u;
+    ctx.beginPath();
+    ctx.moveTo(bx + 112 * u, by + 66 * u);
+    ctx.lineTo(bx + 106 * u, by + 36 * u);
+    ctx.moveTo(bx + 114 * u, by + 66 * u);
+    ctx.lineTo(bx + 122 * u, by + 36 * u);
+    ctx.stroke();
+    // 드라이버
+    ctx.strokeStyle = '#d4a017';
+    ctx.lineWidth = 10 * u;
+    ctx.beginPath();
+    ctx.moveTo(bx + 160 * u, by + 100 * u);
+    ctx.lineTo(bx + 160 * u, by + 60 * u);
+    ctx.stroke();
+    ctx.strokeStyle = '#b8c0c8';
+    ctx.lineWidth = 3 * u;
+    ctx.beginPath();
+    ctx.moveTo(bx + 160 * u, by + 60 * u);
+    ctx.lineTo(bx + 160 * u, by + 28 * u);
+    ctx.stroke();
+    // 전선 뭉치(구리색 원)
+    for (let k = 0; k < 4; k++) {
+      ctx.strokeStyle = k % 2 ? '#c87533' : '#e0a060';
+      ctx.lineWidth = 3 * u;
+      ctx.beginPath();
+      ctx.arc(bx + 232 * u, by + 76 * u, (14 + k * 5) * u, 0, TAU);
+      ctx.stroke();
+    }
+    // 부품 서랍장
+    const dx = 0.37 * W + px * 0.6;
+    const dy = 0.05 * H;
+    const dw = 0.27 * W;
+    const dh = 0.3 * H;
+    ctx.fillStyle = '#4b5463';
+    rr(ctx, dx, dy, dw, dh, 5);
+    ctx.fill();
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 6; c++) {
+      const cw = (dw - 14 * u) / 6;
+      const ch = (dh - 12 * u) / 4;
+      ctx.fillStyle = '#6a7585';
+      rr(ctx, dx + 7 * u + c * cw + 1.5, dy + 6 * u + r * ch + 1.5, cw - 3, ch - 3, 2);
+      ctx.fill();
+      ctx.fillStyle = '#c8d0da';
+      ctx.fillRect(dx + 7 * u + c * cw + cw / 2 - 5 * u, dy + 6 * u + r * ch + ch / 2 - 1, 10 * u, 2.5 * u);
+      ctx.fillStyle = ['#e6a23c', '#67c23a', '#409eff', '#f56c6c'][(r + c) % 4];
+      ctx.fillRect(dx + 7 * u + c * cw + 4, dy + 6 * u + r * ch + 5, 8 * u, 4 * u);
+    }
+    // 창문
+    const wx = 0.7 * W - px * 0.5;
+    const wy = 0.05 * H;
+    const ww = 0.26 * W;
+    const wh = 0.3 * H;
+    ctx.fillStyle = lin(ctx, 0, wy, 0, wy + wh, [[0, '#7fb0e6'], [1, '#bcd8f0']]);
+    rr(ctx, wx, wy, ww, wh, 4);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(wx + ww * 0.3, wy + wh * 0.35, ww * 0.16, wh * 0.08, 0, 0, TAU);
+    ctx.ellipse(wx + ww * 0.55, wy + wh * 0.28, ww * 0.12, wh * 0.06, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(30,38,50,0.8)';
+    ctx.lineWidth = 6 * u;
+    ctx.strokeRect(wx, wy, ww, wh);
+    ctx.beginPath();
+    ctx.moveTo(wx + ww / 2, wy);
+    ctx.lineTo(wx + ww / 2, wy + wh);
+    ctx.moveTo(wx, wy + wh / 2);
+    ctx.lineTo(wx + ww, wy + wh / 2);
+    ctx.stroke();
+    // 창에서 들어오는 햇빛
+    ctx.fillStyle = 'rgba(255,238,200,0.06)';
+    ctx.beginPath();
+    ctx.moveTo(wx, wy + wh);
+    ctx.lineTo(wx + ww, wy + wh);
+    ctx.lineTo(wx + ww * 0.7, H);
+    ctx.lineTo(wx - ww * 0.5, H);
+    ctx.closePath();
+    ctx.fill();
+    // 스탠드 불빛(살짝 일렁임)
+    glow(ctx, W * 0.5, H * 0.18, H * 0.7, 'rgba(255,214,150,A)', 0.2 + 0.015 * Math.sin(t * 7));
+    // 작업대 앞면
+    ctx.fillStyle = lin(ctx, 0, H * 0.8, 0, H, [[0, 'rgba(18,16,14,0)'], [1, 'rgba(18,16,14,0.8)']]);
+    ctx.fillRect(0, H * 0.8, W, H * 0.2);
+    calm(ctx, W, H, 0.3);
+  });
+
+  // ───────── 물리 실험실: 칠판, 비커 선반, 아날로그 계기 ─────────
+  G.anim3d.registerEnv('lab', (ctx, W, H, t, view) => {
+    const px = (view.yaw || 0) * W * 0.03;
+    const u = W / 960;
+    ctx.fillStyle = lin(ctx, 0, 0, 0, H, [[0, '#35505a'], [0.7, '#223840'], [1, '#141f24']]);
+    ctx.fillRect(0, 0, W, H);
+    // 벽 타일
+    ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 24; i++) {
+      ctx.beginPath();
+      ctx.moveTo((i * W) / 24, 0);
+      ctx.lineTo((i * W) / 24, H * 0.78);
+      ctx.stroke();
+    }
+    for (let j = 0; j < 9; j++) {
+      ctx.beginPath();
+      ctx.moveTo(0, (j * H * 0.78) / 9);
+      ctx.lineTo(W, (j * H * 0.78) / 9);
+      ctx.stroke();
+    }
+    // 칠판
+    const bx = 0.04 * W + px;
+    const by = 0.06 * H;
+    const bw = 0.52 * W;
+    const bh = 0.38 * H;
+    ctx.fillStyle = '#7b5a3a';
+    rr(ctx, bx - 8 * u, by - 8 * u, bw + 16 * u, bh + 16 * u, 6);
+    ctx.fill();
+    ctx.fillStyle = lin(ctx, bx, by, bx + bw, by + bh, [[0, '#24473a'], [1, '#1b362c']]);
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = 'rgba(236,242,236,0.62)';
+    ctx.font = 'italic 600 ' + 30 * u + 'px "Times New Roman", serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('F = B · I · L', bx + 26 * u, by + 54 * u);
+    ctx.fillText('e = −N · ΔΦ / Δt', bx + 26 * u, by + 104 * u);
+    ctx.fillText('H = I / 2πr', bx + 26 * u, by + 154 * u);
+    // 분필 그림: 도선과 자기장 고리
+    ctx.strokeStyle = 'rgba(236,242,236,0.5)';
+    ctx.lineWidth = 2.4 * u;
+    for (let k = 0; k < 3; k++) {
+      ctx.beginPath();
+      ctx.ellipse(bx + bw - 90 * u, by + 96 * u, (24 + k * 20) * u, (10 + k * 8) * u, 0, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(bx + bw - 90 * u, by + 26 * u);
+    ctx.lineTo(bx + bw - 90 * u, by + 170 * u);
+    ctx.stroke();
+    // 분필 받침
+    ctx.fillStyle = '#6a4d30';
+    ctx.fillRect(bx, by + bh, bw, 7 * u);
+    ctx.fillStyle = '#ecf0ec';
+    ctx.fillRect(bx + 30 * u, by + bh - 4 * u, 22 * u, 5 * u);
+    // 벽걸이 아날로그 계기(바늘이 천천히 흔들림)
+    const mx = 0.74 * W - px * 0.5;
+    const my = 0.17 * H;
+    const mr = 0.075 * W;
+    ctx.fillStyle = '#1a2226';
+    ctx.beginPath();
+    ctx.arc(mx, my, mr + 5 * u, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#e9e4d3';
+    ctx.beginPath();
+    ctx.arc(mx, my, mr, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = '#3a3a3a';
+    ctx.lineWidth = 1.5 * u;
+    for (let k = -5; k <= 5; k++) {
+      const a = -Math.PI / 2 + (k * 0.2);
+      ctx.beginPath();
+      ctx.moveTo(mx + Math.cos(a) * mr * 0.78, my + Math.sin(a) * mr * 0.78);
+      ctx.lineTo(mx + Math.cos(a) * mr * 0.95, my + Math.sin(a) * mr * 0.95);
+      ctx.stroke();
+    }
+    const na = -Math.PI / 2 + 0.55 * Math.sin(t * 0.8);
+    ctx.strokeStyle = '#b3261e';
+    ctx.lineWidth = 2.4 * u;
+    ctx.beginPath();
+    ctx.moveTo(mx, my + mr * 0.45);
+    ctx.lineTo(mx + Math.cos(na) * mr * 0.85, my + Math.sin(na) * mr * 0.85 + mr * 0.2);
+    ctx.stroke();
+    // 선반과 비커·플라스크
+    const sx = 0.62 * W - px * 0.6;
+    const sy = 0.4 * H;
+    ctx.fillStyle = '#8a6a44';
+    ctx.fillRect(sx, sy, 0.35 * W, 8 * u);
+    const flask = (x, col, tall) => {
+      ctx.fillStyle = 'rgba(200,225,235,0.25)';
+      ctx.strokeStyle = 'rgba(210,235,245,0.55)';
+      ctx.lineWidth = 2 * u;
+      ctx.beginPath();
+      ctx.moveTo(x - 9 * u, sy - 58 * u * tall);
+      ctx.lineTo(x - 9 * u, sy - 36 * u * tall);
+      ctx.lineTo(x - 30 * u, sy);
+      ctx.lineTo(x + 30 * u, sy);
+      ctx.lineTo(x + 9 * u, sy - 36 * u * tall);
+      ctx.lineTo(x + 9 * u, sy - 58 * u * tall);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(x - 24 * u, sy - 6 * u);
+      ctx.lineTo(x - 17 * u, sy - 22 * u * tall);
+      ctx.lineTo(x + 17 * u, sy - 22 * u * tall);
+      ctx.lineTo(x + 24 * u, sy - 6 * u);
+      ctx.fill();
+    };
+    flask(sx + 50 * u, 'rgba(70,170,230,0.75)', 1);
+    flask(sx + 130 * u, 'rgba(110,210,120,0.75)', 0.85);
+    flask(sx + 210 * u, 'rgba(240,170,70,0.75)', 1.1);
+    // 바닥(타일 바닥에 비친 빛)
+    ctx.fillStyle = lin(ctx, 0, H * 0.78, 0, H, [[0, '#26343a'], [1, '#0f171b']]);
+    ctx.fillRect(0, H * 0.78, W, H * 0.22);
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.fillRect(0, H * 0.78, W, 3 * u);
+    glow(ctx, W * 0.5, H * 0.15, H * 0.8, 'rgba(235,245,255,A)', 0.1 + 0.01 * Math.sin(t * 11));
+    calm(ctx, W, H, 0.3);
+  });
+
+  // ───────── 발전소 배전반실: 배전반 캐비닛, 케이블 트레이, 안전 줄무늬 ─────────
+  G.anim3d.registerEnv('powerhouse', (ctx, W, H, t, view) => {
+    const px = (view.yaw || 0) * W * 0.03;
+    const u = W / 960;
+    ctx.fillStyle = lin(ctx, 0, 0, 0, H, [[0, '#2c3239'], [0.7, '#1e242a'], [1, '#12161a']]);
+    ctx.fillRect(0, 0, W, H);
+    // 천장 형광등
+    for (let i = 0; i < 4; i++) {
+      const lx = (0.1 + i * 0.24) * W + px * 0.4;
+      glow(ctx, lx + 60 * u, 0.04 * H, 150 * u, 'rgba(210,235,255,A)', 0.22);
+      ctx.fillStyle = '#e9f3ff';
+      rr(ctx, lx, 0.02 * H, 120 * u, 8 * u, 3);
+      ctx.fill();
+    }
+    // 케이블 트레이
+    ctx.fillStyle = '#59616b';
+    ctx.fillRect(0, 0.11 * H, W, 7 * u);
+    for (let i = 0; i < 40; i++) {
+      ctx.fillStyle = i % 5 === 0 ? '#c0392b' : i % 3 === 0 ? '#c87533' : '#16191d';
+      ctx.fillRect(i * (W / 40) + 2, 0.095 * H, W / 40 - 5, 9 * u);
+    }
+    // 배전반 캐비닛 줄
+    const base = 0.7 * H;
+    for (let i = 0; i < 9; i++) {
+      const cw = 0.105 * W;
+      const x = 0.02 * W + i * (cw + 0.008 * W) + px * 0.5;
+      const h = 0.4 * H;
+      ctx.fillStyle = lin(ctx, x, 0, x + cw, 0, [[0, '#6c7886'], [0.5, '#5d6875'], [1, '#4d5662']]);
+      rr(ctx, x, base - h, cw, h, 3);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(10,14,18,0.6)';
+      ctx.lineWidth = 2 * u;
+      ctx.strokeRect(x + 6 * u, base - h + 8 * u, cw - 12 * u, h * 0.45);
+      ctx.strokeRect(x + 6 * u, base - h + h * 0.55, cw - 12 * u, h * 0.38);
+      // 표시등: 초록/주황이 번갈아 깜빡임
+      const on = Math.sin(t * 1.6 + i * 1.7) > -0.2;
+      ctx.fillStyle = on ? '#5ee27b' : '#2c5b38';
+      ctx.beginPath();
+      ctx.arc(x + cw * 0.28, base - h + h * 0.12, 4 * u, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = i % 3 === 0 && Math.sin(t * 3 + i) > 0 ? '#ffb347' : '#5e4524';
+      ctx.beginPath();
+      ctx.arc(x + cw * 0.5, base - h + h * 0.12, 4 * u, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#c0c8d2';
+      ctx.fillRect(x + cw * 0.8, base - h * 0.42, 4 * u, h * 0.2);
+      // 위험 표지
+      if (i % 2 === 0) {
+        ctx.fillStyle = '#f4c20d';
+        ctx.beginPath();
+        ctx.moveTo(x + cw * 0.5, base - h * 0.34);
+        ctx.lineTo(x + cw * 0.5 + 9 * u, base - h * 0.34 + 16 * u);
+        ctx.lineTo(x + cw * 0.5 - 9 * u, base - h * 0.34 + 16 * u);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    // 바닥과 안전 줄무늬
+    ctx.fillStyle = lin(ctx, 0, base, 0, H, [[0, '#2a2e33'], [1, '#101316']]);
+    ctx.fillRect(0, base, W, H - base);
+    for (let i = -2; i < 40; i++) {
+      ctx.fillStyle = i % 2 ? '#f4c20d' : '#1b1d20';
+      ctx.beginPath();
+      ctx.moveTo(i * 30 * u, base + 8 * u);
+      ctx.lineTo(i * 30 * u + 30 * u, base + 8 * u);
+      ctx.lineTo(i * 30 * u + 18 * u, base + 20 * u);
+      ctx.lineTo(i * 30 * u - 12 * u, base + 20 * u);
+      ctx.closePath();
+      ctx.fill();
+    }
+    calm(ctx, W, H, 0.32);
+  });
+
+  // ───────── 공장: 큰 창, 철골 지붕, 컨베이어, 모터 ─────────
+  G.anim3d.registerEnv('factory', (ctx, W, H, t, view) => {
+    const px = (view.yaw || 0) * W * 0.03;
+    const u = W / 960;
+    ctx.fillStyle = lin(ctx, 0, 0, 0, H, [[0, '#3a4148'], [0.65, '#2a3036'], [1, '#161a1e']]);
+    ctx.fillRect(0, 0, W, H);
+    // 큰 공장 창(하늘 + 격자)
+    for (let i = 0; i < 3; i++) {
+      const x = (0.06 + i * 0.32) * W + px * 0.5;
+      const y = 0.1 * H;
+      const w = 0.26 * W;
+      const h = 0.34 * H;
+      ctx.fillStyle = lin(ctx, 0, y, 0, y + h, [[0, '#9fbbd3'], [1, '#dbe8f2']]);
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#1f2429';
+      ctx.lineWidth = 3 * u;
+      for (let k = 0; k <= 4; k++) {
+        ctx.beginPath();
+        ctx.moveTo(x + (k * w) / 4, y);
+        ctx.lineTo(x + (k * w) / 4, y + h);
+        ctx.stroke();
+      }
+      for (let k = 0; k <= 3; k++) {
+        ctx.beginPath();
+        ctx.moveTo(x, y + (k * h) / 3);
+        ctx.lineTo(x + w, y + (k * h) / 3);
+        ctx.stroke();
+      }
+      ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = 'rgba(255,240,205,0.055)';
+      ctx.beginPath();
+      ctx.moveTo(x, y + h);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x + w * 0.5, H);
+      ctx.lineTo(x - w * 0.5, H);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // 철골 트러스
+    ctx.strokeStyle = 'rgba(20,24,28,0.9)';
+    ctx.lineWidth = 4 * u;
+    ctx.beginPath();
+    ctx.moveTo(0, 0.07 * H);
+    ctx.lineTo(W, 0.07 * H);
+    for (let i = 0; i < 24; i++) {
+      ctx.moveTo((i * W) / 24, 0.07 * H);
+      ctx.lineTo(((i + 0.5) * W) / 24, 0.0);
+      ctx.lineTo(((i + 1) * W) / 24, 0.07 * H);
+    }
+    ctx.stroke();
+    // 컨베이어와 상자(천천히 이동)
+    const cy = 0.62 * H;
+    ctx.fillStyle = '#394148';
+    ctx.fillRect(0, cy, W, 0.05 * H);
+    ctx.fillStyle = '#20262b';
+    ctx.fillRect(0, cy + 0.05 * H, W, 0.015 * H);
+    for (let i = 0; i < 6; i++) {
+      const bx = (((i / 6 + t * 0.02) % 1) * 1.1 - 0.05) * W;
+      ctx.fillStyle = '#b98b4e';
+      ctx.fillRect(bx, cy - 0.07 * H, 0.06 * W, 0.07 * H);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(bx, cy - 0.04 * H, 0.06 * W, 3 * u);
+    }
+    // 멀리 있는 전동기와 설비
+    ctx.fillStyle = '#2e5a8a';
+    rr(ctx, 0.08 * W + px * 0.3, cy - 0.2 * H, 0.1 * W, 0.12 * H, 5);
+    ctx.fill();
+    ctx.fillStyle = '#8c98a6';
+    for (let i = 0; i < 5; i++) ctx.fillRect(0.08 * W + px * 0.3 + i * 0.02 * W + 4 * u, cy - 0.2 * H + 6 * u, 5 * u, 0.12 * H - 12 * u);
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(0.82 * W - px * 0.3, cy - 0.27 * H, 0.1 * W, 0.19 * H);
+    ctx.fillStyle = '#232a31';
+    ctx.fillRect(0.835 * W - px * 0.3, cy - 0.25 * H, 0.07 * W, 0.07 * H);
+    // 바닥
+    ctx.fillStyle = lin(ctx, 0, 0.74 * H, 0, H, [[0, '#30353a'], [1, '#101316']]);
+    ctx.fillRect(0, 0.74 * H, W, 0.26 * H);
+    ctx.fillStyle = '#e1b12c';
+    ctx.fillRect(0, 0.78 * H, W, 4 * u);
+    calm(ctx, W, H, 0.3);
+  });
+
+  // ───────── 변전소의 해질녘: 노을, 전봇대와 전선, 철탑 ─────────
+  G.anim3d.registerEnv('substation', (ctx, W, H, t, view) => {
+    const px = (view.yaw || 0) * W * 0.03;
+    const u = W / 960;
+    const hz = 0.62 * H;
+    ctx.fillStyle = lin(ctx, 0, 0, 0, hz, [[0, '#141a38'], [0.55, '#5b4470'], [0.85, '#d97b5b'], [1, '#f2b06a']]);
+    ctx.fillRect(0, 0, W, hz);
+    for (let i = 0; i < 40; i++) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.25 + 0.35 * rnd(i + 7) * (0.7 + 0.3 * Math.sin(t * 2 + i))) + ')';
+      ctx.fillRect(rnd(i) * W, rnd(i + 99) * hz * 0.5, 1.6 * u, 1.6 * u);
+    }
+    glow(ctx, W * 0.22 + px, hz, W * 0.45, 'rgba(255,190,110,A)', 0.4);
+    // 먼 산
+    ctx.fillStyle = '#1d2233';
+    ctx.beginPath();
+    ctx.moveTo(0, hz);
+    for (let i = 0; i <= 24; i++) ctx.lineTo((i * W) / 24, hz - (14 + 26 * Math.abs(Math.sin(i * 1.3 + 0.5))) * u);
+    ctx.lineTo(W, hz);
+    ctx.closePath();
+    ctx.fill();
+    // 도시 불빛
+    for (let i = 0; i < 70; i++) {
+      ctx.fillStyle = 'rgba(255,214,140,' + (0.4 + 0.4 * rnd(i + 3)) + ')';
+      ctx.fillRect(rnd(i + 11) * W, hz - 2 * u - rnd(i + 41) * 8 * u, 2 * u, 2 * u);
+    }
+    // 땅
+    ctx.fillStyle = lin(ctx, 0, hz, 0, H, [[0, '#1b2420'], [1, '#0a0e0c']]);
+    ctx.fillRect(0, hz, W, H - hz);
+    // 철탑(오른쪽 먼 곳)
+    const tx = 0.86 * W - px * 0.6;
+    ctx.strokeStyle = '#10151c';
+    ctx.lineWidth = 3 * u;
+    ctx.beginPath();
+    ctx.moveTo(tx - 22 * u, hz);
+    ctx.lineTo(tx - 4 * u, hz - 130 * u);
+    ctx.lineTo(tx + 4 * u, hz - 130 * u);
+    ctx.lineTo(tx + 22 * u, hz);
+    ctx.moveTo(tx - 40 * u, hz - 112 * u);
+    ctx.lineTo(tx + 40 * u, hz - 112 * u);
+    ctx.moveTo(tx - 30 * u, hz - 88 * u);
+    ctx.lineTo(tx + 30 * u, hz - 88 * u);
+    for (let k = 0; k < 5; k++) {
+      ctx.moveTo(tx - 20 * u + k * 2, hz - k * 24 * u);
+      ctx.lineTo(tx + 20 * u - k * 2, hz - (k + 1) * 24 * u);
+    }
+    ctx.stroke();
+    // 전봇대 줄(원근으로 점점 작아짐)과 늘어진 전선
+    const poles = [];
+    for (let i = 0; i < 6; i++) {
+      const k = i / 5;
+      poles.push({ x: (0.02 + 0.2 * i) * W - px * (0.3 + k * 0.3), h: (150 - i * 15) * u, y: hz + 0.1 * H - i * 0.014 * H });
+    }
+    poles.forEach((p, i) => {
+      ctx.strokeStyle = '#0b0f14';
+      ctx.lineWidth = Math.max(2, (7 - i) * u);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x, p.y - p.h);
+      ctx.stroke();
+      ctx.lineWidth = Math.max(2, (4 - i * 0.4) * u);
+      ctx.beginPath();
+      ctx.moveTo(p.x - 26 * u, p.y - p.h + 14 * u);
+      ctx.lineTo(p.x + 26 * u, p.y - p.h + 14 * u);
+      ctx.stroke();
+      if (i < poles.length - 1) {
+        const q = poles[i + 1];
+        [-20, 0, 20].forEach((o) => {
+          ctx.lineWidth = 1.4 * u;
+          ctx.beginPath();
+          ctx.moveTo(p.x + o * u, p.y - p.h + 14 * u);
+          ctx.quadraticCurveTo((p.x + q.x) / 2 + o * u, (p.y - p.h + q.y - q.h) / 2 + 36 * u, q.x + o * 0.8 * u, q.y - q.h + 14 * u);
+          ctx.stroke();
+        });
+      }
+    });
+    // 울타리
+    ctx.strokeStyle = 'rgba(20,26,22,0.9)';
+    ctx.lineWidth = 1.5 * u;
+    for (let i = 0; i < 60; i++) {
+      ctx.beginPath();
+      ctx.moveTo((i * W) / 60, H * 0.84);
+      ctx.lineTo((i * W) / 60, H * 0.92);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(0, H * 0.855);
+    ctx.lineTo(W, H * 0.855);
+    ctx.moveTo(0, H * 0.905);
+    ctx.lineTo(W, H * 0.905);
+    ctx.stroke();
+    calm(ctx, W, H, 0.22);
+  });
 })(globalThis.GISA);
 
 /* ── app/anim-scenes.js ── */
@@ -28593,6 +29168,7 @@ body.anim-open {
   // ───────── 2) 전류가 만드는 자계: 앙페르 오른나사 ─────────
   G.anim3d.register({
     id: 'wire-field',
+    env: 'lab',
     marks: { dir: { label: '자계의 방향', from: 0, to: 8 }, current: { label: '전류가 커지면', from: 8, to: 16 }, dist: { label: '거리가 멀어지면', from: 16, to: 24 } },
     view: { yaw: 0.45, pitch: 0.28, dist: 7.6 },
     title: '전류가 만드는 자계 (오른나사 법칙)',
@@ -28629,6 +29205,7 @@ body.anim-open {
   // ───────── 3) 플레밍의 왼손 법칙 ─────────
   G.anim3d.register({
     id: 'fleming-left',
+    env: 'lab',
     marks: { field: { label: '자계 방향', from: 0, to: 6 }, current: { label: '전류 방향', from: 6, to: 12 }, force: { label: '힘이 생기는 방향', from: 12, to: 20 }, hand: { label: '왼손 법칙', from: 20, to: 28 } },
     view: { yaw: 0.6, pitch: 0.3, dist: 6.6 },
     title: '플레밍의 왼손 법칙 (전자력)',
@@ -28677,6 +29254,7 @@ body.anim-open {
   // ───────── 4) 전자 유도 ─────────
   G.anim3d.register({
     id: 'induction',
+    env: 'lab',
     marks: { move: { label: '자속이 변할 때', from: 0, to: 8 }, fast: { label: '더 빨리 변할 때', from: 8, to: 16 }, stop: { label: '멈췄을 때', from: 16, to: 24 } },
     view: { yaw: 0.3, pitch: 0.18, dist: 6.2 },
     title: '전자 유도 (패러데이 법칙)',
@@ -28726,6 +29304,7 @@ body.anim-open {
   // ───────── 5) 3상 교류와 회전 자계 ─────────
   G.anim3d.register({
     id: 'three-phase-field',
+    env: 'powerhouse',
     marks: { wave: { label: '3상 파형', from: 0, to: 8 }, coils: { label: '세 코일의 자계', from: 8, to: 16 }, rot: { label: '회전 자계', from: 16, to: 24 } },
     view: { yaw: 0.15, pitch: 0.7, dist: 6.8 },
     title: '3상 교류와 회전 자계',
@@ -28787,6 +29366,7 @@ body.anim-open {
   // ───────── 6) 유도 전동기: 슬립 ─────────
   G.anim3d.register({
     id: 'im-slip',
+    env: 'factory',
     marks: { start: { label: '기동 때(슬립 큼)', from: 0, to: 8 }, run: { label: '운전 중(슬립 작음)', from: 8, to: 16 }, sync: { label: '동기 속도(슬립 0)', from: 16, to: 24 } },
     view: { yaw: 0.3, pitch: 0.7, dist: 6.0 },
     title: '유도 전동기의 회전 (슬립)',
@@ -28824,6 +29404,7 @@ body.anim-open {
   // ───────── 7) 변압기 ─────────
   G.anim3d.register({
     id: 'transformer',
+    env: 'substation',
     marks: { flux: { label: '자속이 전압을 만드는 과정', from: 0, to: 8 }, down: { label: '강압(N2 < N1)', from: 8, to: 16 }, up: { label: '승압(N2 > N1)', from: 16, to: 24 } },
     view: { yaw: 0.25, pitch: 0.15, dist: 7.2 },
     title: '변압기: 권수비와 전압',
@@ -28878,6 +29459,7 @@ body.anim-open {
   // ───────── 8) 콘덴서의 충전 ─────────
   G.anim3d.register({
     id: 'capacitor',
+    env: 'workshop',
     marks: { charge: { label: '충전되는 중', from: 0, to: 10 }, full: { label: '충전이 끝났을 때', from: 10, to: 16 }, dielec: { label: '유전체를 넣으면', from: 16, to: 24 } },
     view: { yaw: 0.6, pitch: 0.15, dist: 6.6 },
     title: '콘덴서: 충전과 정전용량',
@@ -29045,6 +29627,7 @@ body.anim-open {
       resistance: { label: '저항이 커지면', from: 16, to: 24 },
       both: { label: 'I = V ÷ R', from: 24, to: 32 },
     },
+    env: 'workshop',
     bg: ['#2b3442', '#0f141b'],
     view: { yaw: 0.16, pitch: 0.72, dist: 8.9, sx: -0.07, sy: 0.15 },
     poster: 4,
@@ -29321,6 +29904,510 @@ body.anim-open {
       });
     },
   });
+})(globalThis.GISA);
+
+/* ── app/anim-sound.js ── */
+// 3D 장면 효과음. 파일 없이 브라우저의 WebAudio 로 그 자리에서 만든다(전기 웅웅 소리, 모터, 변압기 등 12가지).
+// 소리는 재생 버튼을 눌러야 나고, 플레이어의 "소리" 버튼으로 켜고 끈다(선택은 기억).
+(function (G) {
+  'use strict';
+  if (typeof window === 'undefined') return;
+  const KEY = 'gisa-anim-sound';
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const ease = (x) => {
+    const k = clamp(x, 0, 1);
+    return k * k * (3 - 2 * k);
+  };
+  let on = true;
+  try {
+    on = localStorage.getItem(KEY) !== 'off';
+  } catch (e) {
+    /* 저장소를 못 쓰면 기본값(켜짐) */
+  }
+  let ac = null;
+  let master = null;
+  let noiseBuf = null;
+  let cur = null; // { id, voices, last }
+
+  function ctxOk() {
+    if (ac) return ac;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try {
+      ac = new AC();
+      master = ac.createGain();
+      master.gain.value = 0.55;
+      master.connect(ac.destination);
+      const len = ac.sampleRate * 2;
+      noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      let b = 0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        b = (b + 0.02 * w) / 1.02; // 갈색 잡음
+        d[i] = b * 3.5;
+      }
+    } catch (e) {
+      ac = null;
+    }
+    return ac;
+  }
+  const now = () => ac.currentTime;
+
+  // ───────── 계속 나는 소리(목소리) 6가지 ─────────
+  // 각 목소리는 { set({vol, freq}), stop() }
+  function mkGain() {
+    const g = ac.createGain();
+    g.gain.value = 0;
+    g.connect(master);
+    return g;
+  }
+  const smooth = (param, v, tc) => param.setTargetAtTime(v, now(), tc || 0.06);
+  const voices = {
+    // 1) 전기 웅웅(교류 60 Hz 느낌)
+    hum() {
+      const g = mkGain();
+      const lp = ac.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 520;
+      lp.connect(g);
+      const o1 = ac.createOscillator();
+      o1.type = 'sawtooth';
+      o1.frequency.value = 60;
+      const o2 = ac.createOscillator();
+      o2.type = 'sine';
+      o2.frequency.value = 120;
+      const g2 = ac.createGain();
+      g2.gain.value = 0.5;
+      o1.connect(lp);
+      o2.connect(g2);
+      g2.connect(lp);
+      o1.start();
+      o2.start();
+      return {
+        set(p) {
+          smooth(g.gain, p.vol, 0.08);
+          if (p.freq) {
+            smooth(o1.frequency, p.freq, 0.1);
+            smooth(o2.frequency, p.freq * 2, 0.1);
+          }
+        },
+        stop() {
+          [o1, o2].forEach((o) => o.stop(now() + 0.3));
+        },
+        g,
+      };
+    },
+    // 2) 자기장 일렁임(대역 잡음)
+    shimmer() {
+      const g = mkGain();
+      const src = ac.createBufferSource();
+      src.buffer = noiseBuf;
+      src.loop = true;
+      const bp = ac.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = 3;
+      bp.frequency.value = 500;
+      const lfo = ac.createOscillator();
+      lfo.frequency.value = 0.7;
+      const lg = ac.createGain();
+      lg.gain.value = 140;
+      lfo.connect(lg);
+      lg.connect(bp.frequency);
+      src.connect(bp);
+      bp.connect(g);
+      src.start();
+      lfo.start();
+      return {
+        set(p) {
+          smooth(g.gain, p.vol * 2.2, 0.1);
+          if (p.freq) smooth(bp.frequency, p.freq, 0.1);
+        },
+        stop() {
+          src.stop(now() + 0.3);
+          lfo.stop(now() + 0.3);
+        },
+        g,
+      };
+    },
+    // 3) 모터 윙(떨림 있는 톱니파)
+    whirr() {
+      const g = mkGain();
+      const lp = ac.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 1100;
+      lp.connect(g);
+      const o = ac.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = 80;
+      const lfo = ac.createOscillator();
+      lfo.frequency.value = 6;
+      const lg = ac.createGain();
+      lg.gain.value = 3;
+      lfo.connect(lg);
+      lg.connect(o.frequency);
+      o.connect(lp);
+      o.start();
+      lfo.start();
+      return {
+        set(p) {
+          smooth(g.gain, p.vol, 0.1);
+          if (p.freq) {
+            smooth(o.frequency, p.freq, 0.12);
+            smooth(lp.frequency, 500 + p.freq * 5, 0.12);
+          }
+        },
+        stop() {
+          o.stop(now() + 0.3);
+          lfo.stop(now() + 0.3);
+        },
+        g,
+      };
+    },
+    // 4) 변압기 웅(120 Hz 맥동)
+    buzz() {
+      const g = mkGain();
+      const lp = ac.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 650;
+      lp.connect(g);
+      const o1 = ac.createOscillator();
+      o1.type = 'square';
+      o1.frequency.value = 120;
+      const o2 = ac.createOscillator();
+      o2.type = 'sine';
+      o2.frequency.value = 240;
+      const g2 = ac.createGain();
+      g2.gain.value = 0.7;
+      o1.connect(lp);
+      o2.connect(g2);
+      g2.connect(lp);
+      o1.start();
+      o2.start();
+      return {
+        set(p) {
+          smooth(g.gain, p.vol * 0.7, 0.1);
+          if (p.freq) {
+            smooth(o1.frequency, p.freq, 0.1);
+            smooth(o2.frequency, p.freq * 2, 0.1);
+          }
+        },
+        stop() {
+          [o1, o2].forEach((o) => o.stop(now() + 0.3));
+        },
+        g,
+      };
+    },
+    // 5) 낮은 우르릉(큰 기계)
+    rumble() {
+      const g = mkGain();
+      const src = ac.createBufferSource();
+      src.buffer = noiseBuf;
+      src.loop = true;
+      const lp = ac.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 180;
+      const o = ac.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = 46;
+      const og = ac.createGain();
+      og.gain.value = 0.5;
+      src.connect(lp);
+      lp.connect(g);
+      o.connect(og);
+      og.connect(g);
+      src.start();
+      o.start();
+      return {
+        set(p) {
+          smooth(g.gain, p.vol * 1.4, 0.12);
+          if (p.freq) {
+            smooth(o.frequency, p.freq, 0.15);
+            smooth(lp.frequency, p.freq * 4, 0.15);
+          }
+        },
+        stop() {
+          src.stop(now() + 0.3);
+          o.stop(now() + 0.3);
+        },
+        g,
+      };
+    },
+    // 6) 충전음(전압에 따라 올라가는 맑은 소리)
+    tone() {
+      const g = mkGain();
+      const o = ac.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = 300;
+      const lfo = ac.createOscillator();
+      lfo.frequency.value = 5;
+      const lg = ac.createGain();
+      lg.gain.value = 4;
+      lfo.connect(lg);
+      lg.connect(o.frequency);
+      o.connect(g);
+      o.start();
+      lfo.start();
+      return {
+        set(p) {
+          smooth(g.gain, p.vol, 0.08);
+          if (p.freq) smooth(o.frequency, p.freq, 0.1);
+        },
+        stop() {
+          o.stop(now() + 0.3);
+          lfo.stop(now() + 0.3);
+        },
+        g,
+      };
+    },
+  };
+
+  // ───────── 한 번 나는 소리 6가지 ─────────
+  function env(g, a, d, peak) {
+    const t = now();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+  }
+  const events = {
+    // 건전지가 "톡" 끼워지는 소리
+    drop(v) {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(260 * (v || 1), now());
+      o.frequency.exponentialRampToValueAtTime(90, now() + 0.14);
+      env(g, 0.005, 0.16, 0.5);
+      o.connect(g);
+      g.connect(master);
+      o.start();
+      o.stop(now() + 0.3);
+    },
+    // 스위치 "딸깍"
+    click() {
+      const s = ac.createBufferSource();
+      s.buffer = noiseBuf;
+      const hp = ac.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 1800;
+      const g = ac.createGain();
+      env(g, 0.001, 0.05, 0.5);
+      s.connect(hp);
+      hp.connect(g);
+      g.connect(master);
+      s.start(now(), Math.random());
+      s.stop(now() + 0.1);
+    },
+    // 부품을 들어 올리는 "슉"
+    swoosh() {
+      const s = ac.createBufferSource();
+      s.buffer = noiseBuf;
+      const bp = ac.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = 1.2;
+      bp.frequency.setValueAtTime(300, now());
+      bp.frequency.exponentialRampToValueAtTime(2200, now() + 0.35);
+      const g = ac.createGain();
+      env(g, 0.08, 0.35, 0.7);
+      s.connect(bp);
+      bp.connect(g);
+      g.connect(master);
+      s.start(now(), Math.random());
+      s.stop(now() + 0.6);
+    },
+    // 구간이 바뀔 때 부드러운 "딩동"
+    chime() {
+      [660, 880].forEach((f, i) => {
+        const o = ac.createOscillator();
+        const g = ac.createGain();
+        o.type = 'sine';
+        o.frequency.value = f;
+        const t0 = now() + i * 0.13;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.28, t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.9);
+        o.connect(g);
+        g.connect(master);
+        o.start(t0);
+        o.stop(t0 + 1);
+      });
+    },
+    // 전하가 흐르는 "똑"
+    blip(f) {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = 'sine';
+      o.frequency.value = f || 700;
+      env(g, 0.003, 0.07, 0.22);
+      o.connect(g);
+      g.connect(master);
+      o.start();
+      o.stop(now() + 0.15);
+    },
+    // 유도 전류가 생길 때 "지직"
+    zap() {
+      const s = ac.createBufferSource();
+      s.buffer = noiseBuf;
+      const bp = ac.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = 4;
+      bp.frequency.value = 1500 + Math.random() * 1500;
+      const g = ac.createGain();
+      env(g, 0.002, 0.08, 0.45);
+      s.connect(bp);
+      bp.connect(g);
+      g.connect(master);
+      s.start(now(), Math.random());
+      s.stop(now() + 0.15);
+    },
+  };
+
+  // ───────── 장면마다 들려줄 소리 ─────────
+  // voices: t 를 받아 { 목소리이름: {vol, freq} }, ticks: 초당 "똑" 횟수, events: [[시각, 소리, 값]]
+  const stepI = (t, vals) => {
+    let v = vals[0];
+    [8, 16, 24].forEach((b, i) => {
+      v += (vals[i + 1] - vals[i]) * ease((t - b) / 1.2);
+    });
+    return v;
+  };
+  const SCENES = {
+    'ohm-water': {
+      voices: (t) => {
+        const I = stepI(t, [2, 4, 2, 2]);
+        return { hum: { vol: 0.03 + 0.016 * I, freq: 60 } };
+      },
+      ticks: (t) => stepI(t, [2, 4, 2, 2]) * 2.2,
+      events: [[8, 'chime'], [8.85, 'drop', 1], [9.05, 'drop', 1.12], [16, 'chime'], [16.2, 'swoosh'], [17.45, 'click'], [24, 'chime']],
+    },
+    'wire-field': {
+      voices: (t) => {
+        const I = t < 8 ? 1 : 2;
+        const far = t >= 16 ? 0.45 : 1;
+        return { hum: { vol: 0.025 * I * far, freq: 50 }, shimmer: { vol: 0.02 * I * far, freq: 520 + 120 * I } };
+      },
+      events: [[8, 'chime'], [16, 'chime']],
+    },
+    'fleming-left': {
+      voices: (t) => {
+        const f = ease((t - 12) / 2);
+        return { hum: { vol: t >= 6 ? 0.03 : 0.01, freq: 60 }, whirr: { vol: 0.055 * f, freq: 80 + 90 * ease((t - 12) / 8) } };
+      },
+      events: [[6, 'chime'], [6.1, 'click'], [12, 'chime'], [20, 'chime']],
+    },
+    induction: {
+      voices: (t) => ({ shimmer: { vol: t < 8 ? 0.018 : t < 16 ? 0.036 : 0, freq: t < 8 ? 480 : 820 } }),
+      ticks: (t) => (t < 8 ? 2.5 : t < 16 ? 6 : 0),
+      events: [[8, 'chime'], [16, 'chime'], [16.2, 'click']],
+    },
+    'three-phase-field': {
+      voices: (t) => ({ hum: { vol: 0.045, freq: 60 }, rumble: { vol: 0.04 * ease((t - 16) / 3), freq: 55 } }),
+      events: [[8, 'chime'], [16, 'chime']],
+    },
+    'im-slip': {
+      voices: (t) => {
+        const f = t < 8 ? 70 + 100 * ease(t / 8) : t < 16 ? 170 : 170 + 30 * ease((t - 16) / 6);
+        return { whirr: { vol: 0.05, freq: f }, rumble: { vol: t < 16 ? 0.05 : 0.025, freq: 50 } };
+      },
+      events: [[8, 'chime'], [16, 'chime']],
+    },
+    transformer: {
+      voices: (t) => ({ buzz: { vol: t < 8 ? 0.05 : t < 16 ? 0.035 : 0.065, freq: t < 16 ? 120 : 128 } }),
+      events: [[8, 'chime'], [8.1, 'click'], [16, 'chime'], [16.1, 'click']],
+    },
+    capacitor: {
+      voices: (t) => {
+        const q = t < 10 ? 1 - Math.exp(-t / 3) : 1;
+        const jump = t >= 16 ? ease((t - 16) / 1.5) * 160 : 0;
+        return { tone: { vol: t < 10 ? 0.035 : 0.02, freq: 260 + 520 * q + jump }, hum: { vol: 0.012, freq: 60 } };
+      },
+      ticks: (t) => (t < 10 ? 7 * Math.exp(-t / 3) : 0),
+      events: [[10, 'chime'], [16, 'chime'], [16.2, 'swoosh'], [17.6, 'drop', 1]],
+    },
+  };
+
+  // ───────── 바깥에서 쓰는 함수 ─────────
+  function stop() {
+    if (!cur || !ac) {
+      cur = null;
+      return;
+    }
+    const c = cur;
+    cur = null;
+    Object.keys(c.voices).forEach((k) => {
+      const v = c.voices[k];
+      try {
+        smooth(v.g.gain, 0, 0.03);
+        v.stop();
+      } catch (e) {
+        /* 이미 멈춤 */
+      }
+    });
+  }
+  function frame(id, t, playing) {
+    if (!on || !playing || !SCENES[id]) {
+      if (cur) stop();
+      return;
+    }
+    if (!ctxOk()) return;
+    if (ac.state === 'suspended') ac.resume();
+    const sc = SCENES[id];
+    if (!cur || cur.id !== id) {
+      stop();
+      cur = { id, voices: {}, last: t, tick: 0 };
+    }
+    const c = cur;
+    const want = sc.voices(t);
+    Object.keys(want).forEach((k) => {
+      if (!c.voices[k]) c.voices[k] = voices[k]();
+      c.voices[k].set(want[k]);
+    });
+    Object.keys(c.voices).forEach((k) => {
+      if (!want[k]) c.voices[k].set({ vol: 0 });
+    });
+    const dt = t - c.last;
+    if (dt < 0 || dt > 0.6) c.last = t; // 처음으로 되감기거나 건너뛴 경우: 그 사이 효과음은 건너뜀
+    else {
+      (sc.events || []).forEach((e) => {
+        if (e[0] > c.last && e[0] <= t) events[e[1]](e[2]);
+      });
+      if (sc.ticks) {
+        c.tick += sc.ticks(t) * dt;
+        while (c.tick >= 1) {
+          c.tick -= 1;
+          events[id === 'induction' ? 'zap' : 'blip'](id === 'capacitor' ? 500 + 500 * (1 - Math.exp(-t / 3)) : 620 + Math.random() * 120);
+        }
+      }
+      c.last = t;
+    }
+  }
+
+  G.animSound = {
+    enabled: () => on,
+    set(v) {
+      on = !!v;
+      try {
+        localStorage.setItem(KEY, on ? 'on' : 'off');
+      } catch (e) {
+        /* 저장 못 해도 이번엔 적용됨 */
+      }
+      if (!on) stop();
+    },
+    toggle() {
+      G.animSound.set(!on);
+      return on;
+    },
+    // 재생 버튼을 누른 순간(사용자 조작) 오디오를 깨운다
+    unlock() {
+      if (on && ctxOk() && ac.state === 'suspended') ac.resume();
+    },
+    has: (id) => !!SCENES[id],
+    frame,
+    stop,
+    // 시험용: 내부 상태
+    _state: () => ({ on, ctx: ac ? ac.state : 'none', cur: cur ? cur.id : null, voices: cur ? Object.keys(cur.voices) : [] }),
+    _count: () => ({ voices: Object.keys(voices).length, events: Object.keys(events).length }),
+  };
 })(globalThis.GISA);
 
 /* ── app/kigeum-rules.js ── */

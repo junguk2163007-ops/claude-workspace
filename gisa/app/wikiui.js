@@ -286,6 +286,11 @@
     const t = e.target && e.target.closest ? e.target.closest('[data-term]') : null;
     if (!t) return;
     e.preventDefault();
+    // 지금 열려 있는 용어를 한 번 더 누르면 해설 창이 닫힌다
+    if (panel && !panel.hidden && stack[stack.length - 1] === 'term:' + t.dataset.term) {
+      close();
+      return;
+    }
     open(t.dataset.term);
   });
   document.addEventListener('keydown', (e) => {
@@ -295,7 +300,8 @@
     }
     if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('term')) {
       e.preventDefault();
-      open(e.target.dataset.term);
+      if (panel && !panel.hidden && stack[stack.length - 1] === 'term:' + e.target.dataset.term) close();
+      else open(e.target.dataset.term);
     }
   });
 
