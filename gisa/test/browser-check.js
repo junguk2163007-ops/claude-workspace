@@ -1522,6 +1522,23 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.screenshot({ path: path.join(SHOTS, '24-anim3d.png'), fullPage: false });
     await page.keyboard.press('Escape');
     check(!(await page.$('#anim-overlay')), 'Esc 로 닫힘');
+    // 포인트별 ▶ 버튼: 그 포인트에 맞는 구간만 반복 재생
+    await page.click('#tab-units');
+    await page.click('#tab-units');
+    await page.click('.chip[data-subject="circuit"]');
+    await page.click('.lesson-row[data-unit="ohm"]');
+    const pointBtns = await page.$$('.point-card .anim-point');
+    check(pointBtns.length >= 3, '포인트 카드 제목마다 옆에 ▶ 버튼 (' + pointBtns.length + '개)');
+    await page.click('[data-anim="ohm-voltage"]');
+    await page.waitForSelector('#anim-overlay');
+    check((await page.textContent('#anim-overlay .anim-head strong')).includes('전압을 높이면') && (await page.textContent('#anim-cap')).includes('2배로 올리면'), '"전압 구하기" ▶ 는 전압을 높이는 구간부터');
+    await page.click('#anim-bigplay');
+    await page.waitForTimeout(700);
+    check((await page.textContent('#anim-cap')).includes('2배로 올리면'), '구간 안에서만 재생됨');
+    await page.keyboard.press('Escape');
+    await page.click('[data-anim="ohm-resistance"]');
+    check((await page.textContent('#anim-cap')).includes('저항이 2배'), '"저항 구하기" ▶ 는 저항 구간');
+    await page.keyboard.press('Escape');
     check(errors.length === 0, '3D 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }

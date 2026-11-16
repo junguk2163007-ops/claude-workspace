@@ -273,7 +273,8 @@
     if (modal.opener && modal.opener.focus) modal.opener.focus();
     modal = null;
   }
-  function open(cid, startId) {
+  const pointMap = {}; // 포인트 id → { scene, mark }
+  function open(cid, startId, win) {
     const ids = byConcept[cid] || [];
     if (!ids.length) return;
     close();
@@ -352,6 +353,7 @@
     const view = { yaw: 0.5, pitch: 0.32, dist: 7.5 };
     const applyView = () => Object.assign(view, { yaw: 0.5, pitch: 0.32, dist: 6.2 }, scenes[cur].view || {});
     const st = { t: 0, playing: false, last: 0, speed: 1, started: false };
+    let range = win && win.to > win.from ? { from: win.from, to: win.to, label: win.label || '' } : null; // 한 구간만 반복
     const onKey = (e) => {
       if (e.key === 'Escape') close();
     };
@@ -361,7 +363,9 @@
     const paint = () => {
       const s = sc();
       renderFrame(canvas, s, st.t, view);
-      fill.style.width = (100 * st.t) / s.duration + '%';
+      const a0 = range ? range.from : 0;
+      const a1 = range ? range.to : s.duration;
+      fill.style.width = (100 * clamp((st.t - a0) / (a1 - a0), 0, 1)) + '%';
       const c = (s.captions || []).find((x) => st.t >= x.t0 && st.t < x.t1) || (s.captions || [])[s.captions.length - 1];
       cap.textContent = c ? c.text : '';
     };
@@ -381,17 +385,20 @@
         const dt = Math.min(0.1, (now - st.last) / 1000) * st.speed;
         st.last = now;
         st.t += dt;
-        if (st.t >= sc().duration) st.t = 0;
+        if (range) {
+          if (st.t >= range.to || st.t < range.from) st.t = range.from;
+        } else if (st.t >= sc().duration) st.t = 0;
         paint();
       }
       modal.raf = requestAnimationFrame(loop);
     };
     const pick = (id) => {
+      if (id !== cur) range = null; // 다른 장면으로 바꾸면 구간 제한을 푼다
       cur = id;
       applyView();
       st.t = 0;
       st.started = false;
-      title.textContent = '3D로 보기 · ' + sc().title;
+      title.textContent = '3D로 보기 · ' + sc().title + (range && range.label ? ' · ' + range.label : '');
       pop.setAttribute('aria-label', sc().title);
       tabs.textContent = '';
       if (ids.length > 1) {
@@ -405,11 +412,11 @@
           tabs.append(b);
         });
       }
-      st.t = sc().poster != null ? sc().poster : 0;
+      st.t = range ? range.from : sc().poster != null ? sc().poster : 0;
       setPlaying(false);
       big.hidden = false;
       paint();
-      st.t = 0;
+      st.t = range ? range.from : 0;
     };
     // 조작
     closeBtn.onclick = close;
@@ -423,14 +430,15 @@
     big.onclick = () => setPlaying(true);
     playB.onclick = () => setPlaying(!st.playing);
     restartB.onclick = () => {
-      st.t = 0;
+      st.t = range ? range.from : 0;
       setPlaying(true);
       paint();
     };
     speed.onchange = () => (st.speed = Number(speed.value));
     bar.onclick = (e) => {
       const r = bar.getBoundingClientRect();
-      st.t = clamp((e.clientX - r.left) / r.width, 0, 0.999) * sc().duration;
+      const f = clamp((e.clientX - r.left) / r.width, 0, 0.999);
+      st.t = range ? range.from + f * (range.to - range.from) : f * sc().duration;
       paint();
     };
     let drag = null;
@@ -458,8 +466,30 @@
     if (reduce) big.title = '움직임 줄이기 설정이라 자동으로 재생하지 않아. 재생을 눌러 봐.';
   }
 
+  // 단락의 "포인트별로 풀어 보기" 카드: 그 포인트와 가장 가까운 장면·구간을 연결한다
+  function mapPoint(pid, sceneId, mark) {
+    pointMap[pid] = { scene: sceneId, mark: mark || null };
+  }
+  function pointInfo(pid, cid) {
+    const ids = byConcept[cid] || [];
+    if (!ids.length) return null;
+    const m = pointMap[pid];
+    const sceneId = m && scenes[m.scene] ? m.scene : ids[0];
+    const sc = scenes[sceneId];
+    const mk = m && m.mark && sc.marks ? sc.marks[m.mark] : null;
+    return { scene: sceneId, label: mk ? mk.label : '', from: mk ? mk.from : 0, to: mk ? mk.to : sc.duration, mapped: !!mk };
+  }
+  function openPoint(pid, cid) {
+    const info = pointInfo(pid, cid);
+    if (!info) return;
+    open(cid, info.scene, info.mapped ? { from: info.from, to: info.to, label: info.label } : null);
+  }
+
   G.anim3d = {
     register,
+    mapPoint,
+    pointInfo,
+    openPoint,
     open,
     close,
     has: (cid) => !!(byConcept[cid] && byConcept[cid].length),

@@ -3186,6 +3186,14 @@ body.anim-open {
   overflow: hidden;
 }
 
+.anim-point {
+  margin-left: 8px;
+  padding: 1px 9px;
+  vertical-align: middle;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .kg-peek {
   margin-left: 4px;
   padding: 2px 10px;
@@ -3213,7 +3221,7 @@ body.anim-open {
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794790656417,"label":"11/16 09:57"};</script>
+<script>window.GISA_BUILD={"t":1794791548351,"label":"11/16 10:12"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -27764,6 +27772,11 @@ body.anim-open {
   G.changelog = [
     {
       date: '11/16',
+      title: '포인트마다 ▶ 3D 버튼',
+      items: ['"포인트별로 풀어 보기" 카드의 제목 옆마다 ▶ 버튼이 생겼어. 누르면 그 포인트와 가장 가까운 장면의 그 부분만 반복 재생해(예: "전압 구하기"는 전압을 높이는 구간, "저항 구하기"는 저항이 커지는 구간). 3D 장면이 있는 개념의 포인트에만 보여.'],
+    },
+    {
+      date: '11/16',
       title: '3D 설명 애니메이션 (▶ 3D로 보기)',
       items: [
         '단락(과목별)과 레슨 맨 위에 "▶ 3D로 보기" 버튼이 생겼어. 누르면 팝업이 열리고, 재생 버튼을 눌러야 움직여. 20~30초짜리 장면에 설명 글이 같이 나와.',
@@ -28218,7 +28231,8 @@ body.anim-open {
     if (modal.opener && modal.opener.focus) modal.opener.focus();
     modal = null;
   }
-  function open(cid, startId) {
+  const pointMap = {}; // 포인트 id → { scene, mark }
+  function open(cid, startId, win) {
     const ids = byConcept[cid] || [];
     if (!ids.length) return;
     close();
@@ -28297,6 +28311,7 @@ body.anim-open {
     const view = { yaw: 0.5, pitch: 0.32, dist: 7.5 };
     const applyView = () => Object.assign(view, { yaw: 0.5, pitch: 0.32, dist: 6.2 }, scenes[cur].view || {});
     const st = { t: 0, playing: false, last: 0, speed: 1, started: false };
+    let range = win && win.to > win.from ? { from: win.from, to: win.to, label: win.label || '' } : null; // 한 구간만 반복
     const onKey = (e) => {
       if (e.key === 'Escape') close();
     };
@@ -28306,7 +28321,9 @@ body.anim-open {
     const paint = () => {
       const s = sc();
       renderFrame(canvas, s, st.t, view);
-      fill.style.width = (100 * st.t) / s.duration + '%';
+      const a0 = range ? range.from : 0;
+      const a1 = range ? range.to : s.duration;
+      fill.style.width = (100 * clamp((st.t - a0) / (a1 - a0), 0, 1)) + '%';
       const c = (s.captions || []).find((x) => st.t >= x.t0 && st.t < x.t1) || (s.captions || [])[s.captions.length - 1];
       cap.textContent = c ? c.text : '';
     };
@@ -28326,17 +28343,20 @@ body.anim-open {
         const dt = Math.min(0.1, (now - st.last) / 1000) * st.speed;
         st.last = now;
         st.t += dt;
-        if (st.t >= sc().duration) st.t = 0;
+        if (range) {
+          if (st.t >= range.to || st.t < range.from) st.t = range.from;
+        } else if (st.t >= sc().duration) st.t = 0;
         paint();
       }
       modal.raf = requestAnimationFrame(loop);
     };
     const pick = (id) => {
+      if (id !== cur) range = null; // 다른 장면으로 바꾸면 구간 제한을 푼다
       cur = id;
       applyView();
       st.t = 0;
       st.started = false;
-      title.textContent = '3D로 보기 · ' + sc().title;
+      title.textContent = '3D로 보기 · ' + sc().title + (range && range.label ? ' · ' + range.label : '');
       pop.setAttribute('aria-label', sc().title);
       tabs.textContent = '';
       if (ids.length > 1) {
@@ -28350,11 +28370,11 @@ body.anim-open {
           tabs.append(b);
         });
       }
-      st.t = sc().poster != null ? sc().poster : 0;
+      st.t = range ? range.from : sc().poster != null ? sc().poster : 0;
       setPlaying(false);
       big.hidden = false;
       paint();
-      st.t = 0;
+      st.t = range ? range.from : 0;
     };
     // 조작
     closeBtn.onclick = close;
@@ -28368,14 +28388,15 @@ body.anim-open {
     big.onclick = () => setPlaying(true);
     playB.onclick = () => setPlaying(!st.playing);
     restartB.onclick = () => {
-      st.t = 0;
+      st.t = range ? range.from : 0;
       setPlaying(true);
       paint();
     };
     speed.onchange = () => (st.speed = Number(speed.value));
     bar.onclick = (e) => {
       const r = bar.getBoundingClientRect();
-      st.t = clamp((e.clientX - r.left) / r.width, 0, 0.999) * sc().duration;
+      const f = clamp((e.clientX - r.left) / r.width, 0, 0.999);
+      st.t = range ? range.from + f * (range.to - range.from) : f * sc().duration;
       paint();
     };
     let drag = null;
@@ -28403,8 +28424,30 @@ body.anim-open {
     if (reduce) big.title = '움직임 줄이기 설정이라 자동으로 재생하지 않아. 재생을 눌러 봐.';
   }
 
+  // 단락의 "포인트별로 풀어 보기" 카드: 그 포인트와 가장 가까운 장면·구간을 연결한다
+  function mapPoint(pid, sceneId, mark) {
+    pointMap[pid] = { scene: sceneId, mark: mark || null };
+  }
+  function pointInfo(pid, cid) {
+    const ids = byConcept[cid] || [];
+    if (!ids.length) return null;
+    const m = pointMap[pid];
+    const sceneId = m && scenes[m.scene] ? m.scene : ids[0];
+    const sc = scenes[sceneId];
+    const mk = m && m.mark && sc.marks ? sc.marks[m.mark] : null;
+    return { scene: sceneId, label: mk ? mk.label : '', from: mk ? mk.from : 0, to: mk ? mk.to : sc.duration, mapped: !!mk };
+  }
+  function openPoint(pid, cid) {
+    const info = pointInfo(pid, cid);
+    if (!info) return;
+    open(cid, info.scene, info.mapped ? { from: info.from, to: info.to, label: info.label } : null);
+  }
+
   G.anim3d = {
     register,
+    mapPoint,
+    pointInfo,
+    openPoint,
     open,
     close,
     has: (cid) => !!(byConcept[cid] && byConcept[cid].length),
@@ -28448,6 +28491,7 @@ body.anim-open {
   // ───────── 1) 옴의 법칙: 물탱크와 파이프 ─────────
   G.anim3d.register({
     id: 'ohm-water',
+    marks: { base: { label: '전압·저항·전류란', from: 0, to: 6 }, voltage: { label: '전압을 높이면', from: 6, to: 12 }, resistance: { label: '저항이 커지면', from: 12, to: 18 }, both: { label: 'I = V ÷ R', from: 18, to: 24 } },
     view: { yaw: 0.35, pitch: 0.22, dist: 6.6 },
     title: '옴의 법칙: 물 파이프 비유',
     concepts: ['ohm', 'series', 'parallel', 'divider'],
@@ -28490,6 +28534,7 @@ body.anim-open {
   // ───────── 2) 전류가 만드는 자계: 앙페르 오른나사 ─────────
   G.anim3d.register({
     id: 'wire-field',
+    marks: { dir: { label: '자계의 방향', from: 0, to: 8 }, current: { label: '전류가 커지면', from: 8, to: 16 }, dist: { label: '거리가 멀어지면', from: 16, to: 24 } },
     view: { yaw: 0.45, pitch: 0.28, dist: 7.6 },
     title: '전류가 만드는 자계 (오른나사 법칙)',
     concepts: ['em-magfield'],
@@ -28525,6 +28570,7 @@ body.anim-open {
   // ───────── 3) 플레밍의 왼손 법칙 ─────────
   G.anim3d.register({
     id: 'fleming-left',
+    marks: { field: { label: '자계 방향', from: 0, to: 6 }, current: { label: '전류 방향', from: 6, to: 12 }, force: { label: '힘이 생기는 방향', from: 12, to: 20 }, hand: { label: '왼손 법칙', from: 20, to: 28 } },
     view: { yaw: 0.6, pitch: 0.3, dist: 6.6 },
     title: '플레밍의 왼손 법칙 (전자력)',
     concepts: ['em-force'],
@@ -28572,6 +28618,7 @@ body.anim-open {
   // ───────── 4) 전자 유도 ─────────
   G.anim3d.register({
     id: 'induction',
+    marks: { move: { label: '자속이 변할 때', from: 0, to: 8 }, fast: { label: '더 빨리 변할 때', from: 8, to: 16 }, stop: { label: '멈췄을 때', from: 16, to: 24 } },
     view: { yaw: 0.3, pitch: 0.18, dist: 6.2 },
     title: '전자 유도 (패러데이 법칙)',
     concepts: ['em-induction', 'em-inductance'],
@@ -28620,6 +28667,7 @@ body.anim-open {
   // ───────── 5) 3상 교류와 회전 자계 ─────────
   G.anim3d.register({
     id: 'three-phase-field',
+    marks: { wave: { label: '3상 파형', from: 0, to: 8 }, coils: { label: '세 코일의 자계', from: 8, to: 16 }, rot: { label: '회전 자계', from: 16, to: 24 } },
     view: { yaw: 0.15, pitch: 0.7, dist: 6.8 },
     title: '3상 교류와 회전 자계',
     concepts: ['three-phase', 'y-delta', 'symcomp'],
@@ -28680,6 +28728,7 @@ body.anim-open {
   // ───────── 6) 유도 전동기: 슬립 ─────────
   G.anim3d.register({
     id: 'im-slip',
+    marks: { start: { label: '기동 때(슬립 큼)', from: 0, to: 8 }, run: { label: '운전 중(슬립 작음)', from: 8, to: 16 }, sync: { label: '동기 속도(슬립 0)', from: 16, to: 24 } },
     view: { yaw: 0.3, pitch: 0.7, dist: 6.0 },
     title: '유도 전동기의 회전 (슬립)',
     concepts: ['mc-im-slip', 'mc-im-power'],
@@ -28716,6 +28765,7 @@ body.anim-open {
   // ───────── 7) 변압기 ─────────
   G.anim3d.register({
     id: 'transformer',
+    marks: { flux: { label: '자속이 전압을 만드는 과정', from: 0, to: 8 }, down: { label: '강압(N2 < N1)', from: 8, to: 16 }, up: { label: '승압(N2 > N1)', from: 16, to: 24 } },
     view: { yaw: 0.25, pitch: 0.15, dist: 7.2 },
     title: '변압기: 권수비와 전압',
     concepts: ['mc-tr-ratio', 'mc-tr-eff', 'mc-tr-reg'],
@@ -28769,6 +28819,7 @@ body.anim-open {
   // ───────── 8) 콘덴서의 충전 ─────────
   G.anim3d.register({
     id: 'capacitor',
+    marks: { charge: { label: '충전되는 중', from: 0, to: 10 }, full: { label: '충전이 끝났을 때', from: 10, to: 16 }, dielec: { label: '유전체를 넣으면', from: 16, to: 24 } },
     view: { yaw: 0.6, pitch: 0.15, dist: 6.6 },
     title: '콘덴서: 충전과 정전용량',
     concepts: ['em-capacitor', 'transient', 'dielectric'],
@@ -28823,6 +28874,67 @@ body.anim-open {
       g.hud(0.04, 0.95, dielec ? '유전체를 넣음 → C 증가, Q = C·V 증가' : '전류 i 는 점점 줄고 전압 v 는 전지 전압으로', C.white, 20);
     },
   });
+
+  // 포인트 카드의 ▶ 버튼이 여는 장면·구간 (연결 안 된 포인트는 그 개념의 첫 장면을 처음부터)
+  G.anim3d.mapPoint('ohm-current', 'ohm-water', 'both');
+  G.anim3d.mapPoint('ohm-voltage', 'ohm-water', 'voltage');
+  G.anim3d.mapPoint('ohm-resistance', 'ohm-water', 'resistance');
+  G.anim3d.mapPoint('ohm-cells', 'ohm-water', 'base');
+  G.anim3d.mapPoint('s:st-kg-isrc', 'ohm-water', 'base');
+  G.anim3d.mapPoint('series-total', 'ohm-water', 'resistance');
+  G.anim3d.mapPoint('series-current', 'ohm-water', 'both');
+  G.anim3d.mapPoint('em-mag-wire', 'wire-field', 'dir');
+  G.anim3d.mapPoint('em-mag-coil', 'wire-field', 'current');
+  G.anim3d.mapPoint('em-mag-solenoid', 'wire-field', 'current');
+  G.anim3d.mapPoint('em-force-bil', 'fleming-left', 'force');
+  G.anim3d.mapPoint('mg-force', 'fleming-left', 'force');
+  G.anim3d.mapPoint('em-force-parallel', 'fleming-left', 'hand');
+  G.anim3d.mapPoint('s:st-em-parallel-current', 'fleming-left', 'hand');
+  G.anim3d.mapPoint('em-faraday', 'induction', 'fast');
+  G.anim3d.mapPoint('em-motional', 'induction', 'move');
+  G.anim3d.mapPoint('mg-emf', 'induction', 'move');
+  G.anim3d.mapPoint('s:st-kg-mg7', 'induction', 'move');
+  G.anim3d.mapPoint('em-ind-self', 'induction', 'fast');
+  G.anim3d.mapPoint('em-ind-mutual', 'induction', 'move');
+  G.anim3d.mapPoint('em-ind-energy', 'induction', 'move');
+  G.anim3d.mapPoint('tp-power', 'three-phase-field', 'wave');
+  G.anim3d.mapPoint('tp-current', 'three-phase-field', 'wave');
+  G.anim3d.mapPoint('s:st-kg-harm-seq', 'three-phase-field', 'rot');
+  G.anim3d.mapPoint('yd-voltage', 'three-phase-field', 'coils');
+  G.anim3d.mapPoint('yd-current', 'three-phase-field', 'coils');
+  G.anim3d.mapPoint('yd-load', 'three-phase-field', 'coils');
+  G.anim3d.mapPoint('yd-convert', 'three-phase-field', 'coils');
+  G.anim3d.mapPoint('yd-nphase', 'three-phase-field', 'coils');
+  G.anim3d.mapPoint('sc-comp', 'three-phase-field', 'rot');
+  G.anim3d.mapPoint('sc-slg', 'three-phase-field', 'coils');
+  G.anim3d.mapPoint('sc-cur', 'three-phase-field', 'rot');
+  G.anim3d.mapPoint('sc-unbal', 'three-phase-field', 'rot');
+  G.anim3d.mapPoint('mc-im-slip', 'im-slip', 'run');
+  G.anim3d.mapPoint('mc-im-speed', 'im-slip', 'run');
+  G.anim3d.mapPoint('s:st-mc-slip1', 'im-slip', 'start');
+  G.anim3d.mapPoint('mc-im-power', 'im-slip', 'run');
+  G.anim3d.mapPoint('mc-im-torque-v', 'im-slip', 'start');
+  G.anim3d.mapPoint('mc-tr-ratio', 'transformer', 'down');
+  G.anim3d.mapPoint('mc-tr-eff', 'transformer', 'flux');
+  G.anim3d.mapPoint('mc-tr-maxeff', 'transformer', 'flux');
+  G.anim3d.mapPoint('s:st-mc-ironloss', 'transformer', 'flux');
+  G.anim3d.mapPoint('mc-tr-reg', 'transformer', 'down');
+  G.anim3d.mapPoint('em-cap-energy', 'capacitor', 'full');
+  G.anim3d.mapPoint('cap-w', 'capacitor', 'full');
+  G.anim3d.mapPoint('em-cap-plate', 'capacitor', 'dielec');
+  G.anim3d.mapPoint('em-cap-scale', 'capacitor', 'dielec');
+  G.anim3d.mapPoint('cap-glass', 'capacitor', 'dielec');
+  G.anim3d.mapPoint('tr-tau', 'capacitor', 'charge');
+  G.anim3d.mapPoint('tr-step', 'capacitor', 'charge');
+  G.anim3d.mapPoint('tr-inv', 'capacitor', 'charge');
+  G.anim3d.mapPoint('tr-sol', 'capacitor', 'charge');
+  G.anim3d.mapPoint('s:st-tr-rc', 'capacitor', 'full');
+  G.anim3d.mapPoint('s:st-kg-tr1', 'capacitor', 'charge');
+  G.anim3d.mapPoint('di-two', 'capacitor', 'dielec');
+  G.anim3d.mapPoint('di-angle', 'capacitor', 'dielec');
+  G.anim3d.mapPoint('di-pol', 'capacitor', 'dielec');
+  G.anim3d.mapPoint('s:st-di-bound', 'capacitor', 'dielec');
+  G.anim3d.mapPoint('s:st-kg-dielec', 'capacitor', 'dielec');
 })(globalThis.GISA);
 
 /* ── app/kigeum-rules.js ── */
@@ -31905,6 +32017,14 @@ body.anim-open {
     );
   }
 
+  // 포인트 제목 옆 ▶: 그 포인트와 가장 가까운 3D 장면(구간)을 바로 재생
+  function animPointButton(p, cid) {
+    if (!G.anim3d || !G.anim3d.pointInfo) return null;
+    const info = G.anim3d.pointInfo(p.id, cid);
+    if (!info) return null;
+    return h('button', { class: 'btn small soft anim-point', type: 'button', 'data-anim': p.id, title: '3D로 보기' + (info.label ? ' · ' + info.label : ''), 'aria-label': p.t + ' 3D로 보기', onclick: () => G.anim3d.openPoint(p.id, cid) }, '▶');
+  }
+
   // 이 개념에 3D 설명 애니메이션이 있으면 레슨 위에 재생 버튼을 보여 준다
   function animButton(cid) {
     if (!cid || !G.anim3d || !G.anim3d.has(cid)) return null;
@@ -32100,7 +32220,7 @@ body.anim-open {
         return h(
           'section',
           { class: 'point-card', 'data-point': pid },
-          h('div', { class: 'point-head' }, h('span', { class: 'lesson-no' }, i + 1), h('h3', null, p.t), h('span', { class: 'state ' + stt.cls }, stt.text)),
+          h('div', { class: 'point-head' }, h('span', { class: 'lesson-no' }, i + 1), h('h3', null, p.t, animPointButton(p, c.id)), h('span', { class: 'state ' + stt.cls }, stt.text)),
           h('p', { class: 'point-ask' }, p.ask),
           h('div', { class: 'box formula-box' }, h('div', { class: 'box-head' }, h('span', { class: 'eyebrow' }, '풀이 핵심'), h('button', { class: 'btn small soft why-btn', type: 'button', 'data-why': pid, 'aria-label': '풀이 핵심의 원리 자세히 보기', onclick: () => openWhy(p, c.id) }, 'Why?')), h('p', null, p.key)),
           h('div', { class: 'box trap-box' }, h('span', { class: 'eyebrow' }, '자주 틀리는 곳'), h('p', null, p.trap)),

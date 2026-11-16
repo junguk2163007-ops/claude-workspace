@@ -2122,6 +2122,14 @@
     );
   }
 
+  // 포인트 제목 옆 ▶: 그 포인트와 가장 가까운 3D 장면(구간)을 바로 재생
+  function animPointButton(p, cid) {
+    if (!G.anim3d || !G.anim3d.pointInfo) return null;
+    const info = G.anim3d.pointInfo(p.id, cid);
+    if (!info) return null;
+    return h('button', { class: 'btn small soft anim-point', type: 'button', 'data-anim': p.id, title: '3D로 보기' + (info.label ? ' · ' + info.label : ''), 'aria-label': p.t + ' 3D로 보기', onclick: () => G.anim3d.openPoint(p.id, cid) }, '▶');
+  }
+
   // 이 개념에 3D 설명 애니메이션이 있으면 레슨 위에 재생 버튼을 보여 준다
   function animButton(cid) {
     if (!cid || !G.anim3d || !G.anim3d.has(cid)) return null;
@@ -2317,7 +2325,7 @@
         return h(
           'section',
           { class: 'point-card', 'data-point': pid },
-          h('div', { class: 'point-head' }, h('span', { class: 'lesson-no' }, i + 1), h('h3', null, p.t), h('span', { class: 'state ' + stt.cls }, stt.text)),
+          h('div', { class: 'point-head' }, h('span', { class: 'lesson-no' }, i + 1), h('h3', null, p.t, animPointButton(p, c.id)), h('span', { class: 'state ' + stt.cls }, stt.text)),
           h('p', { class: 'point-ask' }, p.ask),
           h('div', { class: 'box formula-box' }, h('div', { class: 'box-head' }, h('span', { class: 'eyebrow' }, '풀이 핵심'), h('button', { class: 'btn small soft why-btn', type: 'button', 'data-why': pid, 'aria-label': '풀이 핵심의 원리 자세히 보기', onclick: () => openWhy(p, c.id) }, 'Why?')), h('p', null, p.key)),
           h('div', { class: 'box trap-box' }, h('span', { class: 'eyebrow' }, '자주 틀리는 곳'), h('p', null, p.trap)),
