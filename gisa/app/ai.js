@@ -588,6 +588,73 @@
   }
 
   // ───────── 사이드(PC): 오른쪽에 고정 ─────────
+  // 옆 질문 창의 왼쪽 가장자리를 잡아끌면 폭이 바뀐다(두 번 누르면 원래 폭, 선택은 이 기기에 기억)
+  const SIDE_W_KEY = 'gisa-side-w';
+  const SIDE_W_DEFAULT = 340;
+  const sideMax = () => Math.max(340, Math.min(900, Math.round(window.innerWidth * 0.6)));
+  function setSideWidth(w, save) {
+    const v = Math.max(300, Math.min(sideMax(), Math.round(w)));
+    document.documentElement.style.setProperty('--side-w', v + 'px');
+    if (save) {
+      try {
+        localStorage.setItem(SIDE_W_KEY, String(v));
+      } catch (e) {
+        /* 저장 못 해도 이번 화면에서는 적용됨 */
+      }
+    }
+    return v;
+  }
+  function mountResizer(host) {
+    let w = SIDE_W_DEFAULT;
+    try {
+      w = Number(localStorage.getItem(SIDE_W_KEY)) || SIDE_W_DEFAULT;
+    } catch (e) {
+      /* 기본 폭 */
+    }
+    setSideWidth(w, false);
+    const bar = el('div', 'side-resize');
+    bar.id = 'side-resize';
+    bar.setAttribute('role', 'separator');
+    bar.setAttribute('aria-orientation', 'vertical');
+    bar.setAttribute('aria-label', '질문 창 폭 조절(끌어서 크기 바꾸기, 두 번 누르면 원래대로)');
+    bar.tabIndex = 0;
+    bar.title = '끌어서 크게·작게 (두 번 누르면 원래대로)';
+    let drag = false;
+    bar.addEventListener('pointerdown', (e) => {
+      drag = true;
+      bar.setPointerCapture(e.pointerId);
+      bar.classList.add('on');
+      document.body.classList.add('side-dragging');
+      e.preventDefault();
+    });
+    bar.addEventListener('pointermove', (e) => {
+      if (drag) setSideWidth(window.innerWidth - e.clientX, false);
+    });
+    const end = (e) => {
+      if (!drag) return;
+      drag = false;
+      bar.classList.remove('on');
+      document.body.classList.remove('side-dragging');
+      setSideWidth(window.innerWidth - e.clientX, true);
+    };
+    bar.addEventListener('pointerup', end);
+    bar.addEventListener('pointercancel', end);
+    bar.addEventListener('dblclick', () => setSideWidth(SIDE_W_DEFAULT, true));
+    bar.addEventListener('keydown', (e) => {
+      const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side-w'), 10) || SIDE_W_DEFAULT;
+      if (e.key === 'ArrowLeft') setSideWidth(cur + 30, true);
+      else if (e.key === 'ArrowRight') setSideWidth(cur - 30, true);
+      else if (e.key === 'Home' || e.key === 'Enter') setSideWidth(SIDE_W_DEFAULT, true);
+      else return;
+      e.preventDefault();
+    });
+    window.addEventListener('resize', () => {
+      const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side-w'), 10) || SIDE_W_DEFAULT;
+      if (cur > sideMax()) setSideWidth(sideMax(), false);
+    });
+    host.appendChild(bar);
+  }
+
   function tryMount() {
     if (!sample || !getCtx || side) return;
     const host = document.getElementById('side');
@@ -723,6 +790,7 @@
         if (!hist.hidden) fillHistory();
       },
     };
+    mountResizer(host);
     document.body.classList.add('has-side');
     applyAvatar();
     side.refresh();

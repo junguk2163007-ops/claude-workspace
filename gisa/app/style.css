@@ -676,7 +676,7 @@ select {
 }
 @media (min-width: 940px) {
   body.has-side {
-    padding-right: 340px;
+    padding-right: var(--side-w, 340px);
   }
   body.has-side #side {
     display: flex;
@@ -686,7 +686,7 @@ select {
     top: env(safe-area-inset-top, 0px);
     right: 0;
     bottom: 0;
-    width: 340px;
+    width: var(--side-w, 340px);
     padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
     background: var(--surface);
     border-left: 1px solid var(--line);
@@ -1398,7 +1398,7 @@ body.calc-dock.has-side .toast {
   left: 50%;
 }
 body.has-side:not(.calc-dock) .toast {
-  left: calc((100% - 340px) / 2);
+  left: calc((100% - var(--side-w, 340px)) / 2);
 }
 /* 액정 */
 .lcd-panel {
@@ -3813,4 +3813,47 @@ details summary {
 .reset-line {
   font-weight: 700;
   color: var(--bad);
+}
+
+/* ── AI 패널: 왼쪽 가장자리를 잡아끌어 폭 조절, 보내기 버튼은 작게 ── */
+.side-resize {
+  position: absolute;
+  left: -5px;
+  top: 0;
+  bottom: 0;
+  width: 11px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 2;
+}
+.side-resize::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  width: 3px;
+  height: 46px;
+  margin-top: -23px;
+  border-radius: 3px;
+  background: var(--line);
+  transition: background-color 0.15s, height 0.15s, margin-top 0.15s;
+}
+.side-resize:hover::after,
+.side-resize.on::after {
+  background: var(--accent);
+  height: 72px;
+  margin-top: -36px;
+}
+body.side-dragging {
+  cursor: col-resize;
+  user-select: none;
+}
+.ai-form .btn.primary,
+.ai-form .btn {
+  align-self: flex-end;
+  flex: none;
+  min-height: 34px;
+  padding: 4px 13px;
+  font-size: calc(13.5px * var(--fs, 1));
+  border-radius: 11px;
 }

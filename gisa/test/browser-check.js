@@ -1505,6 +1505,39 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await ctx.close();
   }
 
+  // ── 2-17x. 옆 AI 창: 잡아끌어 폭 조절, 보내기 버튼 작게 ──
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+    await ctx.addInitScript(() => {
+      window.claude = { use: async (n) => (n === 'sample' ? async (i, o) => ({ text: '응', truncated: false }) : null) };
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(FILE);
+    await page.waitForSelector('#side-resize');
+    const width = () => page.evaluate(() => Math.round(document.getElementById('side').getBoundingClientRect().width));
+    check((await width()) === 340, '옆 AI 창 기본 폭 340px');
+    const hb = await page.evaluate(() => { const r = document.getElementById('side-resize').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await page.mouse.move(hb.x, hb.y);
+    await page.mouse.down();
+    await page.mouse.move(hb.x - 220, hb.y, { steps: 6 });
+    await page.mouse.up();
+    const w2 = await width();
+    check(w2 >= 540 && w2 <= 580, '왼쪽 가장자리를 끌면 창이 넓어짐 (' + w2 + 'px)');
+    check((await page.evaluate(() => Math.round(parseFloat(getComputedStyle(document.body).paddingRight)))) === w2, '가운데 내용이 창 폭만큼 비켜 줌');
+    check((await page.evaluate(() => localStorage.getItem('gisa-side-w'))) === String(w2), '넓힌 폭이 기억됨');
+    check(await noOverflow(page), '넓힌 상태에서 가로 넘침 없음');
+    await page.screenshot({ path: path.join(SHOTS, '26-side-wide.png') });
+    await page.dblclick('#side-resize');
+    check((await width()) === 340, '두 번 누르면 원래 폭으로 돌아감');
+    const sendH = await page.evaluate(() => Math.round(document.querySelector('#side .ai-form button[type="submit"]').getBoundingClientRect().height));
+    check(sendH <= 40, '보내기 버튼이 작음 (높이 ' + sendH + 'px)');
+    check(errors.length === 0, '폭 조절 콘솔 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
+
   // ── 2-17y. AI 답변을 천천히 보여 주기(속도 설정, 멈추기로 바로 전부) ──
   {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' });

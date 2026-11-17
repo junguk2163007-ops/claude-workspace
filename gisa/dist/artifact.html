@@ -680,7 +680,7 @@ select {
 }
 @media (min-width: 940px) {
   body.has-side {
-    padding-right: 340px;
+    padding-right: var(--side-w, 340px);
   }
   body.has-side #side {
     display: flex;
@@ -690,7 +690,7 @@ select {
     top: env(safe-area-inset-top, 0px);
     right: 0;
     bottom: 0;
-    width: 340px;
+    width: var(--side-w, 340px);
     padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
     background: var(--surface);
     border-left: 1px solid var(--line);
@@ -1402,7 +1402,7 @@ body.calc-dock.has-side .toast {
   left: 50%;
 }
 body.has-side:not(.calc-dock) .toast {
-  left: calc((100% - 340px) / 2);
+  left: calc((100% - var(--side-w, 340px)) / 2);
 }
 /* 액정 */
 .lcd-panel {
@@ -3819,13 +3819,56 @@ details summary {
   color: var(--bad);
 }
 
+/* ── AI 패널: 왼쪽 가장자리를 잡아끌어 폭 조절, 보내기 버튼은 작게 ── */
+.side-resize {
+  position: absolute;
+  left: -5px;
+  top: 0;
+  bottom: 0;
+  width: 11px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 2;
+}
+.side-resize::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  width: 3px;
+  height: 46px;
+  margin-top: -23px;
+  border-radius: 3px;
+  background: var(--line);
+  transition: background-color 0.15s, height 0.15s, margin-top 0.15s;
+}
+.side-resize:hover::after,
+.side-resize.on::after {
+  background: var(--accent);
+  height: 72px;
+  margin-top: -36px;
+}
+body.side-dragging {
+  cursor: col-resize;
+  user-select: none;
+}
+.ai-form .btn.primary,
+.ai-form .btn {
+  align-self: flex-end;
+  flex: none;
+  min-height: 34px;
+  padding: 4px 13px;
+  font-size: calc(13.5px * var(--fs, 1));
+  border-radius: 11px;
+}
+
 </style>
 <header class="appbar" id="bar"></header>
 <main><div class="wrap" id="view"></div></main>
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794931668363,"label":"11/18 01:07"};</script>
+<script>window.GISA_BUILD={"t":1794932603715,"label":"11/18 01:23"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -26717,6 +26760,73 @@ details summary {
   }
 
   // ───────── 사이드(PC): 오른쪽에 고정 ─────────
+  // 옆 질문 창의 왼쪽 가장자리를 잡아끌면 폭이 바뀐다(두 번 누르면 원래 폭, 선택은 이 기기에 기억)
+  const SIDE_W_KEY = 'gisa-side-w';
+  const SIDE_W_DEFAULT = 340;
+  const sideMax = () => Math.max(340, Math.min(900, Math.round(window.innerWidth * 0.6)));
+  function setSideWidth(w, save) {
+    const v = Math.max(300, Math.min(sideMax(), Math.round(w)));
+    document.documentElement.style.setProperty('--side-w', v + 'px');
+    if (save) {
+      try {
+        localStorage.setItem(SIDE_W_KEY, String(v));
+      } catch (e) {
+        /* 저장 못 해도 이번 화면에서는 적용됨 */
+      }
+    }
+    return v;
+  }
+  function mountResizer(host) {
+    let w = SIDE_W_DEFAULT;
+    try {
+      w = Number(localStorage.getItem(SIDE_W_KEY)) || SIDE_W_DEFAULT;
+    } catch (e) {
+      /* 기본 폭 */
+    }
+    setSideWidth(w, false);
+    const bar = el('div', 'side-resize');
+    bar.id = 'side-resize';
+    bar.setAttribute('role', 'separator');
+    bar.setAttribute('aria-orientation', 'vertical');
+    bar.setAttribute('aria-label', '질문 창 폭 조절(끌어서 크기 바꾸기, 두 번 누르면 원래대로)');
+    bar.tabIndex = 0;
+    bar.title = '끌어서 크게·작게 (두 번 누르면 원래대로)';
+    let drag = false;
+    bar.addEventListener('pointerdown', (e) => {
+      drag = true;
+      bar.setPointerCapture(e.pointerId);
+      bar.classList.add('on');
+      document.body.classList.add('side-dragging');
+      e.preventDefault();
+    });
+    bar.addEventListener('pointermove', (e) => {
+      if (drag) setSideWidth(window.innerWidth - e.clientX, false);
+    });
+    const end = (e) => {
+      if (!drag) return;
+      drag = false;
+      bar.classList.remove('on');
+      document.body.classList.remove('side-dragging');
+      setSideWidth(window.innerWidth - e.clientX, true);
+    };
+    bar.addEventListener('pointerup', end);
+    bar.addEventListener('pointercancel', end);
+    bar.addEventListener('dblclick', () => setSideWidth(SIDE_W_DEFAULT, true));
+    bar.addEventListener('keydown', (e) => {
+      const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side-w'), 10) || SIDE_W_DEFAULT;
+      if (e.key === 'ArrowLeft') setSideWidth(cur + 30, true);
+      else if (e.key === 'ArrowRight') setSideWidth(cur - 30, true);
+      else if (e.key === 'Home' || e.key === 'Enter') setSideWidth(SIDE_W_DEFAULT, true);
+      else return;
+      e.preventDefault();
+    });
+    window.addEventListener('resize', () => {
+      const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side-w'), 10) || SIDE_W_DEFAULT;
+      if (cur > sideMax()) setSideWidth(sideMax(), false);
+    });
+    host.appendChild(bar);
+  }
+
   function tryMount() {
     if (!sample || !getCtx || side) return;
     const host = document.getElementById('side');
@@ -26852,6 +26962,7 @@ details summary {
         if (!hist.hidden) fillHistory();
       },
     };
+    mountResizer(host);
     document.body.classList.add('has-side');
     applyAvatar();
     side.refresh();
@@ -28563,6 +28674,14 @@ details summary {
 (function (G) {
   'use strict';
   G.changelog = [
+    {
+      date: '11/18',
+      title: 'AI 창 폭 조절, 보내기 버튼 작게',
+      items: [
+        '오른쪽 AI 창의 왼쪽 가장자리(가운데 세로 막대)를 잡아끌면 창을 크게·작게 할 수 있어. 두 번 누르면 원래 폭이고, 정한 폭은 기억해. 키보드 ←/→ 로도 조절돼.',
+        'AI 창의 "보내기" 버튼을 작게 줄였어.',
+      ],
+    },
     {
       date: '11/18',
       title: '전체 디자인 새 단장, 글자 크기 설정, 기록 초기화 두 번 확인',
