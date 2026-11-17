@@ -8,13 +8,13 @@
   const HISTORY_MAX = 500;
   const MASTER_STREAK = 3; // 한 포인트에서 연속 3문제를 맞히면 "익숙해짐"
   // 기기를 넘나들며 합치는 설정. 나머지(화면 테마, 과목 필터, 동기화 켜기)는 기기마다 따로 둔다.
-  const SYNC_SETTINGS = ['skipOrder', 'mixStatic'];
+  const SYNC_SETTINGS = ['skipOrder', 'mixStatic', 'fontScale']; // 계정에 저장돼 기기가 바뀌어도 따라오는 설정
   const DONE_MAX = 500;
 
   function emptyState() {
     return {
       v: 1,
-      settings: { skipOrder: false, mixStatic: true, subject: 'all', focus: 'auto', theme: 'system', allSubjects: true, syncOn: true },
+      settings: { skipOrder: false, mixStatic: true, subject: 'all', focus: 'auto', theme: 'system', fontScale: 1, allSubjects: true, syncOn: true },
       concepts: {},
       streak: { cur: 0, best: 0 },
       total: { n: 0, c: 0 },

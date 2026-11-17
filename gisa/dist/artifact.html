@@ -3,30 +3,31 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@600;700&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400;1,600&display=swap">
 <style>
 /* 레이아웃: 680px 한 기둥, 위에 붙는 탭 바, 문제만 카드로 띄우고 나머지는 평면
-   디자인: 한밤의 남색 + 샴페인 골드. 밝은 테마는 진주빛 바탕에 사파이어, 어두운 테마는 자정의 남색에 골드. */
+   디자인: 아이보리 화이트 + 차콜 + 샴페인 골드(밝은 테마), 따뜻한 먹색 + 골드(어두운 테마). 배경엔 천천히 흐르는 3상 파형. */
 :root {
-  --bg: #f3f2f9;
+  --bg: #faf8f5;
   --surface: #ffffff;
-  --surface-2: #ecebf5;
-  --ink: #14122b;
-  --muted: #5d5a7e;
-  --line: #dcd9ec;
-  --accent: #26379a; /* 사파이어 */
+  --surface-2: #f2eee8;
+  --ink: #1a171c;
+  --muted: #655e66;
+  --line: #e2dcd2;
+  --accent: #26212b; /* 차콜 */
   --accent-ink: #ffffff;
-  --accent-soft: #e7e9fb;
-  --gold: #c08a26;
-  --gold-soft: #f8ecce;
+  --accent-soft: #f1e9d8;
+  --gold: #b3862c;
+  --gold-soft: #f6ebd0;
   --ok: #0f7a55;
   --ok-soft: #ddf3ea;
   --bad: #c22e4b;
   --bad-soft: #fbe3e8;
   --warn: #8b5a00;
   --warn-soft: #faf0d4;
-  --glow-a: rgba(38, 55, 154, 0.1);
-  --glow-b: rgba(192, 138, 38, 0.12);
-  --shadow-sm: 0 1px 2px rgba(20, 18, 60, 0.05), 0 6px 18px rgba(20, 18, 60, 0.06);
-  --shadow-md: 0 2px 4px rgba(20, 18, 60, 0.06), 0 14px 34px rgba(20, 18, 60, 0.12);
-  --grad-accent: linear-gradient(135deg, #3a4fc4 0%, #22318a 100%);
+  --glow-a: rgba(214, 120, 140, 0.1);
+  --glow-b: rgba(192, 138, 38, 0.1);
+  --shadow-sm: 0 1px 2px rgba(30, 22, 40, 0.05), 0 6px 18px rgba(30, 22, 40, 0.06);
+  --shadow-md: 0 2px 4px rgba(30, 22, 40, 0.06), 0 14px 34px rgba(30, 22, 40, 0.12);
+  --grad-accent: linear-gradient(135deg, #3a3340 0%, #17131b 100%);
+  --btn-glow: rgba(30, 22, 40, 0.3);
   --font-display: "Noto Serif KR", "Nanum Myeongjo", "Apple Myungjo", "Batang", serif;
   --font-body: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -34,54 +35,56 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #090c1f;
-    --surface: #121739;
-    --surface-2: #1a2049;
-    --ink: #eff0fa;
-    --muted: #a4a9d0;
-    --line: #272e63;
-    --accent: #ebc26c;
-    --accent-ink: #19130a;
-    --accent-soft: #2c2a4d;
-    --gold: #ebc26c;
-    --gold-soft: #332d24;
-    --ok: #5fd2a3;
-    --ok-soft: #0f2e29;
-    --bad: #ff8fa4;
-    --bad-soft: #3a1830;
-    --warn: #ebc26c;
-    --warn-soft: #332b17;
-    --glow-a: rgba(94, 110, 230, 0.22);
-    --glow-b: rgba(235, 194, 108, 0.1);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.28);
-    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 18px 40px rgba(0, 0, 0, 0.45);
-    --grad-accent: linear-gradient(135deg, #f4d38f 0%, #dcab4a 100%);
+    --bg: #100e13;
+    --surface: #1b181f;
+    --surface-2: #26222b;
+    --ink: #f8f3ec;
+    --muted: #bdb4bd;
+    --line: #3a343f;
+    --accent: #e6bf72;
+    --accent-ink: #1a1306;
+    --accent-soft: #382d1c;
+    --gold: #e6bf72;
+    --gold-soft: #3c3223;
+    --ok: #62d3a2;
+    --ok-soft: #123a2e;
+    --bad: #ff91a8;
+    --bad-soft: #4a1f33;
+    --warn: #e6bf72;
+    --warn-soft: #3f3320;
+    --glow-a: rgba(196, 80, 120, 0.16);
+    --glow-b: rgba(230, 191, 114, 0.12);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 18px 40px rgba(0, 0, 0, 0.5);
+    --grad-accent: linear-gradient(135deg, #f3d595 0%, #d9aa4b 100%);
+    --btn-glow: rgba(230, 191, 114, 0.24);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #090c1f;
-  --surface: #121739;
-  --surface-2: #1a2049;
-  --ink: #eff0fa;
-  --muted: #a4a9d0;
-  --line: #272e63;
-  --accent: #ebc26c;
-  --accent-ink: #19130a;
-  --accent-soft: #2c2a4d;
-  --gold: #ebc26c;
-  --gold-soft: #332d24;
-  --ok: #5fd2a3;
-  --ok-soft: #0f2e29;
-  --bad: #ff8fa4;
-  --bad-soft: #3a1830;
-  --warn: #ebc26c;
-  --warn-soft: #332b17;
-  --glow-a: rgba(94, 110, 230, 0.22);
-  --glow-b: rgba(235, 194, 108, 0.1);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.28);
-  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 18px 40px rgba(0, 0, 0, 0.45);
-  --grad-accent: linear-gradient(135deg, #f4d38f 0%, #dcab4a 100%);
+  --bg: #100e13;
+  --surface: #1b181f;
+  --surface-2: #26222b;
+  --ink: #f8f3ec;
+  --muted: #bdb4bd;
+  --line: #3a343f;
+  --accent: #e6bf72;
+  --accent-ink: #1a1306;
+  --accent-soft: #382d1c;
+  --gold: #e6bf72;
+  --gold-soft: #3c3223;
+  --ok: #62d3a2;
+  --ok-soft: #123a2e;
+  --bad: #ff91a8;
+  --bad-soft: #4a1f33;
+  --warn: #e6bf72;
+  --warn-soft: #3f3320;
+  --glow-a: rgba(196, 80, 120, 0.16);
+  --glow-b: rgba(230, 191, 114, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 18px 40px rgba(0, 0, 0, 0.5);
+  --grad-accent: linear-gradient(135deg, #f3d595 0%, #d9aa4b 100%);
+  --btn-glow: rgba(230, 191, 114, 0.24);
   color-scheme: dark;
 }
 :root[data-theme="light"] {
@@ -102,8 +105,8 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: calc(16px * var(--fs, 1));
+  line-height: 1.62;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
@@ -155,7 +158,7 @@ button:disabled {
   align-items: center;
   gap: 10px;
   font-weight: 700;
-  font-size: 17px;
+  font-size: calc(17px * var(--fs, 1));
   letter-spacing: -0.01em;
 }
 .brand svg {
@@ -167,11 +170,11 @@ button:disabled {
 .brand small {
   font-weight: 500;
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
 }
 .brand .streak {
   margin-left: auto;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-weight: 600;
   color: var(--muted);
   font-family: var(--font-mono);
@@ -239,7 +242,7 @@ button:disabled {
   border-radius: 9px;
   background: var(--accent);
   color: var(--accent-ink);
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   line-height: 18px;
   text-align: center;
   font-family: var(--font-mono);
@@ -253,13 +256,13 @@ main .wrap {
 }
 h2 {
   margin: 4px 0 0;
-  font-size: 22px;
+  font-size: calc(22px * var(--fs, 1));
   line-height: 1.3;
   text-wrap: balance;
 }
 h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
 }
 p {
   margin: 0;
@@ -268,10 +271,10 @@ p {
   color: var(--muted);
 }
 .small {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
 }
 .eyebrow {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -301,7 +304,7 @@ main .wrap > *,
   color: var(--ink);
   padding: 7px 14px;
   border-radius: 999px;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 600;
 }
 .chip[aria-pressed="true"] {
@@ -311,7 +314,7 @@ main .wrap > *,
 }
 .chip .soon {
   font-weight: 500;
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   opacity: 0.75;
   margin-left: 4px;
 }
@@ -321,7 +324,7 @@ main .wrap > *,
   gap: 10px;
 }
 .picker label {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 600;
   color: var(--muted);
   flex: none;
@@ -329,7 +332,7 @@ main .wrap > *,
 select {
   flex: 1;
   min-width: 0;
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   padding: 9px 12px;
   border-radius: 10px;
   border: 1px solid var(--line);
@@ -346,7 +349,7 @@ select {
   border-radius: 12px;
   background: var(--surface);
   border: 1px solid var(--line);
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: var(--muted);
 }
 .lockbar strong {
@@ -359,7 +362,7 @@ select {
 }
 .subject-title {
   margin-top: 18px;
-  font-size: 19px;
+  font-size: calc(19px * var(--fs, 1));
 }
 
 /* ── 모드 배너 ── */
@@ -372,7 +375,7 @@ select {
   border-radius: 12px;
   background: var(--warn-soft);
   color: var(--warn);
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 600;
 }
 .banner .btn {
@@ -394,7 +397,7 @@ select {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
 }
 .tag {
   padding: 2px 9px;
@@ -415,10 +418,10 @@ select {
   margin-left: auto;
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
 }
 .qtext {
-  font-size: 18px;
+  font-size: calc(18px * var(--fs, 1));
   line-height: 1.65;
   font-weight: 500;
   word-break: keep-all;
@@ -439,7 +442,7 @@ select {
   margin: 0 auto;
 }
 .circuit text {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-family: var(--font-mono);
 }
 .circuit .hl {
@@ -463,13 +466,13 @@ select {
   padding: 12px 14px;
   border-radius: 10px;
   background: var(--surface-2);
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   display: grid;
   gap: 6px;
 }
 .formula {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   overflow-wrap: anywhere;
 }
 
@@ -491,7 +494,7 @@ select {
   border: 1.5px solid var(--line);
   border-radius: 12px;
   background: var(--surface);
-  font-size: 17px;
+  font-size: calc(17px * var(--fs, 1));
   font-weight: 500;
   font-family: var(--font-mono);
   overflow-wrap: anywhere;
@@ -508,7 +511,7 @@ select {
   display: grid;
   place-items: center;
   border: 1.5px solid currentColor;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 700;
   color: var(--muted);
   font-family: var(--font-body);
@@ -549,7 +552,7 @@ select {
 }
 .ai-box summary {
   padding: 11px 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 700;
   color: var(--accent);
   cursor: pointer;
@@ -567,7 +570,7 @@ select {
   gap: 6px;
 }
 .ai-chip {
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   padding: 6px 11px;
 }
 .ai-thread {
@@ -582,7 +585,7 @@ select {
 .ai-msg {
   padding: 10px 12px;
   border-radius: 12px;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -607,14 +610,14 @@ select {
 .ai-form input {
   flex: 1;
   min-width: 0;
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--surface);
 }
 .ai-note {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   color: var(--muted);
 }
 
@@ -629,10 +632,10 @@ select {
   gap: 8px;
 }
 .side-head strong {
-  font-size: 17px;
+  font-size: calc(17px * var(--fs, 1));
 }
 .side-ctx {
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   color: var(--muted);
   padding: 6px 10px;
   border-radius: 8px;
@@ -658,7 +661,7 @@ select {
 }
 .ai-hint {
   color: var(--muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   line-height: 1.7;
   padding: 10px 2px;
 }
@@ -669,7 +672,7 @@ select {
   max-height: 120px;
   resize: none;
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid var(--line);
@@ -697,7 +700,7 @@ select {
 
 /* ── 동기화 상태 ── */
 .syncdot {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   color: var(--muted);
 }
 .syncdot.ok {
@@ -712,7 +715,7 @@ select {
   padding: 12px 14px;
   border-radius: 12px;
   font-weight: 700;
-  font-size: 17px;
+  font-size: calc(17px * var(--fs, 1));
 }
 .verdict.ok {
   background: var(--ok-soft);
@@ -725,7 +728,7 @@ select {
 .verdict small {
   display: block;
   font-weight: 500;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: var(--ink);
   margin-top: 2px;
 }
@@ -754,13 +757,13 @@ select {
   color: var(--accent-ink);
   display: grid;
   place-items: center;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-family: var(--font-mono);
   flex: none;
 }
 .ex .lead {
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -785,7 +788,7 @@ select {
   padding: 12px 14px;
   border-radius: 10px;
   background: var(--accent-soft);
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
 }
 .per-choice {
   list-style: none;
@@ -802,7 +805,7 @@ select {
 .per-choice .pc-mark {
   grid-row: span 2;
   font-weight: 700;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   padding-top: 2px;
 }
 .per-choice .pc-mark.ok {
@@ -818,18 +821,18 @@ select {
   overflow-wrap: anywhere;
 }
 .per-choice .pc-why {
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   min-width: 0;
 }
 .per-choice .mine {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   font-weight: 700;
   color: var(--muted);
   margin-left: 6px;
   font-family: var(--font-body);
 }
 .note {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: var(--muted);
 }
 
@@ -844,7 +847,7 @@ select {
   border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--surface);
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   font-weight: 600;
   text-align: center;
 }
@@ -866,7 +869,7 @@ select {
 .btn.small {
   min-height: 36px;
   padding: 6px 12px;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
 }
 .btn:disabled {
   opacity: 0.45;
@@ -924,7 +927,7 @@ select {
   gap: 8px;
 }
 .state {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 6px;
@@ -938,7 +941,7 @@ select {
   color: var(--muted);
 }
 .req {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: var(--muted);
   display: grid;
   gap: 2px;
@@ -948,7 +951,7 @@ select {
 }
 details summary {
   cursor: pointer;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 600;
   color: var(--accent);
 }
@@ -956,7 +959,7 @@ details[open] summary {
   margin-bottom: 6px;
 }
 details p {
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
 }
 details p + p {
   margin-top: 8px;
@@ -976,12 +979,12 @@ details p + p {
 }
 .tile .v {
   font-family: var(--font-mono);
-  font-size: 26px;
+  font-size: calc(26px * var(--fs, 1));
   font-weight: 600;
   line-height: 1.2;
 }
 .tile .k {
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   color: var(--muted);
 }
 .bar {
@@ -1003,7 +1006,7 @@ details p + p {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: var(--muted);
   font-family: var(--font-mono);
 }
@@ -1051,7 +1054,7 @@ details p + p {
 }
 input[type="text"],
 textarea {
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   padding: 9px 12px;
   border-radius: 10px;
   border: 1px solid var(--line);
@@ -1060,12 +1063,12 @@ textarea {
 }
 textarea {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   min-height: 90px;
   resize: vertical;
 }
 .msg {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
 }
 .msg.err {
   color: var(--bad);
@@ -1094,7 +1097,7 @@ textarea {
   border-radius: 12px;
   background: var(--ink);
   color: var(--bg);
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 600;
   z-index: 20;
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.2);
@@ -1138,7 +1141,7 @@ textarea {
   background: var(--surface-2);
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-weight: 600;
 }
 .back {
@@ -1150,7 +1153,7 @@ textarea {
   min-width: 0;
 }
 .lesson h2 {
-  font-size: 24px;
+  font-size: calc(24px * var(--fs, 1));
 }
 .lesson .goal {
   padding: 12px 14px;
@@ -1165,11 +1168,11 @@ textarea {
   min-width: 0;
 }
 .lesson-sec h3 {
-  font-size: 17px;
+  font-size: calc(17px * var(--fs, 1));
 }
 .lesson-sec p,
 .lesson-sec li {
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   line-height: 1.75;
   word-break: keep-all;
   overflow-wrap: anywhere;
@@ -1246,7 +1249,7 @@ textarea {
   gap: 8px;
 }
 .pt-list li {
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
@@ -1268,10 +1271,10 @@ textarea {
 .point-head h3 {
   flex: 1 1 140px;
   min-width: 0;
-  font-size: 17px;
+  font-size: calc(17px * var(--fs, 1));
 }
 .point-ask {
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   line-height: 1.7;
 }
 .box.trap-box {
@@ -1287,7 +1290,7 @@ textarea {
   gap: 8px 12px;
 }
 .mini-example summary {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
 }
 .mini-example .example {
   margin-top: 8px;
@@ -2060,7 +2063,7 @@ a.term:visited {
 .wiki-title {
   flex: 1;
   min-width: 0;
-  font-size: 18px;
+  font-size: calc(18px * var(--fs, 1));
   outline: none;
   overflow-wrap: anywhere;
 }
@@ -2092,7 +2095,7 @@ a.term:visited {
 }
 .wiki-sec h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   color: var(--accent);
   padding-bottom: 3px;
   border-bottom: 1px solid var(--line);
@@ -2127,12 +2130,12 @@ a.term:visited {
 }
 .wiki-formula code {
   font-family: var(--font-mono);
-  font-size: 14.5px;
+  font-size: calc(14.5px * var(--fs, 1));
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 .wiki-formula span {
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   color: var(--muted);
 }
 .wiki-units {
@@ -2144,7 +2147,7 @@ a.term:visited {
   padding: 3px 10px;
   border-radius: 999px;
   background: var(--surface-2);
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--fs, 1));
 }
 .wiki-example {
   display: grid;
@@ -2161,7 +2164,7 @@ a.term:visited {
 }
 .wiki-say {
   color: var(--muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
 }
 .wiki-example .btn {
   justify-self: start;
@@ -2180,7 +2183,7 @@ a.term:visited {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   padding: 10px 14px;
   border-radius: 10px;
   border: 1px solid var(--line);
@@ -2193,7 +2196,7 @@ a.term:visited {
 }
 .wiki-group {
   margin: 10px 0 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: var(--accent);
 }
 .wiki-item {
@@ -2209,7 +2212,7 @@ a.term:visited {
   cursor: pointer;
 }
 .wiki-item span {
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   color: var(--muted);
 }
 .wiki-item:hover {
@@ -2246,13 +2249,13 @@ a.term:visited {
 }
 .search-label {
   font-weight: 700;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
 }
 .search-input {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   padding: 11px 14px;
   border-radius: 12px;
   border: 1.5px solid var(--line);
@@ -2658,7 +2661,7 @@ a.term:visited {
   margin-left: auto;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 18px;
+  font-size: calc(18px * var(--fs, 1));
   font-variant-numeric: tabular-nums;
 }
 .ex-timer.low {
@@ -2669,7 +2672,7 @@ a.term:visited {
 }
 .ex-sec {
   margin: 12px 0 6px;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
 }
 .ex-grid {
   display: grid;
@@ -2761,7 +2764,7 @@ a.term:visited {
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-weight: 600;
   cursor: pointer;
 }
@@ -2784,7 +2787,7 @@ a.term:visited {
   justify-content: center;
   margin-left: 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   line-height: 1.25;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -2821,11 +2824,11 @@ a.term:visited {
 .cfig-art svg text {
   fill: currentColor;
   stroke: none;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fs, 1));
   font-family: var(--font-body, inherit);
 }
 .cfig-art svg text.sm {
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--fs, 1));
   fill: var(--muted);
 }
 .cfig-art svg .a {
@@ -2842,13 +2845,13 @@ a.term:visited {
   flex-direction: column;
   gap: 3px;
   margin-top: 8px;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--fs, 1));
   line-height: 1.6;
   color: var(--muted);
 }
 .cfig figcaption strong {
   color: var(--ink);
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
 }
 
 /* ── 기출 AI 해설 ── */
@@ -2863,19 +2866,21 @@ a.term:visited {
 }
 .ulog-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
 }
 .ulog ul {
   margin: 6px 0 0;
   padding-left: 20px;
   line-height: 1.7;
-  font-size: 14.5px;
+  font-size: calc(14.5px * var(--fs, 1));
 }
 
 .ulog-head strong {
-  flex: 1;
+  flex: 1 1 130px;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .ulog-more {
   margin-left: auto;
@@ -2931,7 +2936,7 @@ a.term:visited {
   border: 0;
   background: none;
   color: var(--accent);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--fs, 1));
   font-weight: 600;
   padding: 2px 4px;
   cursor: pointer;
@@ -2946,7 +2951,7 @@ a.term:visited {
   border-left: 3px solid var(--accent);
   border-radius: 8px;
   background: var(--surface-2);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--fs, 1));
 }
 .ai-reply strong {
   flex: none;
@@ -2964,7 +2969,7 @@ a.term:visited {
   margin-bottom: 4px;
   padding-left: 8px;
   border-left: 3px solid rgba(127, 127, 127, 0.5);
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   opacity: 0.8;
   overflow-wrap: anywhere;
 }
@@ -2986,7 +2991,7 @@ a.term:visited {
 }
 .ai-sent-hint {
   margin-left: 8px;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fs, 1));
   color: var(--muted);
   align-self: center;
 }
@@ -3037,7 +3042,7 @@ a.term:visited {
 }
 .why-text {
   margin: 12px 0 6px;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   line-height: 1.75;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -3079,10 +3084,10 @@ body.why-open {
   line-height: 1.3;
 }
 .side-name strong {
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
 }
 .side-sub {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fs, 1));
   color: var(--muted);
 }
 .side-sub::before {
@@ -3360,7 +3365,7 @@ body.anim-open {
   border-radius: 50%;
   background: var(--surface-2);
   color: var(--ink);
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   cursor: pointer;
 }
 .side-list-btn:hover,
@@ -3377,7 +3382,7 @@ body.anim-open {
   border-radius: 999px;
   background: var(--accent);
   color: var(--accent-ink);
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--fs, 1));
   font-weight: 700;
   line-height: 17px;
   text-align: center;
@@ -3426,12 +3431,12 @@ body.anim-open {
   display: none;
 }
 .ai-history-q {
-  font-size: 14.5px;
+  font-size: calc(14.5px * var(--fs, 1));
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 .ai-history-meta {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fs, 1));
   color: var(--muted);
 }
 .ai-history-item[open] summary {
@@ -3439,7 +3444,7 @@ body.anim-open {
 }
 .ai-history-a {
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -3460,7 +3465,7 @@ body.anim-open {
 }
 .kg-years summary {
   cursor: pointer;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--fs, 1));
   font-weight: 600;
   color: var(--accent);
 }
@@ -3469,7 +3474,7 @@ body.anim-open {
   grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   gap: 6px;
   margin-top: 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
 }
 .kg-year {
   padding: 4px 8px;
@@ -3481,8 +3486,6 @@ body.anim-open {
 /* ══════════ 새 테마 레이어(맨 마지막에 둬서 위의 규칙을 다듬음) ══════════ */
 body {
   background-color: var(--bg);
-  background-image: radial-gradient(900px 460px at 8% -6%, var(--glow-a), transparent 62%), radial-gradient(760px 420px at 104% 2%, var(--glow-b), transparent 60%);
-  background-repeat: no-repeat;
   letter-spacing: -0.005em;
 }
 h2,
@@ -3491,7 +3494,7 @@ h2,
   font-family: var(--font-display);
 }
 h2 {
-  font-size: 24px;
+  font-size: calc(24px * var(--fs, 1));
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -3512,7 +3515,7 @@ body::before {
   background: color-mix(in srgb, var(--surface) 82%, transparent);
 }
 .brand {
-  font-size: 19px;
+  font-size: calc(19px * var(--fs, 1));
   letter-spacing: -0.02em;
 }
 .brand .bolt {
@@ -3535,7 +3538,7 @@ body::before {
   background: var(--grad-accent);
   border-color: transparent;
   color: var(--accent-ink);
-  box-shadow: 0 6px 18px rgba(38, 55, 154, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  box-shadow: 0 6px 18px var(--btn-glow), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 :root[data-theme="dark"] .tab[aria-selected="true"] {
   box-shadow: 0 6px 20px rgba(235, 194, 108, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.45);
@@ -3593,7 +3596,7 @@ button.row:hover,
   background: var(--grad-accent);
   border-color: transparent;
   color: var(--accent-ink);
-  box-shadow: 0 6px 16px rgba(38, 55, 154, 0.28);
+  box-shadow: 0 6px 16px var(--btn-glow);
 }
 /* 버튼 */
 .btn {
@@ -3607,7 +3610,7 @@ button.row:hover,
 .btn.primary {
   background: var(--grad-accent);
   border-color: transparent;
-  box-shadow: 0 8px 20px rgba(38, 55, 154, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 20px var(--btn-glow), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 :root[data-theme="dark"] .btn.primary {
   box-shadow: 0 8px 22px rgba(235, 194, 108, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.4);
@@ -3699,13 +3702,130 @@ details summary {
   color: var(--accent-ink);
 }
 
+/* 가독성: 어두운 테마에서는 글자를 한 단계 굵게 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body {
+    font-weight: 500;
+  }
+}
+:root[data-theme="dark"] body {
+  font-weight: 500;
+}
+.field input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.field label {
+  overflow-wrap: anywhere;
+}
+
+/* ── 배경: 흐르는 3상 파형 + 천천히 떠도는 빛무리 ── */
+.bg-art {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.bg-art svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.bg-art .orb {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+}
+.bg-art .o1 {
+  width: 70vmax;
+  height: 70vmax;
+  left: -22vmax;
+  top: -28vmax;
+  background: radial-gradient(circle, var(--glow-a), transparent 66%);
+  animation: orb-a 42s ease-in-out infinite alternate;
+}
+.bg-art .o2 {
+  width: 62vmax;
+  height: 62vmax;
+  right: -20vmax;
+  bottom: -24vmax;
+  background: radial-gradient(circle, var(--glow-b), transparent 66%);
+  animation: orb-b 50s ease-in-out infinite alternate;
+}
+.bg-wave path {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.bg-wave path.thin {
+  stroke-width: 1;
+}
+.bg-wave .w1 {
+  stroke: var(--gold);
+  opacity: 0.32;
+}
+.bg-wave .w2 {
+  stroke: #d0708a;
+  opacity: 0.22;
+}
+.bg-wave .w3 {
+  stroke: var(--ink);
+  opacity: 0.1;
+}
+.bg-wave {
+  animation: wave-flow 48s linear infinite;
+}
+.bg-wave.slow {
+  animation-duration: 90s;
+  animation-direction: reverse;
+}
+@keyframes wave-flow {
+  to {
+    transform: translateX(-800px);
+  }
+}
+@keyframes orb-a {
+  to {
+    transform: translate(10vmax, 8vmax) scale(1.08);
+  }
+}
+@keyframes orb-b {
+  to {
+    transform: translate(-9vmax, -7vmax) scale(1.1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bg-art .orb,
+  .bg-wave {
+    animation: none;
+  }
+}
+@media print {
+  .bg-art {
+    display: none;
+  }
+}
+
+.reset-box {
+  display: grid;
+  gap: 10px;
+}
+.reset-line {
+  font-weight: 700;
+  color: var(--bad);
+}
+
 </style>
 <header class="appbar" id="bar"></header>
 <main><div class="wrap" id="view"></div></main>
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794930311186,"label":"11/18 00:45"};</script>
+<script>window.GISA_BUILD={"t":1794931668363,"label":"11/18 01:07"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -25390,13 +25510,13 @@ details summary {
   const HISTORY_MAX = 500;
   const MASTER_STREAK = 3; // 한 포인트에서 연속 3문제를 맞히면 "익숙해짐"
   // 기기를 넘나들며 합치는 설정. 나머지(화면 테마, 과목 필터, 동기화 켜기)는 기기마다 따로 둔다.
-  const SYNC_SETTINGS = ['skipOrder', 'mixStatic'];
+  const SYNC_SETTINGS = ['skipOrder', 'mixStatic', 'fontScale']; // 계정에 저장돼 기기가 바뀌어도 따라오는 설정
   const DONE_MAX = 500;
 
   function emptyState() {
     return {
       v: 1,
-      settings: { skipOrder: false, mixStatic: true, subject: 'all', focus: 'auto', theme: 'system', allSubjects: true, syncOn: true },
+      settings: { skipOrder: false, mixStatic: true, subject: 'all', focus: 'auto', theme: 'system', fontScale: 1, allSubjects: true, syncOn: true },
       concepts: {},
       streak: { cur: 0, best: 0 },
       total: { n: 0, c: 0 },
@@ -28445,11 +28565,14 @@ details summary {
   G.changelog = [
     {
       date: '11/18',
-      title: '전체 디자인·테마 새로 단장',
+      title: '전체 디자인 새 단장, 글자 크기 설정, 기록 초기화 두 번 확인',
       items: [
-        '한밤의 남색과 샴페인 골드로 색을 새로 잡았어. 밝은 테마는 진주빛 바탕에 사파이어, 어두운 테마는 자정의 남색에 골드야.',
-        '제목과 로고에 명조 계열 글씨를 써서 우아하게 했고, 상단 바는 유리처럼 비치게 하고 아래에 가는 금빛 선을 넣었어.',
-        '탭·칩·버튼은 알약 모양에 그라데이션과 부드러운 그림자, 단원 목록은 한 줄씩 떠 있는 카드, 진행 막대는 남색에서 금색으로 차오르게 바꿨어.',
+        '색을 아이보리 화이트·차콜·샴페인 골드(밝은 테마), 따뜻한 먹색·골드(어두운 테마)로 새로 잡았어. 푸르스름한 느낌은 걷어냈어.',
+        '배경에 천천히 흘러가는 3상 파형(120°씩 어긋난 사인파 세 개)과 은은하게 떠도는 빛무리를 깔았어. 글을 가리지 않게 아주 옅고, 움직임 줄이기 설정이면 멈춰.',
+        '제목과 로고는 명조 계열 글씨, 상단 바는 유리처럼 비치고 아래에 가는 금빛 선이 있어. 탭·칩·버튼은 알약 모양, 단원 목록은 떠 있는 카드야.',
+        '어두운 테마를 더 밝게 하고 글자를 더 하얗게·굵게 해서 읽기 편하게 했어.',
+        '기본 글자 크기는 예전 그대로 두고, 설정 → "글자 크기"에서 작게/기본/크게/아주 크게를 고를 수 있어. 이 선택은 계정에 저장돼서 다른 기기에서도 같아.',
+        '"기록 초기화"는 한 번 누르면 재밌는 말로 되묻고, 확인 버튼은 몇 초 뒤에야 눌려서 실수로 연달아 눌러도 안 지워져. 취소는 "아차, 취소!"야.',
       ],
     },
     {
@@ -32447,6 +32570,8 @@ details summary {
     const t = S.settings.theme || 'system';
     if (t === 'system') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', t);
+    const fs = Number(S.settings.fontScale);
+    document.documentElement.style.setProperty('--fs', String(fs >= 0.8 && fs <= 1.5 ? fs : 1)); // 글자 크기 배율(계정별 저장)
   }
 
   // ───────── 문제 고르기 ─────────
@@ -34958,6 +35083,59 @@ details summary {
     sel.value = G.aiTutor.getSpeed();
     return h('div', { class: 'field' }, h('label', { for: 'ai-speed-select' }, h('strong', null, 'AI 답변이 나오는 속도')), sel);
   }
+  // 기록 초기화: 한 번 누르면 재밌게 되묻고, 확인 버튼은 몇 초 뒤에야 눌려서 실수로 연달아 눌러도 안 지워진다
+  const RESET_LINES = [
+    '정말요? 쌓아 온 정답들이 짐 싸고 있어요.',
+    '잠깐, 방금 그 손가락 실수 아니죠? 한 번만 더 확인할게요.',
+    '지우면 연속 정답 기록도 같이 꺼져요. 전기도 한 번 끊으면 다시 켜야 하잖아요.',
+    '이 버튼은 되돌리기가 없어요. 두 번 눌러야 열리는 금고예요.',
+    '푼 문제들이 눈물을 닦고 있어요. 그래도 새로 시작할 거예요?',
+  ];
+  const RESET_DONE = ['깨끗이 비웠어요. 오늘부터 다시 1일!', '전원 OFF → ON. 새 마음으로 시작해요!', '기록을 지웠어요. 이제부터 만점 가는 길만 남았어요.'];
+  function resetConfirmBox() {
+    const line = RESET_LINES[view.resetLine == null ? 0 : view.resetLine % RESET_LINES.length];
+    const ok = h(
+      'button',
+      {
+        class: 'btn danger',
+        id: 'reset-confirm',
+        disabled: true,
+        onclick: () => {
+          const theme = S.settings.theme;
+          const fs = S.settings.fontScale;
+          G.store.clear();
+          S = P.emptyState();
+          S.settings.theme = theme;
+          if (fs) S.settings.fontScale = fs;
+          P.replaceAll(S);
+          save();
+          view.resetArmed = false;
+          view.mode = 'normal';
+          nextQuestion();
+          toast(RESET_DONE[Math.floor(Math.random() * RESET_DONE.length)]);
+          render();
+        },
+      },
+      '잠깐만요… 3'
+    );
+    let n = 3;
+    const timer = setInterval(() => {
+      if (!ok.isConnected) return clearInterval(timer);
+      n -= 1;
+      if (n <= 0) {
+        clearInterval(timer);
+        ok.disabled = false;
+        ok.textContent = '네, 새로 시작할래요';
+      } else ok.textContent = '잠깐만요… ' + n;
+    }, 700);
+    return h(
+      'div',
+      { class: 'reset-box' },
+      h('p', { class: 'reset-line', id: 'reset-line' }, line),
+      h('div', { class: 'inline' }, h('button', { class: 'btn', id: 'reset-cancel', onclick: () => { view.resetArmed = false; render(); } }, '아차, 취소!'), ok)
+    );
+  }
+
   function renderSettings(root) {
     const m = view.msg;
     renderUpdateLog(root);
@@ -34994,6 +35172,22 @@ details summary {
       h('option', { value: 'dark' }, '어둡게')
     );
     themeSel.value = S.settings.theme || 'system';
+    const fontSel = h(
+      'select',
+      {
+        id: 'font-select',
+        onchange: (e) => {
+          S.settings.fontScale = Number(e.target.value);
+          save();
+          applyTheme();
+        },
+      },
+      h('option', { value: '0.92' }, '작게'),
+      h('option', { value: '1' }, '기본'),
+      h('option', { value: '1.12' }, '크게'),
+      h('option', { value: '1.25' }, '아주 크게')
+    );
+    fontSel.value = String([0.92, 1, 1.12, 1.25].indexOf(Number(S.settings.fontScale)) >= 0 ? Number(S.settings.fontScale) : 1);
 
     root.appendChild(h('h2', null, '설정'));
     if (!G.store.isAvailable())
@@ -35005,6 +35199,7 @@ details summary {
         sw('skip-order', 'skipOrder', '순서 건너뛰기 (전부 열기)', '선행 개념 조건 없이 모든 개념을 열어.'),
         sw('mix-static', 'mixStatic', '이론형 문제 섞기', '숫자 계산이 아닌 개념 문제도 가끔(약 20%) 섞어서 내.'),
         h('div', { class: 'field' }, h('label', { for: 'theme-select' }, h('strong', null, '화면 테마')), themeSel),
+        h('div', { class: 'field' }, h('label', { for: 'font-select' }, h('strong', null, '글자 크기'), h('br'), h('span', { class: 'muted small' }, '계정에 저장돼서 다른 기기에서도 같게 보여.')), fontSel),
         aiSpeedField()
       )
     );
@@ -35126,35 +35321,8 @@ details summary {
         h(
           'div',
           { class: 'field' },
-          h('p', { class: 'small muted' }, '푼 기록, 정답률, 복습 일정을 모두 지워. 되돌릴 수 없어. 동기화 중이면 다른 기기의 기록도 같이 지워져.'),
-          view.resetArmed
-            ? h(
-                'div',
-                { class: 'inline' },
-                h(
-                  'button',
-                  {
-                    class: 'btn danger',
-                    id: 'reset-confirm',
-                    onclick: () => {
-                      const theme = S.settings.theme;
-                      G.store.clear();
-                      S = P.emptyState();
-                      S.settings.theme = theme;
-                      P.replaceAll(S);
-                      save();
-                      view.resetArmed = false;
-                      view.mode = 'normal';
-                      nextQuestion();
-                      toast('기록을 모두 지웠어');
-                      render();
-                    },
-                  },
-                  '정말 지우기'
-                ),
-                h('button', { class: 'btn', onclick: () => { view.resetArmed = false; render(); } }, '취소')
-              )
-            : h('button', { class: 'btn', id: 'reset', onclick: () => { view.resetArmed = true; render(); } }, '기록 초기화')
+          h('p', { class: 'small muted' }, '푼 기록, 정답률, 복습 일정을 모두 지워. 되돌릴 수 없어서 두 번 물어볼게. 동기화 중이면 다른 기기의 기록도 같이 지워져.'),
+          view.resetArmed ? resetConfirmBox() : h('button', { class: 'btn', id: 'reset', onclick: () => { view.resetLine = Math.floor(Math.random() * RESET_LINES.length); view.resetArmed = true; render(); } }, '기록 초기화')
         )
       )
     );
@@ -35286,11 +35454,37 @@ details summary {
     rememberView();
   }
 
+  // 배경: 천천히 흘러가는 3상 교류 파형(120°씩 어긋난 사인파 세 개)과 은은한 빛무리. 글을 가리지 않게 아주 옅게 깐다.
+  function mountBackdrop() {
+    if (document.getElementById('bg-art')) return;
+    const P = 800; // 파형 한 주기의 가로 길이(이만큼 흘러가면 처음과 똑같아서 끊김 없이 반복)
+    const wave = (amp, ph, y) => {
+      let d = '';
+      for (let i = 0; i <= 240; i++) {
+        const x = (i * P * 3) / 240;
+        d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + (y + amp * Math.sin((x / P) * 2 * Math.PI + ph)).toFixed(1);
+      }
+      return d;
+    };
+    const svg =
+      '<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' +
+      '<g class="bg-wave"><path class="w1" d="' + wave(70, 0, 600) + '"/><path class="w2" d="' + wave(70, 2.094, 600) + '"/><path class="w3" d="' + wave(70, 4.189, 600) + '"/></g>' +
+      '<g class="bg-wave slow"><path class="w1 thin" d="' + wave(34, 1, 180) + '"/><path class="w2 thin" d="' + wave(34, 3.1, 180) + '"/></g>' +
+      '</svg>';
+    const el = document.createElement('div');
+    el.id = 'bg-art';
+    el.className = 'bg-art';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<i class="orb o1"></i><i class="orb o2"></i>' + svg;
+    document.body.prepend(el);
+  }
+
   function start() {
     if (G.kigeum) G.kigeum.load().then(() => render());
     if (!S.settings.theme) S.settings.theme = 'system';
     if (S.total.n === 0 && !Object.keys(S.lessons || {}).length) view.tab = 'learn';
     applyTheme();
+    mountBackdrop();
     const local = lsGet(VIEW_KEY);
     const hasClaude = () => typeof window.claude !== 'undefined' && window.claude && typeof window.claude.use === 'function';
     // 기출 CBT·단락 없는 기출 화면은 기출 보관함을 읽은 다음에 복원

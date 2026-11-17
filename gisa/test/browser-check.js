@@ -591,6 +591,14 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     // 초기화: 서버와 다른 기기에서도 지워지고, 예전 기록이 되살아나지 않음
     await B.page.click('#tab-settings');
     await B.page.click('#reset');
+    check((await B.page.textContent('#reset-line')).length > 10 && (await B.page.isDisabled('#reset-confirm')), '기록 초기화: 한 번 누르면 재밌는 되묻기가 나오고 확인 버튼은 아직 잠겨 있음');
+    await B.page.click('#reset-confirm', { force: true, noWaitAfter: true, timeout: 500 }).catch(() => {});
+    check(!(await B.page.isDisabled('#reset-confirm')) === false && (await B.page.evaluate(() => GISA.ui._state().total.n)) > 0, '잠긴 동안 연달아 눌러도 기록이 지워지지 않음');
+    await B.page.click('#reset-cancel');
+    check(await B.page.isVisible('#reset'), '"아차, 취소!"를 누르면 처음 버튼으로 돌아옴');
+    await B.page.click('#reset');
+    await B.page.waitForFunction(() => { const b = document.getElementById('reset-confirm'); return b && !b.disabled; }, null, { timeout: 8000 });
+    check((await B.page.textContent('#reset-confirm')).includes('새로 시작'), '몇 초 뒤 확인 버튼이 열림');
     await B.page.click('#reset-confirm');
     await sync(B.page);
     check(stored('u-test').total.n === 0 && stored('u-test').resetAt > 0, '초기화가 서버에 반영');
@@ -1532,6 +1540,14 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     check((await page.$$('#ai-speed-select option')).length === 3 && (await page.inputValue('#ai-speed-select')) === 'slow', '설정에 AI 답변 속도(천천히/보통/바로) 선택이 있음');
     await page.selectOption('#ai-speed-select', 'fast');
     check((await page.evaluate(() => localStorage.getItem('gisa-ai-speed'))) === 'fast', '속도 선택이 기억됨');
+    // 글자 크기: 기본은 예전과 똑같이 16px, 설정에서 키우면 계정 설정으로 저장됨
+    check((await page.evaluate(() => getComputedStyle(document.body).fontSize)) === '16px', '글자 크기 기본은 그대로 16px');
+    check((await page.$$('#font-select option')).length === 4 && (await page.inputValue('#font-select')) === '1', '설정에 글자 크기(작게/기본/크게/아주 크게)가 있고 기본이 선택됨');
+    await page.selectOption('#font-select', '1.25');
+    check((await page.evaluate(() => getComputedStyle(document.body).fontSize)) === '20px', '글자 크기를 아주 크게 하면 본문이 20px');
+    check((await page.evaluate(() => GISA.progress.syncView(GISA.ui._state()).settings.fontScale)) === 1.25, '글자 크기는 계정에 올라가는 설정에 들어감');
+    await page.selectOption('#font-select', '1');
+    check((await page.$$('#bg-art svg path')).length >= 5 && (await page.evaluate(() => getComputedStyle(document.querySelector('#bg-art .bg-wave')).animationName)) === 'wave-flow', '배경에 천천히 흐르는 3상 파형이 있음');
     check(errors.length === 0, 'AI 속도 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }

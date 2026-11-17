@@ -104,6 +104,8 @@
     const t = S.settings.theme || 'system';
     if (t === 'system') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', t);
+    const fs = Number(S.settings.fontScale);
+    document.documentElement.style.setProperty('--fs', String(fs >= 0.8 && fs <= 1.5 ? fs : 1)); // 글자 크기 배율(계정별 저장)
   }
 
   // ───────── 문제 고르기 ─────────
@@ -2615,6 +2617,59 @@
     sel.value = G.aiTutor.getSpeed();
     return h('div', { class: 'field' }, h('label', { for: 'ai-speed-select' }, h('strong', null, 'AI 답변이 나오는 속도')), sel);
   }
+  // 기록 초기화: 한 번 누르면 재밌게 되묻고, 확인 버튼은 몇 초 뒤에야 눌려서 실수로 연달아 눌러도 안 지워진다
+  const RESET_LINES = [
+    '정말요? 쌓아 온 정답들이 짐 싸고 있어요.',
+    '잠깐, 방금 그 손가락 실수 아니죠? 한 번만 더 확인할게요.',
+    '지우면 연속 정답 기록도 같이 꺼져요. 전기도 한 번 끊으면 다시 켜야 하잖아요.',
+    '이 버튼은 되돌리기가 없어요. 두 번 눌러야 열리는 금고예요.',
+    '푼 문제들이 눈물을 닦고 있어요. 그래도 새로 시작할 거예요?',
+  ];
+  const RESET_DONE = ['깨끗이 비웠어요. 오늘부터 다시 1일!', '전원 OFF → ON. 새 마음으로 시작해요!', '기록을 지웠어요. 이제부터 만점 가는 길만 남았어요.'];
+  function resetConfirmBox() {
+    const line = RESET_LINES[view.resetLine == null ? 0 : view.resetLine % RESET_LINES.length];
+    const ok = h(
+      'button',
+      {
+        class: 'btn danger',
+        id: 'reset-confirm',
+        disabled: true,
+        onclick: () => {
+          const theme = S.settings.theme;
+          const fs = S.settings.fontScale;
+          G.store.clear();
+          S = P.emptyState();
+          S.settings.theme = theme;
+          if (fs) S.settings.fontScale = fs;
+          P.replaceAll(S);
+          save();
+          view.resetArmed = false;
+          view.mode = 'normal';
+          nextQuestion();
+          toast(RESET_DONE[Math.floor(Math.random() * RESET_DONE.length)]);
+          render();
+        },
+      },
+      '잠깐만요… 3'
+    );
+    let n = 3;
+    const timer = setInterval(() => {
+      if (!ok.isConnected) return clearInterval(timer);
+      n -= 1;
+      if (n <= 0) {
+        clearInterval(timer);
+        ok.disabled = false;
+        ok.textContent = '네, 새로 시작할래요';
+      } else ok.textContent = '잠깐만요… ' + n;
+    }, 700);
+    return h(
+      'div',
+      { class: 'reset-box' },
+      h('p', { class: 'reset-line', id: 'reset-line' }, line),
+      h('div', { class: 'inline' }, h('button', { class: 'btn', id: 'reset-cancel', onclick: () => { view.resetArmed = false; render(); } }, '아차, 취소!'), ok)
+    );
+  }
+
   function renderSettings(root) {
     const m = view.msg;
     renderUpdateLog(root);
@@ -2651,6 +2706,22 @@
       h('option', { value: 'dark' }, '어둡게')
     );
     themeSel.value = S.settings.theme || 'system';
+    const fontSel = h(
+      'select',
+      {
+        id: 'font-select',
+        onchange: (e) => {
+          S.settings.fontScale = Number(e.target.value);
+          save();
+          applyTheme();
+        },
+      },
+      h('option', { value: '0.92' }, '작게'),
+      h('option', { value: '1' }, '기본'),
+      h('option', { value: '1.12' }, '크게'),
+      h('option', { value: '1.25' }, '아주 크게')
+    );
+    fontSel.value = String([0.92, 1, 1.12, 1.25].indexOf(Number(S.settings.fontScale)) >= 0 ? Number(S.settings.fontScale) : 1);
 
     root.appendChild(h('h2', null, '설정'));
     if (!G.store.isAvailable())
@@ -2662,6 +2733,7 @@
         sw('skip-order', 'skipOrder', '순서 건너뛰기 (전부 열기)', '선행 개념 조건 없이 모든 개념을 열어.'),
         sw('mix-static', 'mixStatic', '이론형 문제 섞기', '숫자 계산이 아닌 개념 문제도 가끔(약 20%) 섞어서 내.'),
         h('div', { class: 'field' }, h('label', { for: 'theme-select' }, h('strong', null, '화면 테마')), themeSel),
+        h('div', { class: 'field' }, h('label', { for: 'font-select' }, h('strong', null, '글자 크기'), h('br'), h('span', { class: 'muted small' }, '계정에 저장돼서 다른 기기에서도 같게 보여.')), fontSel),
         aiSpeedField()
       )
     );
@@ -2783,35 +2855,8 @@
         h(
           'div',
           { class: 'field' },
-          h('p', { class: 'small muted' }, '푼 기록, 정답률, 복습 일정을 모두 지워. 되돌릴 수 없어. 동기화 중이면 다른 기기의 기록도 같이 지워져.'),
-          view.resetArmed
-            ? h(
-                'div',
-                { class: 'inline' },
-                h(
-                  'button',
-                  {
-                    class: 'btn danger',
-                    id: 'reset-confirm',
-                    onclick: () => {
-                      const theme = S.settings.theme;
-                      G.store.clear();
-                      S = P.emptyState();
-                      S.settings.theme = theme;
-                      P.replaceAll(S);
-                      save();
-                      view.resetArmed = false;
-                      view.mode = 'normal';
-                      nextQuestion();
-                      toast('기록을 모두 지웠어');
-                      render();
-                    },
-                  },
-                  '정말 지우기'
-                ),
-                h('button', { class: 'btn', onclick: () => { view.resetArmed = false; render(); } }, '취소')
-              )
-            : h('button', { class: 'btn', id: 'reset', onclick: () => { view.resetArmed = true; render(); } }, '기록 초기화')
+          h('p', { class: 'small muted' }, '푼 기록, 정답률, 복습 일정을 모두 지워. 되돌릴 수 없어서 두 번 물어볼게. 동기화 중이면 다른 기기의 기록도 같이 지워져.'),
+          view.resetArmed ? resetConfirmBox() : h('button', { class: 'btn', id: 'reset', onclick: () => { view.resetLine = Math.floor(Math.random() * RESET_LINES.length); view.resetArmed = true; render(); } }, '기록 초기화')
         )
       )
     );
@@ -2943,11 +2988,37 @@
     rememberView();
   }
 
+  // 배경: 천천히 흘러가는 3상 교류 파형(120°씩 어긋난 사인파 세 개)과 은은한 빛무리. 글을 가리지 않게 아주 옅게 깐다.
+  function mountBackdrop() {
+    if (document.getElementById('bg-art')) return;
+    const P = 800; // 파형 한 주기의 가로 길이(이만큼 흘러가면 처음과 똑같아서 끊김 없이 반복)
+    const wave = (amp, ph, y) => {
+      let d = '';
+      for (let i = 0; i <= 240; i++) {
+        const x = (i * P * 3) / 240;
+        d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + (y + amp * Math.sin((x / P) * 2 * Math.PI + ph)).toFixed(1);
+      }
+      return d;
+    };
+    const svg =
+      '<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' +
+      '<g class="bg-wave"><path class="w1" d="' + wave(70, 0, 600) + '"/><path class="w2" d="' + wave(70, 2.094, 600) + '"/><path class="w3" d="' + wave(70, 4.189, 600) + '"/></g>' +
+      '<g class="bg-wave slow"><path class="w1 thin" d="' + wave(34, 1, 180) + '"/><path class="w2 thin" d="' + wave(34, 3.1, 180) + '"/></g>' +
+      '</svg>';
+    const el = document.createElement('div');
+    el.id = 'bg-art';
+    el.className = 'bg-art';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<i class="orb o1"></i><i class="orb o2"></i>' + svg;
+    document.body.prepend(el);
+  }
+
   function start() {
     if (G.kigeum) G.kigeum.load().then(() => render());
     if (!S.settings.theme) S.settings.theme = 'system';
     if (S.total.n === 0 && !Object.keys(S.lessons || {}).length) view.tab = 'learn';
     applyTheme();
+    mountBackdrop();
     const local = lsGet(VIEW_KEY);
     const hasClaude = () => typeof window.claude !== 'undefined' && window.claude && typeof window.claude.use === 'function';
     // 기출 CBT·단락 없는 기출 화면은 기출 보관함을 읽은 다음에 복원

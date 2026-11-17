@@ -330,7 +330,7 @@ G.concepts.forEach((c) => {
     const legacy = P.normalize({ v: 1, concepts: { ohm: { n: 1, c: 1 } }, total: { n: 1, c: 1 }, history: [{ k: 'x', cid: 'ohm', ok: true, t: 9 }] });
     ok(legacy.updatedAt === 0 && legacy.resetAt === 0 && typeof legacy.reviewDone === 'object', 'merge', '예전 저장본 보충');
     ok(P.merge(legacy, B).concepts.ohm.n === 3, 'merge', '예전 저장본과 합치기');
-    ok(Object.keys(P.syncView(B).settings).sort().join() === 'mixStatic,skipOrder', 'merge', '서버에는 공유 설정만 올라감');
+    ok(Object.keys(P.syncView(B).settings).sort().join() === 'fontScale,mixStatic,skipOrder', 'merge', '서버에는 공유 설정(글자 크기 포함)만 올라감');
     const big = mk({ history: Array.from({ length: 400 }, (_, i) => ({ k: 'h' + i, cid: 'ohm', ok: true, t: i })) });
     const big2 = mk({ history: Array.from({ length: 400 }, (_, i) => ({ k: 'g' + i, cid: 'ohm', ok: true, t: 1000 + i })) });
     ok(P.merge(big, big2).history.length === 500, 'merge', '풀이 기록은 최근 500개까지만');
