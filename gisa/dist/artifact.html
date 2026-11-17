@@ -1,64 +1,87 @@
 <title>통전⚡기사 전기기사 필기</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400;1,600&display=swap">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@600;700&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400;1,600&display=swap">
 <style>
-/* 레이아웃: 680px 한 기둥, 위에 붙는 탭 바, 문제만 카드로 띄우고 나머지는 평면 */
+/* 레이아웃: 680px 한 기둥, 위에 붙는 탭 바, 문제만 카드로 띄우고 나머지는 평면
+   디자인: 한밤의 남색 + 샴페인 골드. 밝은 테마는 진주빛 바탕에 사파이어, 어두운 테마는 자정의 남색에 골드. */
 :root {
-  --bg: #eef1f4;
+  --bg: #f3f2f9;
   --surface: #ffffff;
-  --surface-2: #f5f7f9;
-  --ink: #17202a;
-  --muted: #586575;
-  --line: #d5dce3;
-  --accent: #b14f28; /* 구리선 색 */
+  --surface-2: #ecebf5;
+  --ink: #14122b;
+  --muted: #5d5a7e;
+  --line: #dcd9ec;
+  --accent: #26379a; /* 사파이어 */
   --accent-ink: #ffffff;
-  --accent-soft: #f7e8e0;
-  --ok: #17734a;
-  --ok-soft: #e0f1e7;
-  --bad: #b02538;
-  --bad-soft: #fae5e8;
-  --warn: #855600;
-  --warn-soft: #f9efd9;
+  --accent-soft: #e7e9fb;
+  --gold: #c08a26;
+  --gold-soft: #f8ecce;
+  --ok: #0f7a55;
+  --ok-soft: #ddf3ea;
+  --bad: #c22e4b;
+  --bad-soft: #fbe3e8;
+  --warn: #8b5a00;
+  --warn-soft: #faf0d4;
+  --glow-a: rgba(38, 55, 154, 0.1);
+  --glow-b: rgba(192, 138, 38, 0.12);
+  --shadow-sm: 0 1px 2px rgba(20, 18, 60, 0.05), 0 6px 18px rgba(20, 18, 60, 0.06);
+  --shadow-md: 0 2px 4px rgba(20, 18, 60, 0.06), 0 14px 34px rgba(20, 18, 60, 0.12);
+  --grad-accent: linear-gradient(135deg, #3a4fc4 0%, #22318a 100%);
+  --font-display: "Noto Serif KR", "Nanum Myeongjo", "Apple Myungjo", "Batang", serif;
   --font-body: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --radius: 14px;
+  --radius: 18px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e1318;
-    --surface: #161d24;
-    --surface-2: #1b242d;
-    --ink: #e4e9ee;
-    --muted: #98a6b4;
-    --line: #2b3742;
-    --accent: #e8895c;
-    --accent-ink: #1b0e07;
-    --accent-soft: #35231a;
-    --ok: #55c78f;
-    --ok-soft: #12301f;
-    --bad: #ff8292;
-    --bad-soft: #3b1a21;
-    --warn: #e2b45f;
-    --warn-soft: #33290f;
+    --bg: #090c1f;
+    --surface: #121739;
+    --surface-2: #1a2049;
+    --ink: #eff0fa;
+    --muted: #a4a9d0;
+    --line: #272e63;
+    --accent: #ebc26c;
+    --accent-ink: #19130a;
+    --accent-soft: #2c2a4d;
+    --gold: #ebc26c;
+    --gold-soft: #332d24;
+    --ok: #5fd2a3;
+    --ok-soft: #0f2e29;
+    --bad: #ff8fa4;
+    --bad-soft: #3a1830;
+    --warn: #ebc26c;
+    --warn-soft: #332b17;
+    --glow-a: rgba(94, 110, 230, 0.22);
+    --glow-b: rgba(235, 194, 108, 0.1);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.28);
+    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 18px 40px rgba(0, 0, 0, 0.45);
+    --grad-accent: linear-gradient(135deg, #f4d38f 0%, #dcab4a 100%);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0e1318;
-  --surface: #161d24;
-  --surface-2: #1b242d;
-  --ink: #e4e9ee;
-  --muted: #98a6b4;
-  --line: #2b3742;
-  --accent: #e8895c;
-  --accent-ink: #1b0e07;
-  --accent-soft: #35231a;
-  --ok: #55c78f;
-  --ok-soft: #12301f;
-  --bad: #ff8292;
-  --bad-soft: #3b1a21;
-  --warn: #e2b45f;
-  --warn-soft: #33290f;
+  --bg: #090c1f;
+  --surface: #121739;
+  --surface-2: #1a2049;
+  --ink: #eff0fa;
+  --muted: #a4a9d0;
+  --line: #272e63;
+  --accent: #ebc26c;
+  --accent-ink: #19130a;
+  --accent-soft: #2c2a4d;
+  --gold: #ebc26c;
+  --gold-soft: #332d24;
+  --ok: #5fd2a3;
+  --ok-soft: #0f2e29;
+  --bad: #ff8fa4;
+  --bad-soft: #3a1830;
+  --warn: #ebc26c;
+  --warn-soft: #332b17;
+  --glow-a: rgba(94, 110, 230, 0.22);
+  --glow-b: rgba(235, 194, 108, 0.1);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 22px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.35), 0 18px 40px rgba(0, 0, 0, 0.45);
+  --grad-accent: linear-gradient(135deg, #f4d38f 0%, #dcab4a 100%);
   color-scheme: dark;
 }
 :root[data-theme="light"] {
@@ -3455,13 +3478,234 @@ body.anim-open {
   background: var(--surface-2);
 }
 
+/* ══════════ 새 테마 레이어(맨 마지막에 둬서 위의 규칙을 다듬음) ══════════ */
+body {
+  background-color: var(--bg);
+  background-image: radial-gradient(900px 460px at 8% -6%, var(--glow-a), transparent 62%), radial-gradient(760px 420px at 104% 2%, var(--glow-b), transparent 60%);
+  background-repeat: no-repeat;
+  letter-spacing: -0.005em;
+}
+h2,
+.lesson h2,
+.brand {
+  font-family: var(--font-display);
+}
+h2 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.eyebrow {
+  color: var(--gold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+/* 상단 바: 유리처럼 비치는 면 + 가는 금빛 선 */
+.appbar {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  backdrop-filter: saturate(1.4) blur(14px);
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, var(--gold), transparent) 1;
+}
+body::before {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+.brand {
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+.brand .bolt {
+  color: var(--gold);
+}
+.brand svg {
+  color: var(--gold);
+}
+.tab {
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  border-color: var(--line);
+  border-radius: 999px;
+  font-family: var(--font-body);
+  box-shadow: none;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.tab:hover {
+}
+.tab[aria-selected="true"] {
+  background: var(--grad-accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+  box-shadow: 0 6px 18px rgba(38, 55, 154, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+:root[data-theme="dark"] .tab[aria-selected="true"] {
+  box-shadow: 0 6px 20px rgba(235, 194, 108, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tab[aria-selected="true"] {
+    box-shadow: 0 6px 20px rgba(235, 194, 108, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+}
+/* 면: 둥글고 부드러운 그림자 */
+.qcard,
+.rows,
+.tile,
+.lesson,
+.point-card {
+  border-radius: var(--radius);
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+.qcard {
+  padding: 22px 20px 24px;
+}
+.qtext {
+  font-weight: 500;
+  line-height: 1.7;
+}
+.row {
+  padding: 16px 18px;
+  transition: background-color 0.15s;
+}
+button.row:hover,
+.lesson-row:hover {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+.tag {
+  border-radius: 999px;
+  padding: 3px 11px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.state {
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.chip {
+  border-radius: 999px;
+  padding: 8px 16px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s;
+}
+.chip:hover {
+  border-color: var(--accent);
+}
+.chip[aria-pressed="true"] {
+  background: var(--grad-accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+  box-shadow: 0 6px 16px rgba(38, 55, 154, 0.28);
+}
+/* 버튼 */
+.btn {
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.btn:not(:disabled):hover {
+  box-shadow: var(--shadow-md);
+}
+.btn.primary {
+  background: var(--grad-accent);
+  border-color: transparent;
+  box-shadow: 0 8px 20px rgba(38, 55, 154, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+:root[data-theme="dark"] .btn.primary {
+  box-shadow: 0 8px 22px rgba(235, 194, 108, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .btn.primary {
+    box-shadow: 0 8px 22px rgba(235, 194, 108, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+}
+.btn.soft {
+  box-shadow: none;
+}
+/* 보기 */
+.choice {
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+  border-width: 1.5px;
+}
+.choice:not(:disabled):hover {
+  box-shadow: var(--shadow-md);
+}
+.choice .no {
+  background: var(--surface-2);
+  border-color: transparent;
+  color: var(--accent);
+}
+.choice.is-correct .no,
+.choice.is-wrong .no {
+  color: var(--surface);
+}
+/* 진행 막대: 남색에서 금색으로 차오름 */
+.bar {
+  height: 9px;
+  border-radius: 999px;
+}
+.bar > i {
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--gold));
+}
+.bar.low > i {
+  background: linear-gradient(90deg, var(--bad), var(--gold));
+}
+.tile .v {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+/* 입력 */
+input[type="text"],
+input[type="search"],
+input[type="number"],
+textarea,
+select {
+  border-radius: 12px;
+}
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+details summary {
+  color: var(--accent);
+}
+::selection {
+  background: color-mix(in srgb, var(--gold) 35%, transparent);
+}
+/* 목록의 줄은 각각 떠 있는 카드로: 줄 사이가 숨 쉬고 눌러 볼 맛이 남 */
+.rows:has(> .lesson-row) {
+  gap: 10px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+}
+.rows > .lesson-row {
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.rows > .lesson-row:hover {
+  box-shadow: var(--shadow-md);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.rows > .lesson-row:first-child {
+  border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+}
+.lesson-no {
+  background: var(--grad-accent);
+  color: var(--accent-ink);
+}
+
 </style>
 <header class="appbar" id="bar"></header>
 <main><div class="wrap" id="view"></div></main>
 <aside id="calc" aria-label="계산기"></aside>
 <aside id="side" aria-label="AI에게 묻기"></aside>
 <noscript><p style="padding:16px">자바스크립트를 켜야 문제가 나와.</p></noscript>
-<script>window.GISA_BUILD={"t":1794908633726,"label":"11/17 18:43"};</script>
+<script>window.GISA_BUILD={"t":1794930311186,"label":"11/18 00:45"};</script>
 <script>
 /* ── engine/core.js ── */
 // 전역 네임스페이스. 브라우저(단일 HTML)와 node(테스트) 양쪽에서 같은 파일을 그대로 쓴다.
@@ -28199,6 +28443,15 @@ body.anim-open {
 (function (G) {
   'use strict';
   G.changelog = [
+    {
+      date: '11/18',
+      title: '전체 디자인·테마 새로 단장',
+      items: [
+        '한밤의 남색과 샴페인 골드로 색을 새로 잡았어. 밝은 테마는 진주빛 바탕에 사파이어, 어두운 테마는 자정의 남색에 골드야.',
+        '제목과 로고에 명조 계열 글씨를 써서 우아하게 했고, 상단 바는 유리처럼 비치게 하고 아래에 가는 금빛 선을 넣었어.',
+        '탭·칩·버튼은 알약 모양에 그라데이션과 부드러운 그림자, 단원 목록은 한 줄씩 떠 있는 카드, 진행 막대는 남색에서 금색으로 차오르게 바꿨어.',
+      ],
+    },
     {
       date: '11/17',
       title: '위쪽 탭을 더 크고 확실하게',
