@@ -391,7 +391,7 @@
 
     function refresh() {
       presets.textContent = '';
-      presetList(o.getCtx()).forEach((t) => {
+      presetList(o.getCtx()).slice(0, 2).forEach((t) => { // 예시 질문은 2개만(화면을 덜 가림)
         const b = el('button', 'chip ai-chip', t);
         b.type = 'button';
         b.disabled = busy;

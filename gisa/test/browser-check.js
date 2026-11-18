@@ -1533,7 +1533,12 @@ const noOverflow = (page) => page.evaluate((w) => document.documentElement.scrol
     await page.dblclick('#side-resize');
     check((await width()) === 340, '두 번 누르면 원래 폭으로 돌아감');
     const sendH = await page.evaluate(() => Math.round(document.querySelector('#side .ai-form button[type="submit"]').getBoundingClientRect().height));
-    check(sendH <= 40, '보내기 버튼이 작음 (높이 ' + sendH + 'px)');
+    check(sendH <= 28, '보내기 버튼이 작음 (높이 ' + sendH + 'px)');
+    const chips = await page.evaluate(() => ({ n: document.querySelectorAll('#side .ai-chip').length, fs: parseFloat(getComputedStyle(document.querySelector('#side .ai-chip')).fontSize) }));
+    check(chips.n === 2 && chips.fs < 14, '예시 질문은 2개만, 기본 글씨보다 작게 (' + chips.n + '개, ' + chips.fs + 'px)');
+    const inW = await page.evaluate(() => Math.round(document.getElementById('ai-side-input').getBoundingClientRect().width));
+    const sw = await page.evaluate(() => Math.round(document.querySelector('#side .ai-form button[type="submit"]').getBoundingClientRect().width));
+    check(sw <= 64 && inW > 230, '입력칸이 넓고 보내기 버튼 폭은 좁음 (입력칸 ' + inW + 'px, 버튼 ' + sw + 'px)');
     check(errors.length === 0, '폭 조절 콘솔 오류: ' + errors.join(' | '));
     await ctx.close();
   }

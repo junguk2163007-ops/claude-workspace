@@ -3852,8 +3852,20 @@ body.side-dragging {
 .ai-form .btn {
   align-self: flex-end;
   flex: none;
-  min-height: 34px;
-  padding: 4px 13px;
-  font-size: calc(13.5px * var(--fs, 1));
-  border-radius: 11px;
+  min-height: 24px;
+  padding: 1px 9px;
+  font-size: calc(11.5px * var(--fs, 1));
+  line-height: 1.5;
+  border-radius: 8px;
+  box-shadow: none;
+}
+/* 예시 질문: 기본 글씨보다 작고 가볍게 */
+.ai-chip {
+  font-size: calc(11.5px * var(--fs, 1));
+  padding: 3px 10px;
+  font-weight: 500;
+  box-shadow: none;
+}
+.ai-presets {
+  gap: 6px;
 }
