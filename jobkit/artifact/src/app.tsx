@@ -619,8 +619,8 @@ function analyzeFor(store: Store, text: string, parsed: ParsedPosting, currentId
 }
 
 /** 공고 하나로 이력서·자소서·메일을 만들어 "작성중" 지원 건으로 만든다 */
-/** 서류 양식 버전: 2 = 원본 이력서 부제 형식(「직책」)·경력 문구 바로잡음 */
-const SNAPSHOT_V = 2;
+/** 서류 양식 버전: 2 = 원본 이력서 부제 형식(「직책」)·경력 문구 바로잡음, 3 = 추가 서류 문장은 첨부할 때만 */
+const SNAPSHOT_V = 3;
 
 function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs: string[], reuse: AppRec | null, near?: boolean) {
   const today = todaySeoul();
@@ -689,7 +689,7 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
     const p = parsePosting(src, today);
     setParsed(p);
     setAnalyzedText(src);
-    setExtra({ '자격증 사본': p.submit_docs.includes('자격증 사본') });
+    setExtra({ '자격증 사본': false });
     setOtherOn(false);
     setOtherText('');
     setAppId(null);
@@ -964,7 +964,8 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
     setBusy(true);
     setErr(null);
     try {
-      const { rec } = buildDraft(store, text, p, p.submit_docs.includes('자격증 사본') ? ['자격증 사본'] : [], draft ?? null, verdict === 'ok');
+      // 추가 서류(자격증 사본 등)는 실제로 첨부할 때만 본문에 문장을 넣는다
+      const { rec } = buildDraft(store, text, p, [], draft ?? null, verdict === 'ok');
       await store.saveApp(rec);
       onDrafted(rec.id);
     } catch {
@@ -1488,7 +1489,19 @@ function toBase64(bytes: Uint8Array): string {
 
 const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** 메일 본문의 "요청하신 ○○도 함께 첨부하였습니다." 문장 */
-const EXTRA_SENTENCE = /\s?요청하신 [^\n]*?도 함께 첨부하였습니다\./;
+const EXTRA_SENTENCE = /\s?(?:요청하신 [^\n]*?|추가 서류)도 함께 첨부하였습니다\./;
+
+/** 추가 첨부가 생기면 본문에 "함께 첨부" 문장을 넣고, 없어지면 뺀다 */
+function syncExtraSentence(body: string, hasFiles: boolean, requested: boolean): string {
+  const has = EXTRA_SENTENCE.test(body);
+  if (!hasFiles) return has ? body.replace(EXTRA_SENTENCE, '') : body;
+  if (has) return body;
+  const sentence = requested ? ' 요청하신 자격증 사본도 함께 첨부하였습니다.' : ' 추가 서류도 함께 첨부하였습니다.';
+  const anchor = '참고 부탁드립니다.';
+  if (body.includes(anchor)) return body.replace(anchor, anchor + sentence);
+  const i = body.indexOf('\n\n감사합니다');
+  return i >= 0 ? body.slice(0, i) + '\n' + sentence.trim() + body.slice(i) : `${body}\n${sentence.trim()}`;
+}
 /** connector 호출 입력 한도(1 MiB) 안에 들어가도록 잡은 추가 첨부 상한 */
 const EXTRA_LIMIT_BYTES = 380 * 1024;
 
@@ -1538,6 +1551,8 @@ function checksFor(a: AppRec, store: Store, built: Built | null, to: string, sub
     if (missing.length) out.push({ level: 'warn', text: `이력서 인적사항이 비어 있습니다: ${missing.join(', ')}` });
   }
   const extraSize = extras.reduce((n, f) => n + f.size, 0);
+  if (a.parsed?.submit_docs?.includes('자격증 사본') && extras.length === 0 && !EXTRA_SENTENCE.test(body))
+    out.push({ level: 'ok', text: '공고 제출서류의 "자격증 사본"은 해당자만 내는 서류라 첨부하지 않고 보냅니다. 넣고 싶으면 아래 [+ 추가 서류 첨부]로 넣으면 본문 문장도 저절로 들어갑니다.' });
   if (EXTRA_SENTENCE.test(body) && extras.length === 0)
     out.push({ level: 'block', id: 'extra', text: '본문에 추가 서류를 "함께 첨부"했다고 적혀 있는데 추가 첨부 파일이 없습니다. 파일을 넣거나 그 문장을 빼세요. (Gmail 작성창으로 직접 보낼 때는 그 파일을 직접 첨부하면 됩니다)' });
   else if (extras.length)
@@ -1677,7 +1692,8 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
   // 최신 프로필·문구로 서류를 다시 만든다 (받는 사람은 유지)
   const [rebuilt, setRebuilt] = useState(false);
   async function rebuild() {
-    const { rec } = buildDraft(store, a.posting_text, a.parsed, a.extra_docs ?? [], a);
+    const { rec } = buildDraft(store, a.posting_text, a.parsed, [], a);
+    setExtras([]);
     await store.saveApp({ ...rec, selected_email: a.selected_email ?? rec.selected_email }).catch(() => {});
     setSubject(rec.mail_subject);
     setBody(rec.mail_body);
@@ -1850,7 +1866,19 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
           {extras.map((f, i) => (
             <span key={i} className="file-chip">
               📎 {f.name}{' '}
-              <button className="chip-x" aria-label={`${f.name} 빼기`} onClick={() => setExtras(extras.filter((_, j) => j !== i))}>
+              <button
+                className="chip-x"
+                aria-label={`${f.name} 빼기`}
+                onClick={() => {
+                  const next = extras.filter((_, j) => j !== i);
+                  setExtras(next);
+                  const nb = syncExtraSentence(body, next.length > 0, a.parsed.submit_docs.includes('자격증 사본'));
+                  if (nb !== body) {
+                    setBody(nb);
+                    store.patchApp(a.id, { mail_body: nb }).catch(() => {});
+                  }
+                }}
+              >
                 ×
               </button>
             </span>
@@ -1877,7 +1905,13 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
                 const read = await Promise.all(
                   list.map(async (f) => ({ name: f.name, type: f.type || 'application/octet-stream', size: f.size, b64: toBase64(new Uint8Array(await f.arrayBuffer())) })),
                 );
-                setExtras([...extras, ...read]);
+                const next = [...extras, ...read];
+                setExtras(next);
+                const nb = syncExtraSentence(body, next.length > 0, a.parsed.submit_docs.includes('자격증 사본'));
+                if (nb !== body) {
+                  setBody(nb);
+                  store.patchApp(a.id, { mail_body: nb }).catch(() => {});
+                }
               }}
             />
           </label>
