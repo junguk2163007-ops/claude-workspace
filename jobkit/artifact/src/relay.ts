@@ -54,40 +54,26 @@ export interface RelaySignal {
 /** 발송기가 가져와 줄 수 있는 사이트 (브라우저 검사가 없는 곳만) */
 export const FETCH_HOSTS = ['www.jobkorea.co.kr', 'www.saramin.co.kr', 'www.work24.go.kr'];
 
-function newRid() {
+export function newRid() {
   return `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** 클릭 처리 안에서 바로 부른다. 발송기 창을 열어 연결·버전을 확인한다 */
-export function openPing(base: string): { rid: string; win: Window | null } {
-  const rid = newRid();
+/** [연결 확인] 링크 주소. 새 창은 링크 클릭으로 연다 (이 화면은 스크립트로 여는 새 창을 막는다) */
+export function pingHref(base: string, rid: string): string {
   const u = new URL(base.trim());
   u.searchParams.set('ping', '1');
   u.searchParams.set('rid', rid);
-  let win: Window | null = null;
-  try {
-    win = window.open(u.toString(), `jobkit_ping_${rid}`);
-  } catch {
-    win = null;
-  }
-  return { rid, win };
+  return u.toString();
 }
 
-/** 클릭 처리 안에서 바로 부른다. 발송기가 공고 원문을 가져와 이 창으로 돌려준다 */
-export function openFetch(base: string, key: string, url: string): { rid: string; win: Window | null } {
-  const rid = newRid();
+/** 공고 원문 가져오기 링크 주소 */
+export function fetchHref(base: string, key: string, url: string, rid: string): string {
   const u = new URL(base.trim());
   u.searchParams.set('action', 'fetch');
   u.searchParams.set('k', key);
   u.searchParams.set('rid', rid);
   u.searchParams.set('u', url);
-  let win: Window | null = null;
-  try {
-    win = window.open(u.toString(), `jobkit_fetch_${rid}`);
-  } catch {
-    win = null;
-  }
-  return { rid, win };
+  return u.toString();
 }
 
 export function isRelaySignal(d: unknown): d is RelaySignal {
@@ -103,15 +89,9 @@ export function submitRelay(base: string, key: string, p: RelayPayload): void {
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = base.trim();
-  const name = `jobkit_send_${p.rid.replace(/[^A-Za-z0-9_]/g, '_')}`;
-  let w: Window | null = null;
-  try {
-    w = window.open('', name);
-    w?.document.write('<p style="font-family:sans-serif;padding:40px;font-size:18px">jobkit: 보내는 중입니다… 잠시만 기다려 주세요.</p>');
-  } catch {
-    /* 새 창을 못 열면 아래 _blank 로 */
-  }
-  form.target = w ? name : '_blank';
+  // 스크립트로 여는 새 창은 막히므로 폼을 바로 새 창으로 보낸다. rel=opener 라야 결과 신호가 돌아온다
+  form.target = '_blank';
+  form.setAttribute('rel', 'opener');
   form.acceptCharset = 'UTF-8';
   form.style.display = 'none';
   const add = (name: string, value: string) => {
@@ -203,7 +183,8 @@ export function relayScript(key: string): string {
     '  if (extra) for (var k in extra) data[k] = extra[k];',
     "  var sig = rid ? '<script>(function(){var m=' + JSON.stringify(data).replace(/</g, '\\\\u003c').replace(/\\u2028/g, '\\\\u2028').replace(/\\u2029/g, '\\\\u2029') + ';' +",
     "    'var t=[];try{t.push(window.top.opener)}catch(e){}try{t.push(window.opener)}catch(e){}' +",
-    "    't.forEach(function(w){try{if(w)w.postMessage(m,\"*\")}catch(e){}});})();<\\/script>' : '';",
+    "    't.forEach(function(w){try{if(w)w.postMessage(m,\"*\")}catch(e){}});' +",
+    "    'if(t.some(function(w){return !!w})&&m.ok){setTimeout(function(){try{window.top.close()}catch(e){}},2500)}})();<\\/script>' : '';",
     "  var h = '<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">' +",
     "    '<div style=\"font-family:sans-serif;max-width:520px;margin:48px auto;padding:24px 28px;border-radius:14px;background:' + (ok ? '#e3f7ec' : '#ffe7e4') + '\">' +",
     "    '<h2 style=\"margin:0 0 8px\">' + esc(title) + '</h2><p style=\"font-size:16px;line-height:1.6\">' + esc(msg) + '</p>' +",

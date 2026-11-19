@@ -27,7 +27,7 @@ import { EMPTY_PROFILE, useStore, type AppRec, type JobItem, type JobSource, typ
 import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
 import { applyChanges, criteriaPrompt, filterJob, type ChatMessage, type Criteria, type FilterResult, type JobVerdict } from './criteria';
-import { FETCH_HOSTS, isRelaySignal, newKey, openFetch, openPing, relayScript, submitRelay, validRelayBase, RELAY_VERSION, type RelaySignal } from './relay';
+import { FETCH_HOSTS, fetchHref, isRelaySignal, newKey, newRid, pingHref, relayScript, submitRelay, validRelayBase, RELAY_VERSION, type RelaySignal } from './relay';
 import { detailFetchUrl, refreshItem, type JobItem as CJobItem } from '../../collector/extract';
 import { recommend } from './criteria';
 import { estimateCommute, finalMinutes, kakaoRouteUrl, type CommuteResult, type Geo } from './commute';
@@ -1090,25 +1090,22 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
   const nativeId = it.id.slice(it.source.length + 1);
   const directUrl = it.source === 'jobkorea' || it.source === 'saramin' || it.source === 'work24' ? detailFetchUrl(it.source, nativeId) : null;
   const canDirect = relayOk && !!directUrl && FETCH_HOSTS.includes(new URL(directUrl).host);
-  /** 발송기가 공고 원문을 가져와 주면 이 화면에서 바로 고쳐 저장한다 (누가 눌러도 됨) */
-  function refreshDirect() {
+  /** 발송기가 공고 원문을 가져와 주면 이 화면에서 바로 고쳐 저장한다 (누가 눌러도 됨). 새 창은 링크 클릭으로 연다 */
+  function onRefreshClick(e: React.MouseEvent<HTMLAnchorElement>) {
     setRefMsg(null);
-    const { rid, win } = openFetch(store.prefs.relay_url!, store.prefs.relay_key!, directUrl!);
-    if (!win) return setRefMsg('새 창이 막혀 새로고침하지 못했습니다. 이 사이트의 팝업을 허용해 주세요.');
+    const rid = newRid();
+    e.currentTarget.href = fetchHref(store.prefs.relay_url!, store.prefs.relay_key!, directUrl!, rid);
     setFetching(true);
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       fetchWaiters.delete(rid);
       setFetching(false);
-      setRefMsg('발송기에서 응답이 없습니다. 열린 창에 오류가 보이면 설정 → 원클릭 발송 연결에서 [연결 확인]을 눌러 보세요.');
-    }, 45000);
+      // 결과가 이 화면으로 돌아오지 않는 화면이면, 아침 자동 스캔이 처리하도록 요청을 남긴다
+      await store.saveScanRequest(it.id, new Date().toISOString()).catch(() => {});
+      setRefMsg(`새 창의 결과를 이 화면으로 받지 못했습니다. ${fmtKst(nextRequestPickup())} 자동 스캔 때 이 공고를 다시 확인합니다.`);
+    }, 25000);
     fetchWaiters.set(rid, async (s) => {
       fetchWaiters.delete(rid);
       clearTimeout(timer);
-      try {
-        win.close();
-      } catch {
-        /* */
-      }
       try {
         if (!s.ok && !s.status) throw new Error(s.msg);
         const r = refreshItem(it as unknown as CJobItem, s.status ?? 0, s.html ?? '');
@@ -1296,9 +1293,16 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
         </a>
         {it.source !== 'manual' && (
           canDirect ? (
-            <Btn kind="quiet" onClick={refreshDirect} disabled={fetching} title="이 공고가 아직 있는지, 내용이 바뀌었는지 사이트에서 바로 다시 읽습니다">
+            <a
+              className={cx('btn', 'btn-quiet', fetching && 'is-busy')}
+              href={store.prefs.relay_url}
+              target="_blank"
+              rel="opener"
+              onClick={onRefreshClick}
+              title="이 공고가 아직 있는지, 내용이 바뀌었는지 사이트에서 바로 다시 읽습니다"
+            >
               {fetching ? '↻ 가져오는 중…' : '↻ 새로고침'}
-            </Btn>
+            </a>
           ) : (
             <Btn kind="quiet" onClick={refreshOne} disabled={refreshing} title="이 공고가 아직 있는지, 내용이 바뀌었는지 사이트에서 다시 확인합니다">
               {refreshing ? (Date.now() - Date.parse(reqAt!) < 15 * 60000 ? '↻ 새로고침 요청됨…' : `↻ ${fmtKst(nextRequestPickup())} 반영 예정`) : '↻ 새로고침'}
@@ -2392,8 +2396,8 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
             누르면 새 창이 열리며 {store.prefs.sender_email} Gmail에서 이력서·자기소개서를 첨부해 보내고, 정민욱 Drive의 &quot;jobkit 지원서&quot; 폴더에 사본을 남깁니다. 지원 이력에도 바로 기록됩니다.
           </span>
           {relayMsg && <Notice level={relayMsg.level}>{relayMsg.text}</Notice>}
-          {a.send_state === 'relay' && pendingFor < 25000 && <Notice level="info">보내는 중입니다… 새로 열린 창에서 발송기가 메일을 보내고 있습니다. 끝나면 여기에 &quot;완료했습니다&quot;가 뜹니다.</Notice>}
-          {a.send_state === 'relay' && pendingFor >= 25000 && (
+          {a.send_state === 'relay' && pendingFor < 10000 && <Notice level="info">보내는 중입니다… 새로 열린 창에서 발송기가 메일을 보내고 있습니다. 끝나면 여기에 &quot;완료했습니다&quot;가 뜹니다.</Notice>}
+          {a.send_state === 'relay' && pendingFor >= 10000 && (
             <Notice level="warn">
               완료 신호가 오지 않았습니다. 새로 열린 창을 확인해 주세요.
               <span className="row wrap" style={{ marginTop: 8 }}>
@@ -3274,30 +3278,27 @@ function RelaySetup({ store }: { store: Store }) {
   const ready = !!(store.prefs.relay_url && key);
 
   const [checking, setChecking] = useState(false);
-  /** 발송기 창을 열어 버전을 확인한다 (옛 코드는 답을 보내지 않는다) */
-  function checkRelay() {
+  /** 답이 안 돌아오는 화면이면, 새 창에 뜬 글을 보고 직접 고르게 한다 */
+  const [askVersion, setAskVersion] = useState(false);
+  const pingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** [연결 확인] 링크를 누른 순간: 새 창(링크)이 열리고, 발송기가 버전을 이 화면에 알려 준다 */
+  function onPingClick(e: React.MouseEvent<HTMLAnchorElement>) {
     setMsg(null);
-    const { rid, win } = openPing(store.prefs.relay_url!);
-    if (!win) return setMsg({ text: '새 창이 막혔습니다. 이 사이트의 팝업을 허용해 주세요.', level: 'warn' });
+    setAskVersion(false);
+    const rid = newRid();
+    e.currentTarget.href = pingHref(store.prefs.relay_url!, rid);
     setChecking(true);
-    const timer = setTimeout(() => {
+    if (pingTimer.current) clearTimeout(pingTimer.current);
+    pingTimer.current = setTimeout(() => {
       pingWaiters.delete(rid);
       setChecking(false);
-      store.savePrefs({ ...store.prefs, relay_version: 1 }).catch(() => {});
-      setMsg({
-        text: `발송기가 버전을 알려 주지 않았습니다 — 예전 코드(v3 이하)입니다. 아래 [발송기 코드 복사] → Apps Script 에 붙여넣기 → 저장 → 배포 → 배포 관리 → ✏ → 버전: 새 버전 → 배포 후 다시 [연결 확인]을 눌러 주세요.`,
-        level: 'danger',
-      });
-    }, 15000);
+      setAskVersion(true);
+    }, 10000);
     pingWaiters.set(rid, (s) => {
       pingWaiters.delete(rid);
-      clearTimeout(timer);
+      if (pingTimer.current) clearTimeout(pingTimer.current);
       setChecking(false);
-      try {
-        win.close();
-      } catch {
-        /* */
-      }
+      setAskVersion(false);
       const v = s.v ?? 0;
       store.savePrefs({ ...store.prefs, relay_version: v }).catch(() => {});
       setMsg(
@@ -3306,6 +3307,18 @@ function RelaySetup({ store }: { store: Store }) {
           : { text: `발송기가 옛 버전(v${v})입니다. 코드를 다시 붙여넣고 새 버전으로 배포해 주세요.`, level: 'danger' },
       );
     });
+  }
+  function setVersionByEye(v: number) {
+    setAskVersion(false);
+    store.savePrefs({ ...store.prefs, relay_version: v }).catch(() => {});
+    setMsg(
+      v >= RELAY_VERSION
+        ? { text: `발송기 v${v} 로 기록했습니다. 이제 보낼 지원서에서 📨 보내기를 쓸 수 있습니다.`, level: 'ok' }
+        : {
+            text: '예전 코드입니다. 아래 [발송기 코드 복사] → Apps Script 에 붙여넣기 → 💾 저장 → 배포 → 배포 관리 → ✏ → 버전: 새 버전 → 배포 후 다시 [연결 확인]을 눌러 주세요.',
+            level: 'danger',
+          },
+    );
   }
 
   async function ensureKey() {
@@ -3367,12 +3380,28 @@ function RelaySetup({ store }: { store: Store }) {
         <Btn kind="primary" onClick={saveUrl}>
           저장
         </Btn>
-        {validRelayBase(store.prefs.relay_url ?? '') && <Btn onClick={checkRelay}>{checking ? '확인 중…' : '연결 확인'}</Btn>}
+        {validRelayBase(store.prefs.relay_url ?? '') && (
+          <a className="btn btn-plain" href={store.prefs.relay_url} target="_blank" rel="opener" onClick={onPingClick}>
+            {checking ? '확인 중…' : '연결 확인'}
+          </a>
+        )}
         {store.prefs.relay_version ? (
           <Pill tone={store.prefs.relay_version >= RELAY_VERSION ? 'green' : 'orange'}>발송기 v{store.prefs.relay_version}</Pill>
         ) : null}
 
       </div>
+      {askVersion && (
+        <Notice level="info">
+          새로 열린 창에 무엇이 보이나요?
+          <span className="row wrap" style={{ marginTop: 8 }}>
+            <Btn kind="primary" onClick={() => setVersionByEye(RELAY_VERSION)}>
+              &quot;연결됨 ✓ (v{RELAY_VERSION})&quot;
+            </Btn>
+            <Btn onClick={() => setVersionByEye(1)}>버전 없이 &quot;연결됨 ✓&quot; 또는 다른 숫자</Btn>
+          </span>
+          <span className="small">창이 안 열렸거나 오류가 보이면 웹 앱 URL이 맞는지, 배포 액세스가 &quot;모든 사용자&quot;인지 확인해 주세요.</span>
+        </Notice>
+      )}
       {msg && <Notice level={msg.level}>{msg.text}</Notice>}
       <p className="small muted">
         <b>이미 배포했던 경우(코드 바꾸기):</b> 코드를 다시 복사해 붙여넣고 💾 저장 → <b>배포 → 배포 관리 → ✏(수정) → 버전: 새 버전 → 배포</b>. 웹 앱 URL은 그대로라 다시 넣을 필요 없습니다. 지금 코드는 v{RELAY_VERSION}이고,
