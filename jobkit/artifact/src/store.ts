@@ -76,6 +76,8 @@ export type Prefs = Settings & {
   /** 원클릭 발송기(정민욱 계정 Apps Script 웹앱) 주소와 열쇠 */
   relay_url?: string;
   relay_key?: string;
+  /** 마지막 [연결 확인]에서 확인한 발송기 코드 버전 */
+  relay_version?: number;
   /** 서류를 올리는 Google Drive 폴더 */
   drive_folder_id?: string;
 };
@@ -169,6 +171,7 @@ export interface Store extends StoreData {
   saveJobEmail(jobId: string, email: string | null): Promise<void>;
   saveScanRequest(jobId: string, at: string | null): Promise<void>;
   saveManualJobs(items: JobItem[]): Promise<void>;
+  saveJobs(source: JobSource, items: JobItem[]): Promise<void>;
   saveApp(a: AppRec): Promise<void>;
   patchApp(id: string, patch: Partial<AppRec>): Promise<void>;
   deleteApp(id: string): Promise<void>;
@@ -343,6 +346,13 @@ export function useStore(): Store {
       const doc: JobList = { ...(data.jobs.manual ?? ({} as JobList)), source: 'manual', updated_at: now, scanned: items.length, kept: items.length, errors: [], items } as JobList;
       setData((prev) => ({ ...prev, jobs: { ...prev.jobs, manual: doc } }));
       await write('jobs_manual', doc as unknown as Record<string, unknown>);
+    },
+    async saveJobs(source, items) {
+      const cur = data.jobs[source];
+      if (!cur) return;
+      const doc: JobList = { ...cur, kept: items.length, items };
+      setData((prev) => ({ ...prev, jobs: { ...prev.jobs, [source]: doc } }));
+      await write(`jobs_${source}`, doc as unknown as Record<string, unknown>);
     },
     async saveApp(a) {
       setData((prev) => ({ ...prev, apps: [a, ...prev.apps.filter((x) => x.id !== a.id)] }));

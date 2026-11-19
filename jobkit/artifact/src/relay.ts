@@ -2,7 +2,7 @@
 // 직접 넘기고(새 창으로 폼 전송), 발송기가 정민욱 Gmail 로 보내며 정민욱 Drive 에 사본을 남긴다.
 // claude.ai 연결(Gmail/Drive) 기능을 쓰지 않으므로 어느 계정·화면에서 열어도 동작한다.
 
-export const RELAY_VERSION = 3;
+export const RELAY_VERSION = 4;
 
 export interface RelayFile {
   name: string;
@@ -40,9 +40,54 @@ export function newKey() {
 /** 발송기 창이 보내는 완료 신호 */
 export interface RelaySignal {
   jobkit: 'relay';
+  /** send: 메일 보냄 / ping: 연결 확인 / fetch: 공고 원문 가져옴 */
+  kind?: 'send' | 'ping' | 'fetch';
+  /** 발송기 코드 버전 (v4 부터) */
+  v?: number;
   rid: string;
   ok: boolean;
   msg: string;
+  status?: number;
+  html?: string;
+}
+
+/** 발송기가 가져와 줄 수 있는 사이트 (브라우저 검사가 없는 곳만) */
+export const FETCH_HOSTS = ['www.jobkorea.co.kr', 'www.saramin.co.kr', 'www.work24.go.kr'];
+
+function newRid() {
+  return `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** 클릭 처리 안에서 바로 부른다. 발송기 창을 열어 연결·버전을 확인한다 */
+export function openPing(base: string): { rid: string; win: Window | null } {
+  const rid = newRid();
+  const u = new URL(base.trim());
+  u.searchParams.set('ping', '1');
+  u.searchParams.set('rid', rid);
+  let win: Window | null = null;
+  try {
+    win = window.open(u.toString(), `jobkit_ping_${rid}`);
+  } catch {
+    win = null;
+  }
+  return { rid, win };
+}
+
+/** 클릭 처리 안에서 바로 부른다. 발송기가 공고 원문을 가져와 이 창으로 돌려준다 */
+export function openFetch(base: string, key: string, url: string): { rid: string; win: Window | null } {
+  const rid = newRid();
+  const u = new URL(base.trim());
+  u.searchParams.set('action', 'fetch');
+  u.searchParams.set('k', key);
+  u.searchParams.set('rid', rid);
+  u.searchParams.set('u', url);
+  let win: Window | null = null;
+  try {
+    win = window.open(u.toString(), `jobkit_fetch_${rid}`);
+  } catch {
+    win = null;
+  }
+  return { rid, win };
 }
 
 export function isRelaySignal(d: unknown): d is RelaySignal {
@@ -103,18 +148,35 @@ export function relayScript(key: string): string {
     '',
     'function doGet(e) {',
     '  var p = (e && e.parameter) || {};',
-    "  if (p.ping) return page('연결됨 ✓ (v" + RELAY_VERSION + ")', Session.getEffectiveUser().getEmail() + ' 계정으로 보냅니다. 이 창은 닫아도 됩니다.', true, '');",
+    "  if (p.ping) return page('연결됨 ✓ (v" + RELAY_VERSION + ")', Session.getEffectiveUser().getEmail() + ' 계정으로 보냅니다. 이 창은 닫아도 됩니다.', true, p.rid, { kind: 'ping' });",
+    "  if (p.action === 'fetch') return fetchPosting(p);",
     "  return page('jobkit 발송기', 'jobkit 페이지에서 보내기 버튼을 눌러 사용합니다.', true, '');",
+    '}',
+    '',
+    '// 공고 새로고침: 정해진 구인 사이트의 공고 페이지만 가져와 jobkit 에 돌려준다 (로그인·쿠키 없이 공개 페이지만)',
+    "var FETCH_HOSTS = " + JSON.stringify(FETCH_HOSTS) + ";",
+    'function fetchPosting(p) {',
+    "  if (p.k !== KEY) return page('열쇠가 다릅니다', 'jobkit 설정에서 발송기 코드를 다시 붙여넣어 주세요.', false, p.rid, { kind: 'fetch' });",
+    "  var m = String(p.u || '').match(/^https:\\/\\/([^\\/?#]+)\\//);",
+    "  if (!m || FETCH_HOSTS.indexOf(m[1]) < 0) return page('가져올 수 없는 주소', String(p.u || ''), false, p.rid, { kind: 'fetch' });",
+    '  try {',
+    "    var r = UrlFetchApp.fetch(p.u, { muteHttpExceptions: true, followRedirects: true, headers: { 'Accept-Language': 'ko-KR,ko;q=0.9' } });",
+    '    var code = r.getResponseCode();',
+    "    var html = r.getContentText('UTF-8');",
+    "    return page(code < 400 ? '공고를 새로 가져왔습니다 ✓' : '공고 페이지 응답 ' + code, 'jobkit 화면에 바로 반영됩니다. 이 창은 닫아도 됩니다.', code < 400, p.rid, { kind: 'fetch', status: code, html: html.slice(0, 900000) });",
+    '  } catch (err) {',
+    "    return page('공고를 가져오지 못했습니다', String(err && err.message || err), false, p.rid, { kind: 'fetch', status: 0 });",
+    '  }',
     '}',
     '',
     'function doPost(e) {',
     '  var p = (e && e.parameter) || {};',
-    "  if (p.k !== KEY) return page('열쇠가 다릅니다', 'jobkit 설정에서 발송기 코드를 다시 복사해 붙여넣고 새 버전으로 배포해 주세요. 메일은 나가지 않았습니다.', false, p.rid);",
+    "  if (p.k !== KEY) return page('열쇠가 다릅니다', 'jobkit 설정에서 발송기 코드를 다시 복사해 붙여넣고 새 버전으로 배포해 주세요. 메일은 나가지 않았습니다.', false, p.rid, { kind: 'send' });",
     '  var lock = LockService.getScriptLock();',
     '  lock.waitLock(30000);',
     '  try {',
     '    var props = PropertiesService.getScriptProperties();',
-    "    if (p.rid && props.getProperty('sent_' + p.rid)) return page('이미 보낸 지원서입니다', '같은 메일을 두 번 보내지 않았습니다. 이 창은 닫아도 됩니다.', true, p.rid);",
+    "    if (p.rid && props.getProperty('sent_' + p.rid)) return page('이미 보낸 지원서입니다', '같은 메일을 두 번 보내지 않았습니다. 이 창은 닫아도 됩니다.', true, p.rid, { kind: 'send' });",
     "    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(p.to || '')) throw new Error('받는 사람 주소가 이상합니다: ' + p.to);",
     "    var files = JSON.parse(p.files || '[]');",
     '    var atts = files.map(function (f) { return Utilities.newBlob(Utilities.base64Decode(f.b64), f.type, f.name); });',
@@ -127,17 +189,19 @@ export function relayScript(key: string): string {
     '      atts.forEach(function (b) { sub.createFile(b); });',
     "      sub.createFile('메일.txt', '받는 사람: ' + p.to + '\\n제목: ' + p.subject + '\\n\\n' + p.body);",
     '    } catch (x) {}',
-    "    return page('보냈습니다 ✓', p.to + ' 에게 \"' + p.subject + '\" 메일을 첨부 ' + atts.length + '개와 함께 보냈습니다. 이 창은 닫아도 됩니다.', true, p.rid);",
+    "    return page('보냈습니다 ✓', p.to + ' 에게 \"' + p.subject + '\" 메일을 첨부 ' + atts.length + '개와 함께 보냈습니다. 이 창은 닫아도 됩니다.', true, p.rid, { kind: 'send' });",
     '  } catch (err) {',
-    "    return page('보내지 못했습니다', String(err && err.message || err) + ' — 메일은 나가지 않았습니다.', false, p.rid);",
+    "    return page('보내지 못했습니다', String(err && err.message || err) + ' — 메일은 나가지 않았습니다.', false, p.rid, { kind: 'send' });",
     '  } finally {',
     '    lock.releaseLock();',
     '  }',
     '}',
     '',
     '// rid 가 있으면 결과를 jobkit 페이지(이 창을 연 창)로 알려 준다',
-    'function page(title, msg, ok, rid) {',
-    "  var sig = rid ? '<script>(function(){var m=' + JSON.stringify({ jobkit: 'relay', rid: String(rid), ok: !!ok, msg: title + ' ' + msg }).replace(/</g, '\\\\u003c') + ';' +",
+    'function page(title, msg, ok, rid, extra) {',
+    "  var data = { jobkit: 'relay', v: " + RELAY_VERSION + ", rid: String(rid || ''), ok: !!ok, msg: title + ' ' + msg };",
+    '  if (extra) for (var k in extra) data[k] = extra[k];',
+    "  var sig = rid ? '<script>(function(){var m=' + JSON.stringify(data).replace(/</g, '\\\\u003c').replace(/\\u2028/g, '\\\\u2028').replace(/\\u2029/g, '\\\\u2029') + ';' +",
     "    'var t=[];try{t.push(window.top.opener)}catch(e){}try{t.push(window.opener)}catch(e){}' +",
     "    't.forEach(function(w){try{if(w)w.postMessage(m,\"*\")}catch(e){}});})();<\\/script>' : '';",
     "  var h = '<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">' +",

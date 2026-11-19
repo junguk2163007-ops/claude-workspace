@@ -26,7 +26,8 @@ import { EMPTY_PROFILE, useStore, type AppRec, type JobItem, type JobSource, typ
 import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
 import { applyChanges, criteriaPrompt, filterJob, type ChatMessage, type Criteria, type FilterResult, type JobVerdict } from './criteria';
-import { isRelaySignal, newKey, pingUrl, relayScript, submitRelay, validRelayBase, RELAY_VERSION } from './relay';
+import { FETCH_HOSTS, isRelaySignal, newKey, openFetch, openPing, relayScript, submitRelay, validRelayBase, RELAY_VERSION, type RelaySignal } from './relay';
+import { detailFetchUrl, refreshItem, type JobItem as CJobItem } from '../../collector/extract';
 import { recommend } from './criteria';
 import { estimateCommute, finalMinutes, kakaoRouteUrl, type CommuteResult, type Geo } from './commute';
 
@@ -914,6 +915,16 @@ function nextDailyScan(now = new Date()) {
   return new Date(t > now.getTime() ? t : t + 86400000).toISOString();
 }
 
+/** 화면 위 알림 (App 이 받아 띄운다) */
+function alertTop(text: string, level: 'ok' | 'danger' = 'ok') {
+  window.dispatchEvent(new CustomEvent('jobkit-toast', { detail: { text, level } }));
+}
+
+/** 발송기 창이 돌려주는 공고 원문을 받을 곳 (rid → 처리 함수) */
+const fetchWaiters = new Map<string, (s: RelaySignal) => void>();
+/** 발송기 [연결 확인] 결과를 받을 곳 */
+const pingWaiters = new Map<string, (s: RelaySignal) => void>();
+
 /**
  * 수집 작업을 지금 바로 한 번 돌려 본다. 페이지 주인 계정의 claude.ai 화면에서만 된다.
  * 안 되면 false — 요청은 공유 기록에 남아 있으니 다음 확인 때 처리된다.
@@ -1053,6 +1064,50 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
   const scannedAt = it.scanned_at || store.jobs[it.source]?.updated_at || '';
   const reqAt = store.scanRequests[it.id];
   const refreshing = !!reqAt && (!store.scanStatus || store.scanStatus.last_scan_at < reqAt) && Date.now() - Date.parse(reqAt) < 26 * 3600000;
+  const [fetching, setFetching] = useState(false);
+  const relayOk = !!(store.prefs.relay_url && store.prefs.relay_key && (store.prefs.relay_version ?? 0) >= 4);
+  const nativeId = it.id.slice(it.source.length + 1);
+  const directUrl = it.source === 'jobkorea' || it.source === 'saramin' || it.source === 'work24' ? detailFetchUrl(it.source, nativeId) : null;
+  const canDirect = relayOk && !!directUrl && FETCH_HOSTS.includes(new URL(directUrl).host);
+  /** 발송기가 공고 원문을 가져와 주면 이 화면에서 바로 고쳐 저장한다 (누가 눌러도 됨) */
+  function refreshDirect() {
+    setRefMsg(null);
+    const { rid, win } = openFetch(store.prefs.relay_url!, store.prefs.relay_key!, directUrl!);
+    if (!win) return setRefMsg('새 창이 막혀 새로고침하지 못했습니다. 이 사이트의 팝업을 허용해 주세요.');
+    setFetching(true);
+    const timer = setTimeout(() => {
+      fetchWaiters.delete(rid);
+      setFetching(false);
+      setRefMsg('발송기에서 응답이 없습니다. 열린 창에 오류가 보이면 설정 → 원클릭 발송 연결에서 [연결 확인]을 눌러 보세요.');
+    }, 45000);
+    fetchWaiters.set(rid, async (s) => {
+      fetchWaiters.delete(rid);
+      clearTimeout(timer);
+      try {
+        win.close();
+      } catch {
+        /* */
+      }
+      try {
+        if (!s.ok && !s.status) throw new Error(s.msg);
+        const r = refreshItem(it as unknown as CJobItem, s.status ?? 0, s.html ?? '');
+        const list = store.jobs[it.source]?.items ?? [];
+        if (r.closed) {
+          await store.saveJobs(it.source, list.filter((x) => x.id !== it.id));
+          setRefMsg(null);
+          alertTop('이 공고는 사이트에서 마감되었거나 내려가 목록에서 뺐습니다.');
+        } else if (r.item) {
+          const fresh = r.item as unknown as JobItem;
+          await store.saveJobs(it.source, list.map((x) => (x.id === it.id ? fresh : x)));
+          setRefMsg(fresh.text === it.text ? '✓ 새로고침했습니다 — 바뀐 내용은 없습니다.' : '✓ 새로고침했습니다 — 바뀐 내용을 반영했습니다.');
+        }
+      } catch (err) {
+        setRefMsg(`새로고침하지 못했습니다: ${(err as Error).message}. 예전 내용은 그대로 둡니다.`);
+      } finally {
+        setFetching(false);
+      }
+    });
+  }
   async function refreshOne() {
     setRefMsg(null);
     const at = new Date().toISOString();
@@ -1219,9 +1274,15 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
           공고 원문
         </a>
         {it.source !== 'manual' && (
-          <Btn kind="quiet" onClick={refreshOne} disabled={refreshing} title="이 공고가 아직 있는지, 내용이 바뀌었는지 사이트에서 다시 확인합니다">
-            {refreshing ? (Date.now() - Date.parse(reqAt!) < 15 * 60000 ? '↻ 새로고침 요청됨…' : `↻ ${fmtKst(nextRequestPickup())} 반영 예정`) : '↻ 새로고침'}
-          </Btn>
+          canDirect ? (
+            <Btn kind="quiet" onClick={refreshDirect} disabled={fetching} title="이 공고가 아직 있는지, 내용이 바뀌었는지 사이트에서 바로 다시 읽습니다">
+              {fetching ? '↻ 가져오는 중…' : '↻ 새로고침'}
+            </Btn>
+          ) : (
+            <Btn kind="quiet" onClick={refreshOne} disabled={refreshing} title="이 공고가 아직 있는지, 내용이 바뀌었는지 사이트에서 다시 확인합니다">
+              {refreshing ? (Date.now() - Date.parse(reqAt!) < 15 * 60000 ? '↻ 새로고침 요청됨…' : `↻ ${fmtKst(nextRequestPickup())} 반영 예정`) : '↻ 새로고침'}
+            </Btn>
+          )
         )}
       </div>
       {refMsg && <Notice level="info">{refMsg}</Notice>}
@@ -1513,7 +1574,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
     setRefresh(null);
     const at = new Date().toISOString();
     try {
-      await store.saveScanRequest('__all__', at);
+      await store.saveScanRequest('all_sites', at);
     } catch {
       return setRefresh({ level: 'danger', text: '요청을 남기지 못했습니다. 잠시 뒤 다시 눌러 주세요.' });
     }
@@ -1541,7 +1602,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   }
   const ss = store.scanStatus;
   const lastScan = ss?.last_full_scan_at ?? ss?.last_scan_at ?? lastUpdate;
-  const allPending = store.scanRequests.__all__ && (!ss || ss.last_scan_at < store.scanRequests.__all__) && Date.now() - Date.parse(store.scanRequests.__all__) < 26 * 3600000;
+  const allPending = store.scanRequests.all_sites && (!ss || ss.last_scan_at < store.scanRequests.all_sites) && Date.now() - Date.parse(store.scanRequests.all_sites) < 26 * 3600000;
 
   return (
     <div className="jobs-layout">
@@ -2178,6 +2239,16 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
               취소
             </Btn>
           </div>
+        </div>
+      ) : relayReady && (store.prefs.relay_version ?? 0) < RELAY_VERSION ? (
+        <div className="stack-s">
+          <Notice level="danger">
+            {store.prefs.relay_version
+              ? `발송기 코드가 옛 버전(v${store.prefs.relay_version})이라 보내지 않았습니다.`
+              : '발송기 버전을 아직 확인하지 않았습니다.'}{' '}
+            <a href="#prefs">설정 → 원클릭 발송 연결</a>에서 [발송기 코드 복사] → Apps Script 에 붙여넣기 → 💾 저장 → <b>배포 → 배포 관리 → ✏ → 버전: 새 버전 → 배포</b> 후{' '}
+            <b>[연결 확인]</b>을 눌러 &quot;발송기 v{RELAY_VERSION}&quot;이 보이면 여기서 보낼 수 있습니다.
+          </Notice>
         </div>
       ) : relayReady ? (
         <div className="stack-s">
@@ -3072,6 +3143,41 @@ function RelaySetup({ store }: { store: Store }) {
   const key = store.prefs.relay_key ?? '';
   const ready = !!(store.prefs.relay_url && key);
 
+  const [checking, setChecking] = useState(false);
+  /** 발송기 창을 열어 버전을 확인한다 (옛 코드는 답을 보내지 않는다) */
+  function checkRelay() {
+    setMsg(null);
+    const { rid, win } = openPing(store.prefs.relay_url!);
+    if (!win) return setMsg({ text: '새 창이 막혔습니다. 이 사이트의 팝업을 허용해 주세요.', level: 'warn' });
+    setChecking(true);
+    const timer = setTimeout(() => {
+      pingWaiters.delete(rid);
+      setChecking(false);
+      store.savePrefs({ ...store.prefs, relay_version: 1 }).catch(() => {});
+      setMsg({
+        text: `발송기가 버전을 알려 주지 않았습니다 — 예전 코드(v3 이하)입니다. 아래 [발송기 코드 복사] → Apps Script 에 붙여넣기 → 저장 → 배포 → 배포 관리 → ✏ → 버전: 새 버전 → 배포 후 다시 [연결 확인]을 눌러 주세요.`,
+        level: 'danger',
+      });
+    }, 15000);
+    pingWaiters.set(rid, (s) => {
+      pingWaiters.delete(rid);
+      clearTimeout(timer);
+      setChecking(false);
+      try {
+        win.close();
+      } catch {
+        /* */
+      }
+      const v = s.v ?? 0;
+      store.savePrefs({ ...store.prefs, relay_version: v }).catch(() => {});
+      setMsg(
+        v >= RELAY_VERSION
+          ? { text: `연결됨 ✓ 발송기 v${v} — ${s.msg.replace(/^연결됨 ✓ \(v\d+\)\s*/, '').replace(' 이 창은 닫아도 됩니다.', '')}`, level: 'ok' }
+          : { text: `발송기가 옛 버전(v${v})입니다. 코드를 다시 붙여넣고 새 버전으로 배포해 주세요.`, level: 'danger' },
+      );
+    });
+  }
+
   async function ensureKey() {
     if (key) return key;
     const k = newKey();
@@ -3131,11 +3237,10 @@ function RelaySetup({ store }: { store: Store }) {
         <Btn kind="primary" onClick={saveUrl}>
           저장
         </Btn>
-        {validRelayBase(store.prefs.relay_url ?? '') && (
-          <a className="btn btn-plain" href={pingUrl(store.prefs.relay_url!)} target="_blank" rel="noreferrer noopener">
-            연결 확인
-          </a>
-        )}
+        {validRelayBase(store.prefs.relay_url ?? '') && <Btn onClick={checkRelay}>{checking ? '확인 중…' : '연결 확인'}</Btn>}
+        {store.prefs.relay_version ? (
+          <Pill tone={store.prefs.relay_version >= RELAY_VERSION ? 'green' : 'orange'}>발송기 v{store.prefs.relay_version}</Pill>
+        ) : null}
 
       </div>
       {msg && <Notice level={msg.level}>{msg.text}</Notice>}
@@ -3312,6 +3417,14 @@ function App() {
   useEffect(() => {
     const on = (e: MessageEvent) => {
       if (!isRelaySignal(e.data)) return;
+      if (e.data.kind === 'fetch') {
+        fetchWaiters.get(e.data.rid)?.(e.data);
+        return;
+      }
+      if (e.data.kind === 'ping') {
+        pingWaiters.get(e.data.rid)?.(e.data);
+        return;
+      }
       const st = appsRef.current;
       const app = st.apps.find((x) => x.relay_job === e.data.rid);
       if (!app) return;
@@ -3330,7 +3443,12 @@ function App() {
       }
     };
     window.addEventListener('message', on);
-    return () => window.removeEventListener('message', on);
+    const onToast = (e: Event) => setToast((e as CustomEvent).detail);
+    window.addEventListener('jobkit-toast', onToast);
+    return () => {
+      window.removeEventListener('message', on);
+      window.removeEventListener('jobkit-toast', onToast);
+    };
   }, []);
   useEffect(() => {
     const on = () => setView(readHash());

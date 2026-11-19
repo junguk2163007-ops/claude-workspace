@@ -30,7 +30,9 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // collector/collect.ts
 var collect_exports = {};
 __export(collect_exports, {
+  NOT_ROLE_RE: () => NOT_ROLE_RE,
   ORIGIN: () => ORIGIN,
+  ROLE_RE: () => ROLE_RE,
   geocode: () => geocode,
   isRelevant: () => isRelevant
 });
@@ -550,26 +552,9 @@ function estimateCommute(address, site, table = DEFAULT_COMMUTE) {
   return { verdict: "unknown", min: null, area: district ? `${district}(\uB3D9 \uBBF8\uC0C1)` : null, route: null, matched: null };
 }
 
-// collector/collect.ts
-var UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36";
+// collector/extract.ts
 var TEXT_MAX = 3500;
-var PER_SOURCE_MAX = 40;
 var ORIGIN = { dghma: "\uB300\uAD6C\uC8FC\uD0DD\uAD00\uB9AC\uC0AC\uD611\uD68C", jobkorea: "\uC7A1\uCF54\uB9AC\uC544", saramin: "\uC0AC\uB78C\uC778", work24: "\uACE0\uC6A924" };
-var ROLE_RE = /(시설|기전|영선|관리주임|관리과장|관리기사|관리소|아파트|건물\s*관리|빌딩\s*관리|보일러|에너지\s*관리|전기\s*(기사|주임|안전|기술)|설비\s*(관리|유지|보수|기사|주임))/;
-var NOT_ROLE_RE = /(사무|총무|경리|회계|청소|미화|영업|판매|상담원|물품|배송|운전기사|요양|간호|조리|강사|디자인|개발자|마케팅|안전관리대행|월점검|설계|오퍼레이터|\bOP\b|생산|제조|포장|건설|시공|현장\s*기계|엔지니어|정보통신|태양광|판금|절곡|제작|공사|공무|경비원|요양)/;
-function nearInList(loc) {
-  if (!/대구|칠곡/.test(loc)) return false;
-  if (/북구|서구|중구|칠곡|대구\s*전체|대구전체/.test(loc)) return true;
-  if (/(수성구|달서구|달성군|동구|남구|경산|구미|경주|포항|영천)/.test(loc)) return false;
-  return /대구/.test(loc);
-}
-var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-var clean = (s) => s.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|tr|h\d)>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
-async function get(url) {
-  const res = await fetch(url, { headers: { "User-Agent": UA, "Accept-Language": "ko-KR,ko;q=0.9" } });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.text();
-}
 function toItem(source, id, url, listTitle, posted, text, fallback) {
   const today = todaySeoul();
   const p = parsePosting(text, today);
@@ -599,6 +584,77 @@ function toItem(source, id, url, listTitle, posted, text, fallback) {
     text: text.slice(0, TEXT_MAX)
   };
 }
+var clean = (s) => s.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|tr|h\d)>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
+function extractJobkorea(html, c) {
+  const body = clean(html);
+  const s = body.search(/모집요강|모집분야|근무조건|지원자격/);
+  const e = body.search(/기업 정보|기업정보 더보기|이 기업의 다른 공고/);
+  let text = body.slice(s >= 0 ? s : 0, e > s ? e : void 0);
+  const addr = text.match(/근무지\s*주소\s*([^\n]+?)(?:\s*지도보기|\n|$)/)?.[1]?.trim() ?? "";
+  const due = text.match(/마감일\s*(\d{4}\.\d{2}\.\d{2})/)?.[1];
+  text = [`\uCC44\uC6A9\uC815\uBCF4 : ${c.title}`, `\uC704\uD0C1\uC0AC\uBA85 : ${c.company}`, addr && `\uC8FC\uC18C : ${addr}`, due && `\uB9C8\uAC10\uC77C\uC790 : ${due.replace(/\./g, "-")}`, text].filter(Boolean).join("\n");
+  return { text, addr };
+}
+function extractSaramin(html, c) {
+  let text = clean(html);
+  const addr = text.match(/근무\s*(?:지|지역|장소)\s*[:：]\s*([^\n•]+)/)?.[1]?.trim() ?? "";
+  text = [`\uCC44\uC6A9\uC815\uBCF4 : ${c.title}`, `\uC704\uD0C1\uC0AC\uBA85 : ${c.company}`, addr && `\uC8FC\uC18C : ${addr}`, text].filter(Boolean).join("\n");
+  return { text, addr };
+}
+function extractWork24(html, c) {
+  const body = clean(html);
+  const pick = (label) => body.match(new RegExp(`${label}\\s*\\n\\s*([^\\n]+)`))?.[1]?.trim() ?? "";
+  const s0 = body.indexOf("\uC9C1\uBB34\uB0B4\uC6A9");
+  const duty = body.slice(s0 >= 0 ? s0 + 4 : 0, s0 >= 0 ? body.indexOf("\uB354\uBCF4\uAE30", s0) : 0).trim();
+  const addr = pick("\uADFC\uBB34 \uC608\uC815\uC9C0").replace(/,\s*\.\s*/, " ");
+  const site = addr.match(/\([^,)]*,\s*([^)]+)\)/)?.[1]?.trim() ?? "";
+  const m0 = body.search(/접수 방법\s*\n/);
+  const method = m0 >= 0 ? body.slice(m0, body.indexOf("\uC81C\uCD9C \uC11C\uB958", m0) > m0 ? body.indexOf("\uC81C\uCD9C \uC11C\uB958", m0) : m0 + 200).split("\n").slice(1).map((x) => x.trim()).filter((x) => x && x !== "\uD14D\uC2A4\uD2B8" && !/br태그/.test(x)).join(", ").slice(0, 120) : "";
+  const k0 = body.indexOf("\uCC44\uC6A9 \uB2F4\uB2F9\uC790 \uC815\uBCF4 \uC5F4\uB78C");
+  const cblock = k0 >= 0 ? body.slice(k0, body.indexOf("\uC9C8\uBB38\uD558\uAE30", k0) > k0 ? body.indexOf("\uC9C8\uBB38\uD558\uAE30", k0) : k0 + 1500) : "";
+  const cName = cblock.match(/상세 보기\s*\n\s*([^\n*]+?)\s*\n/)?.[1]?.trim() ?? "";
+  const cPhone = cblock.match(/전화번호\s*([0-9][0-9-]{7,})/)?.[1] ?? "";
+  const cFax = cblock.match(/팩스\s*([0-9][0-9-]{7,})/)?.[1] ?? "";
+  const bodyEmails = Array.from(new Set(body.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) ?? [])).filter(
+    (e) => !/(work24|keis|moel|korea)\.(go|or)\.kr$/i.test(e)
+  );
+  const due = pick("\uC811\uC218 \uB9C8\uAC10\uC77C").match(/\d{4}\.\d{2}\.\d{2}/)?.[0]?.replace(/\./g, "-") ?? "";
+  const text = [
+    `\uCC44\uC6A9\uC815\uBCF4 : ${c.title}`,
+    site && `\uB2E8\uC9C0\uBA85 : ${site}`,
+    `\uC704\uD0C1\uC0AC\uBA85 : ${c.company}`,
+    addr && `\uC8FC\uC18C : ${addr}`,
+    `\uAE09\uC5EC : ${pick("\uC784\uAE08 \uC870\uAC74")}`,
+    `\uADFC\uBB34\uD615\uD0DC : ${pick("\uADFC\uBB34 \uD615\uD0DC")} ${pick("\uC0C1\uC138 \uADFC\uBB34\uC2DC\uAC04")}`.trim(),
+    due && `\uB9C8\uAC10\uC77C\uC790 : ${due}`,
+    `\uC81C\uCD9C\uC11C\uB958 : ${pick("\uC81C\uCD9C \uC11C\uB958")}`,
+    `\uC811\uC218\uBC29\uBC95 : ${method}`,
+    bodyEmails.length ? `\uC774\uBA54\uC77C : ${bodyEmails.join(", ")}` : "",
+    cName || cPhone ? `\uCC44\uC6A9\uB2F4\uB2F9 : ${[cName, cPhone && `\uC804\uD654 ${cPhone}`, cFax && `\uD329\uC2A4 ${cFax}`].filter(Boolean).join(" \xB7 ")}` : "",
+    "",
+    duty
+  ].filter((x) => typeof x === "string").join("\n");
+  const contact = cName || cPhone || cFax || method ? { name: cName || void 0, phone: cPhone || void 0, fax: cFax || void 0, method: method || void 0 } : null;
+  return { text, addr, site, contact };
+}
+
+// collector/collect.ts
+var ROLE_RE = /(시설|기전|영선|관리주임|관리과장|관리기사|관리소|아파트|건물\s*관리|빌딩\s*관리|보일러|에너지\s*관리|전기\s*(기사|주임|안전|기술)|설비\s*(관리|유지|보수|기사|주임))/;
+var NOT_ROLE_RE = /(사무|총무|경리|회계|청소|미화|영업|판매|상담원|물품|배송|운전기사|요양|간호|조리|강사|디자인|개발자|마케팅|안전관리대행|월점검|설계|오퍼레이터|\bOP\b|생산|제조|포장|건설|시공|현장\s*기계|엔지니어|정보통신|태양광|판금|절곡|제작|공사|공무|경비원|요양)/;
+function nearInList(loc) {
+  if (!/대구|칠곡/.test(loc)) return false;
+  if (/북구|서구|중구|칠곡|대구\s*전체|대구전체/.test(loc)) return true;
+  if (/(수성구|달서구|달성군|동구|남구|경산|구미|경주|포항|영천)/.test(loc)) return false;
+  return /대구/.test(loc);
+}
+var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function get(url) {
+  const res = await fetch(url, { headers: { "User-Agent": UA, "Accept-Language": "ko-KR,ko;q=0.9" } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+var UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36";
+var PER_SOURCE_MAX = 40;
 function isRelevant(it) {
   const head = `${it.list_title} ${it.title}`;
   if (NOT_ROLE_RE.test(head)) return false;
@@ -688,13 +744,7 @@ async function collectJobkorea() {
     try {
       const html = await get(url);
       scanned++;
-      const body = clean(html);
-      const s = body.search(/모집요강|모집분야|근무조건|지원자격/);
-      const e = body.search(/기업 정보|기업정보 더보기|이 기업의 다른 공고/);
-      let text = body.slice(s >= 0 ? s : 0, e > s ? e : void 0);
-      const addr = text.match(/근무지\s*주소\s*([^\n]+?)(?:\s*지도보기|\n|$)/)?.[1]?.trim() ?? "";
-      const due = text.match(/마감일\s*(\d{4}\.\d{2}\.\d{2})/)?.[1];
-      text = [`\uCC44\uC6A9\uC815\uBCF4 : ${c.title}`, `\uC704\uD0C1\uC0AC\uBA85 : ${c.company}`, addr && `\uC8FC\uC18C : ${addr}`, due && `\uB9C8\uAC10\uC77C\uC790 : ${due.replace(/\./g, "-")}`, text].filter(Boolean).join("\n");
+      const { text, addr } = extractJobkorea(html, c);
       items.push(toItem("jobkorea", gid, url, c.title, "", text, { address: addr || c.loc, company: c.company, title: c.title, site: c.company }));
     } catch (e) {
       errors.push(`\uC7A1\uCF54\uB9AC\uC544 ${gid}: ${e.message}`);
@@ -733,9 +783,7 @@ async function collectSaramin() {
     try {
       const html = await get(`https://www.saramin.co.kr/zf_user/jobs/relay/view-detail?rec_idx=${id}`);
       scanned++;
-      let text = clean(html);
-      const addr = text.match(/근무\s*(?:지|지역|장소)\s*[:：]\s*([^\n•]+)/)?.[1]?.trim() ?? "";
-      text = [`\uCC44\uC6A9\uC815\uBCF4 : ${c.title}`, `\uC704\uD0C1\uC0AC\uBA85 : ${c.company}`, addr && `\uC8FC\uC18C : ${addr}`, text].filter(Boolean).join("\n");
+      const { text, addr } = extractSaramin(html, c);
       items.push(toItem("saramin", id, url, c.title, "", text, { address: addr, company: c.company, title: c.title, site: c.company }));
     } catch (e) {
       errors.push(`\uC0AC\uB78C\uC778 ${id}: ${e.message}`);
@@ -804,41 +852,11 @@ async function collectWork24() {
     if (items.length >= PER_SOURCE_MAX) break;
     const url = `https://www.work24.go.kr/wk/a/b/1500/empDetailAuthView.do?wantedAuthNo=${no}&infoTypeCd=VALIDATION&infoTypeGroup=tb_workinfoworknet`;
     try {
-      const body = clean(await get(url));
+      const body = await get(url);
       scanned++;
-      const pick = (label) => body.match(new RegExp(`${label}\\s*\\n\\s*([^\\n]+)`))?.[1]?.trim() ?? "";
-      const s0 = body.indexOf("\uC9C1\uBB34\uB0B4\uC6A9");
-      const duty = body.slice(s0 >= 0 ? s0 + 4 : 0, s0 >= 0 ? body.indexOf("\uB354\uBCF4\uAE30", s0) : 0).trim();
-      const addr = pick("\uADFC\uBB34 \uC608\uC815\uC9C0").replace(/,\s*\.\s*/, " ");
-      const site = addr.match(/\([^,)]*,\s*([^)]+)\)/)?.[1]?.trim() ?? "";
-      const m0 = body.search(/접수 방법\s*\n/);
-      const method = m0 >= 0 ? body.slice(m0, body.indexOf("\uC81C\uCD9C \uC11C\uB958", m0) > m0 ? body.indexOf("\uC81C\uCD9C \uC11C\uB958", m0) : m0 + 200).split("\n").slice(1).map((x) => x.trim()).filter((x) => x && x !== "\uD14D\uC2A4\uD2B8" && !/br태그/.test(x)).join(", ").slice(0, 120) : "";
-      const k0 = body.indexOf("\uCC44\uC6A9 \uB2F4\uB2F9\uC790 \uC815\uBCF4 \uC5F4\uB78C");
-      const cblock = k0 >= 0 ? body.slice(k0, body.indexOf("\uC9C8\uBB38\uD558\uAE30", k0) > k0 ? body.indexOf("\uC9C8\uBB38\uD558\uAE30", k0) : k0 + 1500) : "";
-      const cName = cblock.match(/상세 보기\s*\n\s*([^\n*]+?)\s*\n/)?.[1]?.trim() ?? "";
-      const cPhone = cblock.match(/전화번호\s*([0-9][0-9-]{7,})/)?.[1] ?? "";
-      const cFax = cblock.match(/팩스\s*([0-9][0-9-]{7,})/)?.[1] ?? "";
-      const bodyEmails = Array.from(new Set(body.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) ?? [])).filter(
-        (e) => !/(work24|keis|moel|korea)\.(go|or)\.kr$/i.test(e)
-      );
-      const due = pick("\uC811\uC218 \uB9C8\uAC10\uC77C").match(/\d{4}\.\d{2}\.\d{2}/)?.[0]?.replace(/\./g, "-") ?? "";
-      const text = [
-        `\uCC44\uC6A9\uC815\uBCF4 : ${c.title}`,
-        site && `\uB2E8\uC9C0\uBA85 : ${site}`,
-        `\uC704\uD0C1\uC0AC\uBA85 : ${c.company}`,
-        addr && `\uC8FC\uC18C : ${addr}`,
-        `\uAE09\uC5EC : ${pick("\uC784\uAE08 \uC870\uAC74")}`,
-        `\uADFC\uBB34\uD615\uD0DC : ${pick("\uADFC\uBB34 \uD615\uD0DC")} ${pick("\uC0C1\uC138 \uADFC\uBB34\uC2DC\uAC04")}`.trim(),
-        due && `\uB9C8\uAC10\uC77C\uC790 : ${due}`,
-        `\uC81C\uCD9C\uC11C\uB958 : ${pick("\uC81C\uCD9C \uC11C\uB958")}`,
-        `\uC811\uC218\uBC29\uBC95 : ${method}`,
-        bodyEmails.length ? `\uC774\uBA54\uC77C : ${bodyEmails.join(", ")}` : "",
-        cName || cPhone ? `\uCC44\uC6A9\uB2F4\uB2F9 : ${[cName, cPhone && `\uC804\uD654 ${cPhone}`, cFax && `\uD329\uC2A4 ${cFax}`].filter(Boolean).join(" \xB7 ")}` : "",
-        "",
-        duty
-      ].filter((x) => typeof x === "string").join("\n");
-      const item = toItem("work24", no, url, c.title, "", text, { address: addr || c.loc, company: c.company, title: c.title, site: site || c.company });
-      item.contact = cName || cPhone || cFax || method ? { name: cName || void 0, phone: cPhone || void 0, fax: cFax || void 0, method: method || void 0 } : null;
+      const r = extractWork24(body, c);
+      const item = toItem("work24", no, url, c.title, "", r.text, { address: r.addr || c.loc, company: c.company, title: c.title, site: r.site || c.company });
+      item.contact = r.contact;
       items.push(item);
     } catch (e) {
       errors.push(`\uACE0\uC6A924 ${no}: ${e.message}`);
@@ -917,7 +935,9 @@ main().catch((e) => {
 });
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  NOT_ROLE_RE,
   ORIGIN,
+  ROLE_RE,
   geocode,
   isRelevant
 });

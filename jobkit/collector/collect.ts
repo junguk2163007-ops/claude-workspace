@@ -6,63 +6,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium, type Browser } from 'playwright';
-import { parsePosting } from '../lib/parser';
 import { todaySeoul } from '../lib/util/date';
-import { estimateCommute, type CommuteResult, type Geo } from '../artifact/src/commute';
+import { type Geo } from '../artifact/src/commute';
+import { clean, extractJobkorea, extractSaramin, extractWork24, toItem, type JobItem, type SourceId, type SourceResult } from './extract';
+export { ORIGIN, type JobItem, type SourceId, type SourceResult } from './extract';
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36';
-const TEXT_MAX = 3500;
-const PER_SOURCE_MAX = 40;
-
-export type SourceId = 'dghma' | 'jobkorea' | 'saramin' | 'work24';
-
-export const ORIGIN: Record<SourceId, string> = { dghma: '대구주택관리사협회', jobkorea: '잡코리아', saramin: '사람인', work24: '고용24' };
-
-export interface JobItem {
-  id: string;
-  source: SourceId;
-  /** 출처 사이트 이름 (화면 배지용) */
-  origin: string;
-  url: string;
-  list_title: string;
-  site: string;
-  title: string;
-  company: string;
-  address: string;
-  salary: string;
-  shift: string;
-  deadline: string | null;
-  deadline_text: string;
-  emails: string[];
-  /** 채용 담당자 (고용24 등) */
-  contact?: { name?: string; phone?: string; fax?: string; method?: string } | null;
-  apply_channels: string[];
-  /** 이메일로 접수 가능한지 */
-  email_apply: boolean;
-  commute: CommuteResult;
-  /** 근무지 좌표 (카카오맵 길찾기용, 도로 단위 정확도). 못 찾으면 null */
-  geo: Geo | null;
-  posted: string;
-  /** 처음 발견한 때 (ISO). 이전 수집 결과(JOBKIT_PREV 폴더)가 있을 때만 채운다 */
-  first_seen?: string;
-  /** 이번에 스캔한 때 (ISO) */
-  scanned_at?: string;
-  text: string;
-}
-
-export interface SourceResult {
-  source: SourceId;
-  updated_at: string;
-  scanned: number;
-  kept: number;
-  dropped_far: number;
-  errors: string[];
-  items: JobItem[];
-}
-
-/** 시설·기전·영선 계열 직무인지 (사무·청소·영업 등은 제외) */
-const ROLE_RE = /(시설|기전|영선|관리주임|관리과장|관리기사|관리소|아파트|건물\s*관리|빌딩\s*관리|보일러|에너지\s*관리|전기\s*(기사|주임|안전|기술)|설비\s*(관리|유지|보수|기사|주임))/;
-const NOT_ROLE_RE = /(사무|총무|경리|회계|청소|미화|영업|판매|상담원|물품|배송|운전기사|요양|간호|조리|강사|디자인|개발자|마케팅|안전관리대행|월점검|설계|오퍼레이터|\bOP\b|생산|제조|포장|건설|시공|현장\s*기계|엔지니어|정보통신|태양광|판금|절곡|제작|공사|공무|경비원|요양)/;
+export const ROLE_RE = /(시설|기전|영선|관리주임|관리과장|관리기사|관리소|아파트|건물\s*관리|빌딩\s*관리|보일러|에너지\s*관리|전기\s*(기사|주임|안전|기술)|설비\s*(관리|유지|보수|기사|주임))/;
+export const NOT_ROLE_RE = /(사무|총무|경리|회계|청소|미화|영업|판매|상담원|물품|배송|운전기사|요양|간호|조리|강사|디자인|개발자|마케팅|안전관리대행|월점검|설계|오퍼레이터|\bOP\b|생산|제조|포장|건설|시공|현장\s*기계|엔지니어|정보통신|태양광|판금|절곡|제작|공사|공무|경비원|요양)/;
 
 /** 목록의 지역 표기가 가까운 구를 포함하는지 (먼 구만 적힌 공고는 상세를 열지 않는다) */
 function nearInList(loc: string): boolean {
@@ -73,58 +23,15 @@ function nearInList(loc: string): boolean {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const clean = (s: string) =>
-  s
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|tr|h\d)>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n\s*\n+/g, '\n')
-    .trim();
-
 async function get(url: string): Promise<string> {
   const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'ko-KR,ko;q=0.9' } });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.text();
 }
 
-function toItem(source: SourceId, id: string, url: string, listTitle: string, posted: string, text: string, fallback: { address?: string; company?: string; title?: string; site?: string }): JobItem {
-  const today = todaySeoul();
-  const p = parsePosting(text, today);
-  const address = p.address || fallback.address || '';
-  const site = p.site || fallback.site || '';
-  const commute = estimateCommute(address, site);
-  return {
-    id: `${source}-${id}`,
-    source,
-    origin: ORIGIN[source],
-    url,
-    list_title: listTitle,
-    site,
-    title: p.title || fallback.title || listTitle,
-    company: p.company || fallback.company || '',
-    address,
-    salary: p.salary_text,
-    shift: p.shift,
-    deadline: p.deadline,
-    deadline_text: p.deadline_text,
-    emails: p.emails,
-    apply_channels: p.apply_channels,
-    email_apply: p.emails.length > 0,
-    commute,
-    geo: null,
-    posted,
-    text: text.slice(0, TEXT_MAX),
-  };
-}
+
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36';
+const PER_SOURCE_MAX = 40;
 
 export function isRelevant(it: Pick<JobItem, 'list_title' | 'title' | 'text'>): boolean {
   const head = `${it.list_title} ${it.title}`;
@@ -231,13 +138,7 @@ async function collectJobkorea(): Promise<{ items: JobItem[]; scanned: number; e
     try {
       const html = await get(url);
       scanned++;
-      const body = clean(html);
-      const s = body.search(/모집요강|모집분야|근무조건|지원자격/);
-      const e = body.search(/기업 정보|기업정보 더보기|이 기업의 다른 공고/);
-      let text = body.slice(s >= 0 ? s : 0, e > s ? e : undefined);
-      const addr = text.match(/근무지\s*주소\s*([^\n]+?)(?:\s*지도보기|\n|$)/)?.[1]?.trim() ?? '';
-      const due = text.match(/마감일\s*(\d{4}\.\d{2}\.\d{2})/)?.[1];
-      text = [`채용정보 : ${c.title}`, `위탁사명 : ${c.company}`, addr && `주소 : ${addr}`, due && `마감일자 : ${due.replace(/\./g, '-')}`, text].filter(Boolean).join('\n');
+      const { text, addr } = extractJobkorea(html, c);
       items.push(toItem('jobkorea', gid, url, c.title, '', text, { address: addr || c.loc, company: c.company, title: c.title, site: c.company }));
     } catch (e) {
       errors.push(`잡코리아 ${gid}: ${(e as Error).message}`);
@@ -281,9 +182,7 @@ async function collectSaramin(): Promise<{ items: JobItem[]; scanned: number; er
     try {
       const html = await get(`https://www.saramin.co.kr/zf_user/jobs/relay/view-detail?rec_idx=${id}`);
       scanned++;
-      let text = clean(html);
-      const addr = text.match(/근무\s*(?:지|지역|장소)\s*[:：]\s*([^\n•]+)/)?.[1]?.trim() ?? '';
-      text = [`채용정보 : ${c.title}`, `위탁사명 : ${c.company}`, addr && `주소 : ${addr}`, text].filter(Boolean).join('\n');
+      const { text, addr } = extractSaramin(html, c);
       items.push(toItem('saramin', id, url, c.title, '', text, { address: addr, company: c.company, title: c.title, site: c.company }));
     } catch (e) {
       errors.push(`사람인 ${id}: ${(e as Error).message}`);
@@ -363,56 +262,11 @@ async function collectWork24(): Promise<{ items: JobItem[]; scanned: number; err
     if (items.length >= PER_SOURCE_MAX) break;
     const url = `https://www.work24.go.kr/wk/a/b/1500/empDetailAuthView.do?wantedAuthNo=${no}&infoTypeCd=VALIDATION&infoTypeGroup=tb_workinfoworknet`;
     try {
-      const body = clean(await get(url));
+      const body = await get(url);
       scanned++;
-      const pick = (label: string) => body.match(new RegExp(`${label}\\s*\\n\\s*([^\\n]+)`))?.[1]?.trim() ?? '';
-      const s0 = body.indexOf('직무내용');
-      const duty = body.slice(s0 >= 0 ? s0 + 4 : 0, s0 >= 0 ? body.indexOf('더보기', s0) : 0).trim();
-      const addr = pick('근무 예정지').replace(/,\s*\.\s*/, ' ');
-      const site = addr.match(/\([^,)]*,\s*([^)]+)\)/)?.[1]?.trim() ?? '';
-      // 접수 방법: 제목 다음 줄부터 "제출 서류" 앞까지 (고용24 입사지원 / 이메일 / 우편 / 방문 / 팩스 …)
-      const m0 = body.search(/접수 방법\s*\n/);
-      const method =
-        m0 >= 0
-          ? body
-              .slice(m0, body.indexOf('제출 서류', m0) > m0 ? body.indexOf('제출 서류', m0) : m0 + 200)
-              .split('\n')
-              .slice(1)
-              .map((x) => x.trim())
-              .filter((x) => x && x !== '텍스트' && !/br태그/.test(x))
-              .join(', ')
-              .slice(0, 120)
-          : '';
-      // 채용 담당자 이름·전화·팩스 (이메일은 고용24 로그인해야 보임)
-      const k0 = body.indexOf('채용 담당자 정보 열람');
-      const cblock = k0 >= 0 ? body.slice(k0, body.indexOf('질문하기', k0) > k0 ? body.indexOf('질문하기', k0) : k0 + 1500) : '';
-      const cName = cblock.match(/상세 보기\s*\n\s*([^\n*]+?)\s*\n/)?.[1]?.trim() ?? '';
-      const cPhone = cblock.match(/전화번호\s*([0-9][0-9-]{7,})/)?.[1] ?? '';
-      const cFax = cblock.match(/팩스\s*([0-9][0-9-]{7,})/)?.[1] ?? '';
-      // 본문 어디에든 적힌 이메일 (고용24 자체 주소 제외)
-      const bodyEmails = Array.from(new Set(body.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) ?? [])).filter(
-        (e) => !/(work24|keis|moel|korea)\.(go|or)\.kr$/i.test(e),
-      );
-      const due = pick('접수 마감일').match(/\d{4}\.\d{2}\.\d{2}/)?.[0]?.replace(/\./g, '-') ?? '';
-      const text = [
-        `채용정보 : ${c.title}`,
-        site && `단지명 : ${site}`,
-        `위탁사명 : ${c.company}`,
-        addr && `주소 : ${addr}`,
-        `급여 : ${pick('임금 조건')}`,
-        `근무형태 : ${pick('근무 형태')} ${pick('상세 근무시간')}`.trim(),
-        due && `마감일자 : ${due}`,
-        `제출서류 : ${pick('제출 서류')}`,
-        `접수방법 : ${method}`,
-        bodyEmails.length ? `이메일 : ${bodyEmails.join(', ')}` : '',
-        cName || cPhone ? `채용담당 : ${[cName, cPhone && `전화 ${cPhone}`, cFax && `팩스 ${cFax}`].filter(Boolean).join(' · ')}` : '',
-        '',
-        duty,
-      ]
-        .filter((x): x is string => typeof x === 'string')
-        .join('\n');
-      const item = toItem('work24', no, url, c.title, '', text, { address: addr || c.loc, company: c.company, title: c.title, site: site || c.company });
-      item.contact = cName || cPhone || cFax || method ? { name: cName || undefined, phone: cPhone || undefined, fax: cFax || undefined, method: method || undefined } : null;
+      const r = extractWork24(body, c);
+      const item = toItem('work24', no, url, c.title, '', r.text, { address: r.addr || c.loc, company: c.company, title: c.title, site: r.site || c.company });
+      item.contact = r.contact;
       items.push(item);
     } catch (e) {
       errors.push(`고용24 ${no}: ${(e as Error).message}`);
