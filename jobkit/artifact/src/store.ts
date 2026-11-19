@@ -56,6 +56,8 @@ export interface AppRec {
   status: ApplicationStatus;
   memo: string;
   snapshot: Snapshot | null;
+  /** 공고에 맞춰 다시 쓴 때 */
+  tailored_at?: string | null;
   /** 서류 양식 버전 (오르면 작성중 서류를 최신 정보로 다시 만든다) */
   snapshot_v?: number;
   /** 최종확인 화면에서 Gmail 로 보낸 기록 */

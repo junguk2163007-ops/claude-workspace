@@ -4,7 +4,8 @@ import { zipSync } from 'fflate';
 import { parsePosting, parseSalaryAmount, type ParsedPosting, type Category } from '../../lib/parser';
 import { analyze, type Analysis, type HistoryEntry, type ReqRow, type Verdict } from '../../lib/analyze';
 import { checkProfile, composeLetter, composeResume, type LetterData, type ResumeData } from '../../lib/render/compose';
-import { gmailComposeUrl, isPortalOnly, mailBody, mailSubject, mailtoUrl } from '../../lib/mail';
+import { gmailComposeUrl, isPortalOnly, mailBody, mailSubject, mailtoUrl, signature } from '../../lib/mail';
+import { checkTailored, tailorPrompt, type SectionKey, type TailorResult } from './tailor';
 import { koreanDate, todaySeoul } from '../../lib/util/date';
 import { docFileName } from '../../lib/util/filename';
 import { digitsOnly, normalizeSite } from '../../lib/util/text';
@@ -1927,6 +1928,53 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     }
   }
 
+  // ---- 이 공고에 맞춰 다시 쓰기 ----
+  const [tailoring, setTailoring] = useState(false);
+  const [proposal, setProposal] = useState<TailorResult | null>(null);
+  const [tailorErr, setTailorErr] = useState<string | null>(null);
+  const sig = signature(store.prefs, store.profile);
+  const bodyNoSig = sig && body.trimEnd().endsWith(sig) ? body.trimEnd().slice(0, -sig.length).trimEnd() : body.trimEnd();
+  const tailorInput = () => ({
+    profile: store.profile,
+    quals: store.quals,
+    posting: a.posting_text,
+    site: a.site,
+    title: a.title,
+    shift: a.shift,
+    requiredPhrase: a.required_phrase,
+    near: estimateCommute(a.address, a.site).verdict === 'ok',
+    mailBody: bodyNoSig,
+    sections: a.snapshot?.letter.sections ?? [],
+    intro: a.snapshot?.resume.intro ?? [],
+  });
+  async function tailor() {
+    setTailorErr(null);
+    setProposal(null);
+    const sample = await capUse('sample');
+    if (!sample) return setTailorErr('이 화면에서는 AI 다시 쓰기를 쓸 수 없습니다. claude.ai 에서 이 페이지를 열어 주세요.');
+    setTailoring(true);
+    try {
+      const t = tailorInput();
+      const out = await sample.json(tailorPrompt(t), { modelTier: 'default' });
+      const res = checkTailored(out, t);
+      setProposal(res);
+    } catch (e) {
+      const code = (e as { code?: string })?.code;
+      setTailorErr(code === 'rate_limited' ? '잠시 뒤 다시 눌러 주세요(요청이 많습니다).' : code === 'not_granted' ? 'AI 사용 허락이 꺼져 있습니다. 페이지 권한에서 켜 주세요.' : '다시 쓰지 못했습니다. 잠시 뒤 다시 눌러 주세요.');
+    } finally {
+      setTailoring(false);
+    }
+  }
+  async function applyTailored() {
+    if (!proposal || !a.snapshot) return;
+    const letter = { ...a.snapshot.letter, sections: a.snapshot.letter.sections.map((s) => ({ ...s, text: proposal.sections[s.key as SectionKey] ?? s.text })) };
+    const resume = { ...a.snapshot.resume, intro: proposal.intro };
+    const nb = sig ? `${proposal.mail_body.trimEnd()}\n\n${sig}` : proposal.mail_body;
+    setBody(nb);
+    await store.patchApp(a.id, { snapshot: { ...a.snapshot, letter, resume }, mail_body: nb, tailored_at: new Date().toISOString() }).catch(() => setTailorErr('저장하지 못했습니다.'));
+    setProposal(null);
+  }
+
   // 최신 프로필·문구로 서류를 다시 만든다 (받는 사람은 유지)
   const [rebuilt, setRebuilt] = useState(false);
   async function rebuild() {
@@ -2064,6 +2112,56 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
         <span className="small muted">
           {a.send_state === 'queued' && <Pill tone="orange">정민욱 계정에서 발송 대기</Pill>} {a.created_at.slice(0, 10)} 작성
         </span>
+      </div>
+
+      <div className="tailor stack-s">
+        <div className="row wrap">
+          <Btn kind={a.tailored_at ? 'plain' : 'primary'} onClick={tailor} disabled={tailoring || !a.snapshot}>
+            {tailoring ? '✍️ 이 공고에 맞춰 쓰는 중… (20~40초)' : a.tailored_at ? '✍️ 다시 맞춰 쓰기' : '✍️ 이 공고에 맞춰 다시 쓰기'}
+          </Btn>
+          <span className="small muted">
+            {a.tailored_at
+              ? `✓ ${fmtKst(a.tailored_at)} 이 공고에 맞춰 다시 썼습니다.`
+              : '메일·자기소개서·이력서 자기소개를 이 단지·직무·근무형태·우대사항에 맞춰 새로 씁니다. 경력·자격·숫자는 바꾸지 않습니다.'}
+          </span>
+        </div>
+        {tailorErr && <Notice level="warn">{tailorErr}</Notice>}
+        {proposal && (
+          <div className="proposal stack-s">
+            <strong>새로 쓴 글 — 확인하고 [적용]을 누르세요</strong>
+            {proposal.summary && <span className="small">💡 {proposal.summary}</span>}
+            {proposal.kept.length > 0 && (
+              <Notice level="info">
+                검사에 걸려 원래 글을 그대로 둔 곳: {proposal.kept.map((k) => `${k.what}(${k.why})`).join(', ')}
+              </Notice>
+            )}
+            <details open>
+              <summary>메일 본문</summary>
+              <pre className="proposal-text">{proposal.mail_body}</pre>
+            </details>
+            {(a.snapshot?.letter.sections ?? []).map((s) => (
+              <details key={s.key}>
+                <summary>
+                  자기소개서 · {s.title}
+                  {proposal.sections[s.key as SectionKey] === s.text ? ' (그대로)' : ''}
+                </summary>
+                <pre className="proposal-text">{proposal.sections[s.key as SectionKey]}</pre>
+              </details>
+            ))}
+            <details>
+              <summary>이력서 · 지원동기 및 자기소개</summary>
+              <pre className="proposal-text">{proposal.intro.join('\n\n')}</pre>
+            </details>
+            <div className="row">
+              <Btn kind="primary" onClick={applyTailored}>
+                적용
+              </Btn>
+              <Btn kind="quiet" onClick={() => setProposal(null)}>
+                취소
+              </Btn>
+            </div>
+          </div>
+        )}
       </div>
 
       <ul className="checks-list">
