@@ -1109,7 +1109,7 @@ function ago(iso: string) {
   return `${Math.round(m / 1440)}일 전`;
 }
 
-function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: { it: JobItem; also?: JobSource[]; why?: string[]; verdict: JobVerdict; min: number | null; km: number | null; store: Store; fonts: Fonts | null; onDrafted: (id: string) => void }) {
+function JobCard({ it, an, also, why, verdict, min, km, store, fonts, onDrafted }: { it: JobItem; an?: ReturnType<typeof analyze>; also?: JobSource[]; why?: string[]; verdict: JobVerdict; min: number | null; km: number | null; store: Store; fonts: Fonts | null; onDrafted: (id: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [refMsg, setRefMsg] = useState<string | null>(null);
@@ -1185,7 +1185,7 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
   const text = jobText(it, store);
   const parsed = useMemo(() => parsePosting(text, today), [text, today]);
   const p: ParsedPosting = { ...parsed, site: parsed.site || it.site, title: parsed.title || it.title, address: parsed.address || it.address, company: parsed.company || it.company };
-  const analysis = useMemo(() => analyzeFor(store, text, p, null), [text, store.quals, store.prefs, store.apps]); // eslint-disable-line react-hooks/exhaustive-deps
+  const analysis = useMemo(() => an ?? analyzeFor(store, text, p, null), [an, text, store.quals, store.prefs]); // eslint-disable-line react-hooks/exhaustive-deps
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailIn, setEmailIn] = useState(extraEmail);
   const ct = it.contact;
@@ -1558,7 +1558,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   const list = src === 'all' ? null : store.jobs[src];
   const lastUpdate = SOURCES.map((s) => store.jobs[s.id]?.updated_at).filter(Boolean).sort().pop();
 
-  type Row = { it: JobItem; f: FilterResult; min: number | null; km: number | null; also?: JobSource[]; score: number; why: string[] };
+  type Row = { it: JobItem; f: FilterResult; min: number | null; km: number | null; also?: JobSource[]; score: number; why: string[]; an: ReturnType<typeof analyze> };
   /** 종합 탭: 여러 사이트에 같이 올라온 공고는 하나로 묶고 다른 출처를 배지로 보인다 */
   const mergeDupes = (all: Row[]): Row[] => {
     // 사이트마다 주소 쓰는 방식이 달라 제목(공백·기호 뺀 것)으로 묶는다. 너무 짧은 제목은 단지명까지 본다
@@ -1581,8 +1581,9 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
     }
     return out;
   };
-  const judged = useMemo(() => {
-    const out: Record<JobSource, Row[]> = { dghma: [], jobkorea: [], saramin: [], work24: [], manual: [] };
+  // 무거운 계산(공고 읽기·자격 분석)은 공고·기준이 바뀔 때만 한 번 한다. 지원 기록이 바뀌어도 다시 하지 않는다
+  const analyzed = useMemo(() => {
+    const out: { s: JobSource; it: JobItem; p: ParsedPosting; fm: ReturnType<typeof finalMinutes>; an: ReturnType<typeof analyze>; allBlockers: string[]; multi: boolean }[] = [];
     for (const s of SOURCES) {
       for (const it of store.jobs[s.id]?.items ?? []) {
         const text = jobText(it, store);
@@ -1590,11 +1591,21 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
         const p: ParsedPosting = { ...p0, site: p0.site || it.site, title: p0.title || it.title, address: p0.address || it.address, company: p0.company || it.company };
         // 집↔근무지 좌표 거리와 동별 표를 함께 본 통근 추정
         const fm = finalMinutes(it.commute.min, store.prefs.home_geo, it.geo);
-        const an = analyzeFor(store, text, p, null, fm.min !== null && fm.min <= c.commute_limit);
+        const an = analyze(text, p, { qualifications: store.quals, settings: analysisSettings(store, p, fm.min !== null && fm.min <= c.commute_limit), today });
         const allBlockers = hardBlockers(an.rows, store.quals);
         // 직책이 여럿인 공고(시설책임/시설주임 등)는 기사급 요건이 한 직책에만 걸린 경우가 많아 숨기지 않고 알려만 준다
         const titleText = p.title || it.title;
         const multi = /(주임|기사|책임|과장|반장|직원|계장|소장|대리)\s*[\/,]\s*\S*?(주임|기사|책임|과장|반장|직원|계장|소장|대리)/.test(titleText) && !/전기기사|산업기사|전기안전관리자|선임/.test(titleText);
+        out.push({ s: s.id, it, p, fm, an, allBlockers, multi });
+      }
+    }
+    return out;
+  }, [store.jobs, store.prefs.home_geo, store.jobEmails, store.quals, c, today]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const judged = useMemo(() => {
+    const out: Record<JobSource, Row[]> = { dghma: [], jobkorea: [], saramin: [], work24: [], manual: [] };
+    {
+      for (const { s: src, it, p, fm, an, allBlockers, multi } of analyzed) {
         const blockers = multi ? [] : allBlockers;
         const app = store.apps.find((a) => a.status !== '작성중' && normalizeSite(a.site) === normalizeSite(p.site) && normalizeSite(a.title) === normalizeSite(p.title));
         const f = filterJob(
@@ -1614,12 +1625,12 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
           r.score -= 10;
           r.why.push(`⚠ 일부 직책은 ${allBlockers.join(', ')} 필요`);
         }
-        out[s.id].push({ it, f, min: fm.min, km: fm.km, score: r.score, why: r.why });
+        out[src].push({ it, f, min: fm.min, km: fm.km, score: r.score, why: r.why, an });
       }
     }
     for (const k of Object.keys(out) as JobSource[]) out[k].sort((a, b) => b.score - a.score || (a.min ?? 99) - (b.min ?? 99));
     return out;
-  }, [store.jobs, store.prefs.home_geo, store.jobEmails, store.apps, store.quals, c, today]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [analyzed, store.apps, c]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = src === 'all' ? mergeDupes(SOURCES.flatMap((s) => judged[s.id])).sort((a, b) => b.score - a.score || (a.min ?? 99) - (b.min ?? 99)) : judged[src];
   const shown = rows.filter((r) => r.f.show && (showEdge || r.f.verdict === 'ok'));
@@ -1745,7 +1756,24 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
             <p>{rows.length ? '지금 기준에 맞는 공고가 없습니다. 오른쪽에서 기준을 넓혀 보세요.' : '아직 모은 공고가 없습니다.'}</p>
           </section>
         ) : (
-          shown.map(({ it, f, min, km, also, why }) => <JobCard key={it.id} it={it} also={also} why={why} verdict={f.verdict} min={min} km={km} store={store} fonts={fonts} onDrafted={() => (location.hash = '#final')} />)
+          shown.map(({ it, f, min, km, also, why, an }) => (
+            <JobCard
+              key={it.id}
+              an={an}
+              it={it}
+              also={also}
+              why={why}
+              verdict={f.verdict}
+              min={min}
+              km={km}
+              store={store}
+              fonts={fonts}
+              onDrafted={(id) => {
+                openDraftId = id;
+                location.hash = '#final';
+              }}
+            />
+          ))
         )}
 
         {hidden.length > 0 && (
@@ -2005,11 +2033,12 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     intro: a.snapshot?.resume.intro ?? [],
   });
   const stored = tailorFor(store, a.job_id, a.posting_text);
+  const proposalVariant = useRef<number | null>(null);
   async function tailor() {
     setTailorErr(null);
     setProposal(null);
     // 1) 미리 써 둔 이 공고 맞춤 글이 있으면 그것을 보여 준다 (어느 화면에서든 됨)
-    if (stored && a.tailored_at !== stored.at) {
+    if (stored && a.tailored_at !== stored.at && a.tailored_kind !== 'ai') {
       return setProposal({ mail_body: stored.mail_body, sections: stored.sections, intro: stored.intro, summary: stored.summary, kept: stored.kept ?? [] });
     }
     // 2) 없으면 이 화면의 AI 로 새로 쓰고, AI 를 못 쓰는 화면이면 공고 내용으로 바로 쓴다
@@ -2017,9 +2046,14 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     if (!sample) {
       const t = tailorInput();
       const an = analyzeFor(store, a.posting_text, a.parsed, a.id, t.near);
-      return setProposal(
-        ruleTailor({ ...t, address: a.parsed.address, startDate: a.parsed.start_date, gapPhrases: an.gap_qualifications.map((g) => g.promise_phrase) }),
-      );
+      const base = { ...t, address: a.parsed.address, startDate: a.parsed.start_date, gapPhrases: an.gap_qualifications.map((g) => g.promise_phrase) };
+      // 누를 때마다 다른 표현 조합으로 (지금 글과 같으면 다음 번호로)
+      const curMotive = a.snapshot?.letter.sections.find((x) => x.key === 'motive')?.text;
+      let v = (proposalVariant.current ?? a.tailor_variant ?? 0) + 1;
+      let res = ruleTailor({ ...base, variant: v });
+      for (let i = 0; i < 8 && res.mail_body === bodyNoSig && res.sections.motive === curMotive; i++) res = ruleTailor({ ...base, variant: ++v });
+      proposalVariant.current = v;
+      return setProposal(res);
     }
     setTailoring(true);
     try {
@@ -2047,6 +2081,7 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
         mail_body: nb,
         tailored_at: fromStored ? stored!.at : new Date().toISOString(),
         tailored_kind: fromStored ? 'ai' : 'rule',
+        tailor_variant: fromStored ? a.tailor_variant ?? 0 : proposalVariant.current ?? a.tailor_variant ?? 0,
         job_id: a.job_id ?? stored?.job_id ?? null,
         tailor_off: false,
       })
@@ -2085,29 +2120,40 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     let off = false;
     setReady(null);
     if (!built || !relayReady) return;
-    (async () => {
+    // 화면을 먼저 그린 뒤, 서류가 잠깐 안 바뀌면 PDF 를 만든다 (연달아 고칠 때마다 만들지 않게)
+    const t = setTimeout(async () => {
       try {
         const r = await toPdf(fonts, built.resume.pages, '이력서', dataUrlToPhoto(built.photo));
+        if (off) return;
+        await new Promise((res) => setTimeout(res, 0));
         const l = await toPdf(fonts, built.letter.pages, '자기소개서', null);
         if (!off) setReady({ resume: toBase64(r), letter: toBase64(l) });
       } catch {
         if (!off) setRelayMsg({ text: 'PDF를 만들지 못했습니다. 새로고침해 보세요.', level: 'danger' });
       }
-    })();
+    }, 350);
     return () => {
       off = true;
+      clearTimeout(t);
     };
   }, [built, relayReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 보내기는 링크 클릭으로 연다 (이 화면은 폼·스크립트 새 창을 막는다). 서류는 링크의 # 뒤에 담겨 발송기 창이 읽는다
   const [sendRid, setSendRid] = useState(() => `${a.id}-${Date.now().toString(36)}`);
+  // 받는 사람·제목·본문은 입력이 멈춘 뒤에만 링크에 반영한다 (글자마다 큰 링크를 새로 만들면 입력이 끊긴다)
+  const [linkText, setLinkText] = useState({ to, subject, finalBody });
+  useEffect(() => {
+    const t = setTimeout(() => setLinkText({ to, subject, finalBody }), 400);
+    return () => clearTimeout(t);
+  }, [to, subject, finalBody]);
+  const linkFresh = linkText.to === to && linkText.subject === subject && linkText.finalBody === finalBody;
   const sendLink = useMemo(() => {
     if (!ready || !relayReady || !canSend) return null;
     return sendHref(store.prefs.relay_url!, store.prefs.relay_key!, {
       rid: sendRid,
-      to,
-      subject,
-      body: finalBody,
+      to: linkText.to,
+      subject: linkText.subject,
+      body: linkText.finalBody,
       from_name: store.profile.name || '정민욱',
       site: a.site,
       files: [
@@ -2116,7 +2162,7 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
         ...extras.map((x) => ({ name: x.name, type: x.type, b64: x.b64 })),
       ],
     });
-  }, [ready, relayReady, canSend, sendRid, to, subject, finalBody, extras, store.prefs.relay_url, store.prefs.relay_key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, relayReady, canSend, sendRid, linkText, extras, store.prefs.relay_url, store.prefs.relay_key]); // eslint-disable-line react-hooks/exhaustive-deps
   // v6 발송기는 팝업 없이 이 카드 안 상자(iframe)에서 보낸다. 상자가 막힌 화면이면 9초 뒤 새 창 버튼으로 바꾼다 (같은 rid 라 두 번 안 나감)
   const frameOk = (store.prefs.relay_version ?? 0) >= RELAY_FRAME_VERSION;
   const [frame, setFrame] = useState<string | null>(null);
@@ -2224,11 +2270,10 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
 
       <div className="tailor stack-s">
         <div className="row wrap">
-          {!(stored && a.tailored_at === stored.at) && (
             <Btn kind="primary" onClick={tailor} disabled={tailoring || !a.snapshot}>
-              {tailoring ? '✍️ 이 공고에 맞춰 쓰는 중…' : stored ? '✍️ 이 공고 맞춤 글 보기·적용' : a.tailored_at ? '✍️ 다시 써 보기' : '✍️ 이 공고에 맞춰 다시 쓰기'}
+              {tailoring ? '✍️ 이 공고에 맞춰 쓰는 중…' : stored && a.tailored_at !== stored.at ? '✍️ 이 공고 맞춤 글 보기·적용' : a.tailored_at ? '✍️ 다시 써 보기' : '✍️ 이 공고에 맞춰 다시 쓰기'}
             </Btn>
-          )}
+
           {a.tailored_at && (
             <Btn kind="quiet" onClick={() => rebuild(true)}>
               기본 글로 되돌리기
@@ -2466,11 +2511,11 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
       ) : relayReady ? (
         <div className="stack-s">
           <div className="row wrap">
-            {sendLink && a.send_state !== 'relay' && frameOk ? (
+            {sendLink && linkFresh && a.send_state !== 'relay' && frameOk ? (
               <Btn kind="primary" className="big" onClick={sendInPage}>
                 📨 {store.prefs.sender_email}로 보내기
               </Btn>
-            ) : sendLink && a.send_state !== 'relay' ? (
+            ) : sendLink && linkFresh && a.send_state !== 'relay' ? (
               <a className="btn btn-primary big" href={sendLink} target="_blank" rel="opener" onClick={onSendClick}>
                 📨 {store.prefs.sender_email}로 보내기
               </a>
@@ -2606,8 +2651,31 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
   );
 }
 
+/** 보낼 지원서에서 펼쳐 둘 서류 (방금 [지원]한 것) */
+let openDraftId: string | null = null;
+
+/** 접힌 서류 한 줄 (서류 배치·PDF 를 만들지 않아 가볍다) */
+function DraftRow({ a, onOpen }: { a: AppRec; onOpen: () => void }) {
+  return (
+    <section className="card draft-row">
+      <button className="draft-row-btn" onClick={onOpen}>
+        <span className="draft-row-main">
+          <b>{a.site}</b> <span className="muted">{a.title}</span>
+        </span>
+        <span className="small muted">
+          {a.selected_email || '받는 사람 없음'} · {a.created_at.slice(5, 10).replace('-', '/')} 작성{a.tailored_at ? ' · ✍️ 맞춤 글' : ''}
+        </span>
+        <span className="draft-row-open">열기 ▸</span>
+      </button>
+    </section>
+  );
+}
+
 function FinalView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   const drafts = store.apps.filter((a) => a.status === '작성중');
+  // 한 번에 한 장만 펼친다 (모두 펼치면 서류 배치·PDF 를 한꺼번에 만들어 느려진다)
+  const [openId, setOpenId] = useState<string | null>(() => openDraftId);
+  const current = drafts.find((a) => a.id === openId) ?? drafts[0] ?? null;
   const sent = store.apps.filter((a) => a.send_state === 'sent' || (a.status !== '작성중' && a.sent_at)).slice(0, 15);
   const [delId, setDelId] = useState<string | null>(null);
   return (
@@ -2638,7 +2706,24 @@ function FinalView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
           </p>
         </section>
       )}
-      {fonts && drafts.map((a) => <FinalCard key={a.id} a={a} store={store} fonts={fonts} />)}
+      {fonts && current && <FinalCard key={current.id} a={current} store={store} fonts={fonts} />}
+      {drafts.length > 1 && (
+        <div className="stack-s">
+          <span className="small muted">다른 작성중 지원서 {drafts.length - 1}건 — 눌러서 열기</span>
+          {drafts
+            .filter((a) => a.id !== current?.id)
+            .map((a) => (
+              <DraftRow
+                key={a.id}
+                a={a}
+                onOpen={() => {
+                  setOpenId(a.id);
+                  window.scrollTo({ top: 0 });
+                }}
+              />
+            ))}
+        </div>
+      )}
 
       {sent.length > 0 && (
         <section className="card stack-s">

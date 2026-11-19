@@ -275,6 +275,11 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 .origin { display: inline-block; flex: none; font-size: 12.5px; font-weight: 700; line-height: 1; padding: 5px 8px; margin-right: 6px; border-radius: 6px; vertical-align: 2px; color: var(--src-fg, var(--b-fg)); background: var(--src-bg, var(--b-bg)); white-space: nowrap; }
 .new-badge { display: inline-block; font-size: 12px; font-weight: 800; line-height: 1; padding: 5px 7px; margin-right: 6px; border-radius: 6px; vertical-align: 2px; background: var(--r-bg); color: var(--r-fg); letter-spacing: .03em; }
 .why { color: var(--g-fg); font-weight: 600; }
+.draft-row { padding: 0; }
+.draft-row-btn { font: inherit; width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 12px 16px; background: none; border: 0; text-align: left; cursor: pointer; color: var(--ink); border-radius: var(--radius); }
+.draft-row-btn:hover { background: var(--surface-2); }
+.draft-row-main { flex: 1 1 260px; min-width: 0; }
+.draft-row-open { color: var(--accent); font-weight: 700; }
 .relay-frame { width: 100%; height: 132px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); }
 .relay-frame-hidden { position: absolute; width: 1px; height: 1px; border: 0; opacity: 0; pointer-events: none; left: -9999px; }
 .tailor { padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); }

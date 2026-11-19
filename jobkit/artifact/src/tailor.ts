@@ -304,7 +304,20 @@ export interface RuleInput extends TailorInput {
 
 const EXP_HEAD_RE = /^(.*?또한 부동산 분양 업무를 \d+년간 담당하며 다양한 사람을 상대로 신뢰를 쌓고 정확하게 소통하는 능력을 키웠)/;
 
-export function ruleTailor(r: RuleInput): TailorResult {
+/** 변형 번호로 문장 표현을 고른다 (같은 번호면 같은 글) */
+function picker(seed: number) {
+  let x = (seed * 2654435761) >>> 0 || 1;
+  return <T,>(arr: T[]): T => {
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    x >>>= 0;
+    return arr[x % arr.length];
+  };
+}
+
+export function ruleTailor(r: RuleInput & { variant?: number }): TailorResult {
+  const pick = picker((r.variant ?? 0) + 1);
   const site = r.site.replace(/\s*[(（][^)）]*[)）]/g, '').replace(/\s+/g, ' ').trim() || r.site.trim() || '귀사';
   const title = proseTitle(r.title, r.site);
   const duties = dutiesFrom(r.posting);
@@ -316,43 +329,80 @@ export function ruleTailor(r: RuleInput): TailorResult {
   const apt = /아파트|단지|세대|입주/.test(`${site} ${r.posting.slice(0, 600)}`);
   const people = apt ? '입주민 민원에도' : '건물 이용자와도';
   const gap = r.gapPhrases.filter(Boolean);
-  const shiftLine = gyeogil ? '격일 근무에 무리 없이 적응할 수 있는 체력과 생활 리듬을 갖추고 있으며, ' : gyodae ? '교대 근무에도 잘 적응할 수 있는 체력과 생활 리듬을 갖추고 있으며, ' : '';
   const sameGu = place === '북구';
-  const nearLine = !r.near || !place ? '' : sameGu ? '근무지가 제가 사는 북구 안에 있어 오래 다닐 수 있습니다. ' : `근무지인 ${eun(place)} 제가 사는 북구 칠곡 지역과 가까워 오래 다닐 수 있습니다. `;
 
+  const shiftLine = gyeogil
+    ? pick(['격일 근무에 무리 없이 적응할 수 있는 체력과 생활 리듬을 갖추고 있으며, ', '육군 수색대 복무로 다진 체력 덕분에 격일 근무도 자신 있으며, ', '격일처럼 불규칙한 근무에도 흔들리지 않는 생활 습관을 갖추고 있고, '])
+    : gyodae
+      ? pick(['교대 근무에도 잘 적응할 수 있는 체력과 생활 리듬을 갖추고 있으며, ', '육군 수색대 복무로 다진 체력 덕분에 교대 근무도 자신 있으며, '])
+      : '';
+  const nearLine = !r.near || !place ? '' : sameGu
+    ? pick(['근무지가 제가 사는 북구 안에 있어 오래 다닐 수 있습니다. ', '근무지가 집과 같은 북구라 출퇴근 걱정 없이 오래 다닐 수 있습니다. '])
+    : pick([`근무지인 ${eun(place)} 제가 사는 북구 칠곡 지역과 가까워 오래 다닐 수 있습니다. `, `${eun(place)} 집에서 가까워 출퇴근 부담 없이 오래 다닐 수 있습니다. `]);
+  const skill = pick([
+    `건설현장에서 자재 검수와 품질·안전 점검을 맡으며 익힌 꼼꼼함으로 ${eul(duty)} 성실히 해내겠습니다.`,
+    `건설현장 현장관리를 하며 몸에 밴 점검 습관을 살려 ${eul(duty)} 빈틈없이 챙기겠습니다.`,
+    `자재 검수와 품질·안전 점검을 해 온 경험을 바탕으로 ${eul(duty)} 꼼꼼하게 맡겠습니다.`,
+  ]);
+  const gapMail = gap.length ? ' ' + pick([`${gap[0]}하겠습니다.`, `우대 사항에 맞춰 ${gap[0]}하겠습니다.`]) : '';
+  const closing = pick(['현재 재직 중인 곳이 없어 바로 근무를 시작할 수 있습니다.', '지금 재직 중인 곳이 없어 채용되면 곧바로 출근할 수 있습니다.', '채용이 확정되면 바로 근무를 시작할 수 있습니다.']);
   const mail = [
     '안녕하세요.',
     ...(r.requiredPhrase ? [r.requiredPhrase] : []),
     '',
-    `${site} ${title} 채용 공고를 보고 지원하고자 메일 드립니다.`,
-    `${nearLine}${shiftLine}건설현장에서 자재 검수와 품질·안전 점검을 맡으며 익힌 꼼꼼함으로 ${eul(duty)} 성실히 해내겠습니다.${gap.length ? ` ${gap[0]}하겠습니다.` : ''} 현재 재직 중인 곳이 없어 바로 근무를 시작할 수 있습니다.`,
+    pick([`${site} ${title} 채용 공고를 보고 지원하고자 메일 드립니다.`, `${site}에서 ${eul(title)} 모집하신다는 공고를 보고 지원합니다.`, `${site} ${title} 자리에 지원하고자 연락드립니다.`]),
+    `${nearLine}${shiftLine}${skill}${gapMail} ${closing}`,
     '',
-    '이력서와 자기소개서를 첨부하였습니다. 검토 부탁드립니다.',
+    pick(['이력서와 자기소개서를 첨부하였습니다. 검토 부탁드립니다.', '첨부한 이력서와 자기소개서를 살펴봐 주시면 감사하겠습니다.']),
     '',
     '감사합니다.',
   ].join('\n');
 
-  const cur = Object.fromEntries(r.sections.map((s) => [s.key, s.text])) as Record<SectionKey, string>;
+  const cur = Object.fromEntries(r.sections.map((sec) => [sec.key, sec.text])) as Record<SectionKey, string>;
   const expHead = cur.experience.match(EXP_HEAD_RE)?.[1];
   const experience = expHead
-    ? `${expHead}습니다. 이러한 경험을 바탕으로 ${euro(title)}서 ${eul(duty)} 꼼꼼히 해내고, ${people} 차분하고 정확하게 응대하겠습니다.`
+    ? `${expHead}습니다. ` +
+      pick([
+        `이러한 경험을 바탕으로 ${euro(title)}서 ${eul(duty)} 꼼꼼히 해내고, ${people} 차분하고 정확하게 응대하겠습니다.`,
+        `${title} 업무에서도 이 습관을 살려 ${eul(duty)} 빠짐없이 챙기고, ${people} 친절하고 정확하게 응대하겠습니다.`,
+        `이 경험은 ${duty}처럼 꼼꼼함이 필요한 ${title} 업무와 ${apt ? '입주민' : '고객'} 응대에도 그대로 이어질 것이라 생각합니다.`,
+      ])
     : cur.experience;
   const motive = [
     !r.near || !place
       ? ''
       : sameGu
         ? `${eun(site)} 제가 사는 북구 안에 있어, ${gyeogil ? '격일 근무에도 ' : ''}무리 없이 오래 다닐 수 있는 곳입니다.`
-        : `${site}의 근무지인 ${eun(place)} 제가 사는 북구 칠곡 지역과 가까워, ${gyeogil ? '격일 근무에도 ' : ''}무리 없이 오래 다닐 수 있는 곳입니다.`,
-    urgent ? '급히 사람을 구하고 계신 만큼, 바로 투입되어 공백 없이 업무를 이어갈 수 있다는 점도 지원하게 된 이유입니다.' : '',
-    `${eun(title)} ${duty}처럼 꾸준함과 책임감을 갖춘 사람이 오래 자리를 지키며 신뢰를 쌓아가는 일이라고 생각하며, 장기적으로 한 자리에서 성장하고 싶은 저의 방향과도 잘 맞아 지원하게 되었습니다.`,
-    '현재 별도의 재직 중인 곳이 없어 **즉시 출근이 가능**하며, 채용이 확정되는 대로 바로 근무를 시작할 수 있습니다.',
+        : pick([`${site}의 근무지인 ${eun(place)} 제가 사는 북구 칠곡 지역과 가까워, ${gyeogil ? '격일 근무에도 ' : ''}무리 없이 오래 다닐 수 있는 곳입니다.`, `${eun(site)} 집에서 가까운 ${place}에 있어 출퇴근 걱정 없이 오래 일할 수 있는 곳입니다.`]),
+    urgent ? pick(['급히 사람을 구하고 계신 만큼, 바로 투입되어 공백 없이 업무를 이어갈 수 있다는 점도 지원하게 된 이유입니다.', '급하게 사람이 필요하신 상황이라 들었고, 바로 출근해 공백을 메울 수 있다는 점에서 지원하게 되었습니다.']) : '',
+    pick([
+      `${eun(title)} ${duty}처럼 꾸준함과 책임감을 갖춘 사람이 오래 자리를 지키며 신뢰를 쌓아가는 일이라고 생각하며, 장기적으로 한 자리에서 성장하고 싶은 저의 방향과도 잘 맞아 지원하게 되었습니다.`,
+      `${eun(duty)} 눈에 띄지 않아도 매일 꾸준히 챙겨야 하는 일이라고 생각합니다. 맡은 일을 끝까지 해내는 제 성격을 이 자리에서 살리고, 한곳에서 오래 일하고 싶어 지원하게 되었습니다.`,
+      `${site}의 ${title} 공고를 보고, 성실하게 오래 일할 사람이 필요한 자리라는 점에서 끝까지 책임지고 해내는 제가 잘 맞을 것이라 생각해 지원하게 되었습니다.`,
+    ]),
+    pick(['현재 별도의 재직 중인 곳이 없어 **즉시 출근이 가능**하며, 채용이 확정되는 대로 바로 근무를 시작할 수 있습니다.', '현재 재직 중인 곳이 없어 **즉시 출근이 가능**하며, 채용이 정해지면 바로 일을 시작하겠습니다.']),
   ]
     .filter(Boolean)
     .join(' ');
-  const goal = `입사 후에는 ${gyeogil ? '격일 근무에 빠르게 적응하며 ' : ''}${site}의 설비 특성과 업무 순서를 성실히 익히겠습니다. ${
-    gap.length ? `${gap.map((g, i) => (i < gap.length - 1 ? `${g}하고, ` : `${g}하여 `)).join('')}업무 전문성을 넓혀가고,` : '업무에 필요한 관련 자격을 하나씩 취득해 업무 범위를 넓혀가고,'
-  } 단기간 근무가 아닌 장기적으로 함께할 수 있는 사람이 되는 것이 목표이며, **즉시 출근이 가능한 만큼** 빠르게 업무에 적응해 조속히 제 몫을 해내겠습니다.`;
-  const intro = [...r.intro.slice(0, 2), `${site} ${euro(title)}서 즉시 출근이 가능하며, 단기간이 아닌 장기 근속을 목표로 ${eul(duty)} 성실하게 해내겠습니다.`];
+  const gapGoal = gap.length
+    ? `${gap.map((g, i) => (i < gap.length - 1 ? `${g}하고, ` : `${g}하여 `)).join('')}업무 전문성을 넓혀가고,`
+    : pick(['업무에 필요한 관련 자격을 하나씩 취득해 업무 범위를 넓혀가고,', '필요한 자격도 하나씩 갖춰 맡을 수 있는 일을 넓혀가고,']);
+  const goal = `${pick([
+    `입사 후에는 ${gyeogil ? '격일 근무에 빠르게 적응하며 ' : ''}${site}의 설비 특성과 업무 순서를 성실히 익히겠습니다.`,
+    `입사 후에는 선임분들께 ${site}의 설비와 업무 방식을 꼼꼼히 배우며 빠르게 자리를 잡겠습니다.`,
+    `입사 후에는 ${duty}의 기본부터 차근차근 익혀 믿고 맡길 수 있는 사람이 되겠습니다.`,
+  ])} ${gapGoal} ${pick([
+    '단기간 근무가 아닌 장기적으로 함께할 수 있는 사람이 되는 것이 목표이며, **즉시 출근이 가능한 만큼** 빠르게 업무에 적응해 조속히 제 몫을 해내겠습니다.',
+    '오래 함께할 수 있는 사람이 되는 것이 목표이며, **즉시 출근이 가능한 만큼** 하루라도 빨리 제 몫을 해내겠습니다.',
+  ])}`;
+  const intro = [
+    ...r.intro.slice(0, 2),
+    pick([
+      `${site} ${euro(title)}서 즉시 출근이 가능하며, 단기간이 아닌 장기 근속을 목표로 ${eul(duty)} 성실하게 해내겠습니다.`,
+      `즉시 출근이 가능하며, ${site}에서 오래 일하며 ${eul(duty)} 책임 있게 맡겠습니다.`,
+      `${site}의 ${euro(title)}서 바로 근무할 수 있으며, 장기 근속을 목표로 성실하게 일하겠습니다.`,
+    ]),
+  ];
 
   const answer = {
     mail_body: mail,
