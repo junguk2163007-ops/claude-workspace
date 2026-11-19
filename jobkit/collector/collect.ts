@@ -164,7 +164,8 @@ async function collectDghma(browser: Browser): Promise<{ items: JobItem[]; scann
           const cells = line.split('\t').map((c) => c.trim());
           if (cells.length < 2) return [line];
           const out: string[] = [];
-          for (let i = 0; i < cells.length; i += 2) if (cells[i]) out.push(cells[i + 1] ? `${cells[i]} : ${cells[i + 1]}` : cells[i]);
+          // 값이 빈 칸(예: 마감일자 미기재)은 버린다. 남겨 두면 파서가 다음 칸의 라벨을 값으로 읽는다
+          for (let i = 0; i < cells.length; i += 2) if (cells[i] && cells[i + 1]) out.push(`${cells[i]} : ${cells[i + 1]}`);
           return out;
         })
         .join('\n')
