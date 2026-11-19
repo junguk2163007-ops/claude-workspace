@@ -986,7 +986,12 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
         </div>
         <span className="small muted">{it.posted || ''}</span>
       </div>
-      {why && why.length > 0 && <div className="why small">👍 {why.join(' · ')}</div>}
+      {why && why.some((w) => !w.startsWith('⚠')) && <div className="why small">👍 {why.filter((w) => !w.startsWith('⚠')).join(' · ')}</div>}
+      {why?.filter((w) => w.startsWith('⚠')).map((w) => (
+        <div key={w} className="why-warn small">
+          {w}
+        </div>
+      ))}
       <CommuteLine c={{ ...it.commute, verdict, min, km }} from={store.profile.address} to={p.address || p.site} fromGeo={store.prefs.home_geo} toGeo={it.geo} />
       <dl className="job-facts">
         <div>
@@ -2019,30 +2024,20 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
           )}
         </div>
       ) : (
-        <div className="row wrap">
-          <Btn
-            kind="primary"
-            className="big"
-            disabled={!canSend || stage === 'sending'}
-            onClick={async () => {
-              await persistEdits();
-              setStage('confirm');
-              setAckAccount(false);
-              setAccount({ state: 'checking' });
-              setAccount(await connectedGmail());
-            }}
-          >
-            {stage === 'sending' ? '보내는 중…' : 'Gmail로 발송'}
-          </Btn>
-          {blocks.length > 0 && <span className="small warn-text">✕ 항목을 먼저 해결해야 보낼 수 있습니다.</span>}
+        <div className="stack-s">
+          <div className="row wrap">
+            <a className="btn btn-primary big" href="#prefs">
+              📨 버튼 한 번 발송 켜기 (처음 한 번 설정)
+            </a>
+            {blocks.length > 0 && <span className="small warn-text">✕ 항목을 먼저 해결해야 보낼 수 있습니다.</span>}
+          </div>
+          <span className="small muted">
+            이 claude.ai 에 연결된 Gmail은 개인 계정이라 여기서 바로 보내면 보낸 사람이 {store.prefs.sender_email}이 되지 않습니다. 설정 → &quot;원클릭 발송 연결&quot;에서 {store.prefs.sender_email} 계정에 발송기를 한 번 설치하면, 이
+            자리에 [📨 {store.prefs.sender_email}로 보내기] 버튼이 생깁니다. 그 전까지는 아래 &quot;직접 보내기&quot;로 보낼 수 있습니다.
+          </span>
         </div>
       )}
 
-      {!relayReady && (
-        <Notice level="info">
-          버튼 한 번으로 보내려면 <a href="#prefs">설정 → 원클릭 발송 연결</a>을 한 번만 해 두세요. 그 전까지는 아래 방법으로 보냅니다.
-        </Notice>
-      )}
       {stage !== 'confirm' && (
         <details className="manual stack-s" open={!relayReady}>
           <summary>
@@ -2131,7 +2126,14 @@ function FinalView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
           공고 찾기에서 <b>지원</b>을 누르면 만든 서류가 여기에 모입니다. 받는 사람·제목·본문·첨부를 확인하고 <b>📨 보내기</b> 버튼 한 번이면 정민욱 Gmail로 나갑니다. 보내면 지원 이력에 &quot;지원함&quot;으로 기록됩니다.
         </p>
         <p className="small muted">
-          발송 계정: {store.prefs.sender_email ? <b>{store.prefs.sender_email}</b> : <a href="#prefs">설정에서 먼저 지정하세요</a>} · 이 페이지를 연 claude.ai 계정에 연결된 Gmail로 보냅니다.
+          보내는 계정: {store.prefs.sender_email ? <b>{store.prefs.sender_email}</b> : <a href="#prefs">설정에서 먼저 지정하세요</a>} ·{' '}
+          {store.prefs.relay_url && store.prefs.relay_key ? (
+            '원클릭 발송 연결됨'
+          ) : (
+            <>
+              원클릭 발송 아직 안 됨 — <a href="#prefs">설정에서 한 번 연결</a>
+            </>
+          )}
         </p>
       </section>
       {!fonts && <Notice>폰트를 불러오는 중입니다.</Notice>}
