@@ -22,6 +22,10 @@ export interface Criteria {
   salary_min_man: number | null;
   /** 이메일로 접수하는 공고만 */
   email_only: boolean;
+  /** 곧 딸 수 없는 자격(기사급 등)을 필수로 요구하는 공고 숨김 */
+  hide_unqualified: boolean;
+  /** 이미 지원한 공고 숨김 */
+  hide_applied: boolean;
   /** 지원할 때 지킬 지침 */
   notes: string[];
   updated_at: string;
@@ -36,6 +40,8 @@ export const DEFAULT_CRITERIA: Criteria = {
   shifts: [],
   salary_min_man: null,
   email_only: false,
+  hide_unqualified: true,
+  hide_applied: true,
   notes: [
     '공고가 "필수 기재"를 요구하면 메일 제목과 이력서 맨 위에 글자 그대로 넣는다.',
     '경력·자격은 사실만 쓴다. 소방안전관리자 보조처럼 곧 딸 수 있는 자격만 "취득 예정"으로 적는다.',
@@ -67,10 +73,13 @@ export function filterJob(
   job: { list_title: string; title: string; text: string; commute: { min: number | null } },
   p: Pick<ParsedPosting, 'title' | 'shift' | 'salary_text' | 'emails'>,
   c: Criteria,
+  extra: { blockers?: string[]; applied?: string | null } = {},
 ): FilterResult {
   const verdict = commuteVerdict(job.commute.min, c);
   const head = `${job.list_title} ${p.title || job.title}`;
+  if ((c.hide_applied ?? true) && extra.applied) return { show: false, verdict, reason: `이미 지원함 (${extra.applied})` };
   if (verdict === 'far') return { show: false, verdict, reason: `통근 ${job.commute.min}분 (기준 ${c.commute_max}분 초과)` };
+  if ((c.hide_unqualified ?? true) && extra.blockers?.length) return { show: false, verdict, reason: `필수 자격 없음: ${extra.blockers.join(', ')}` };
   const ex = has(head, c.roles_exclude);
   if (ex) return { show: false, verdict, reason: `제외 직무 "${ex}"` };
   if (c.roles_include.length && !has(`${head} ${job.text.slice(0, 800)}`, c.roles_include)) return { show: false, verdict, reason: '찾는 직무와 다름' };
@@ -122,6 +131,14 @@ export function applyChanges(cur: Criteria, raw: unknown): { next: Criteria; cha
     next.salary_min_man = s !== null && s > 0 ? Math.min(2000, s) : null;
     changed.push('최소 급여');
   }
+  if (typeof ch.hide_unqualified === 'boolean') {
+    next.hide_unqualified = ch.hide_unqualified;
+    changed.push('자격 필터');
+  }
+  if (typeof ch.hide_applied === 'boolean') {
+    next.hide_applied = ch.hide_applied;
+    changed.push('지원한 공고 숨김');
+  }
   if (typeof ch.email_only === 'boolean') {
     next.email_only = ch.email_only;
     changed.push('접수 방식');
@@ -161,7 +178,7 @@ export function criteriaPrompt(cur: Criteria, history: ChatMessage[], ask: strin
 
 반드시 JSON 하나만 출력한다:
 {"reply": "...", "changes": {바뀐 필드만} 또는 null}
-바꿀 수 있는 필드: goal, roles_include, roles_exclude, commute_limit, commute_max, shifts, salary_min_man, email_only, notes
+바꿀 수 있는 필드: goal, roles_include, roles_exclude, commute_limit, commute_max, shifts, salary_min_man, email_only, hide_unqualified(기사급 필수 자격 공고 숨김), hide_applied(지원한 공고 숨김), notes
 
 현재 지원 기준:
 ${JSON.stringify(shown, null, 1)}
@@ -172,4 +189,55 @@ ${JSON.stringify(shown, null, 1)}
 ${recent || '(없음)'}
 
 사용자 요청: ${ask}`;
+}
+
+/** 추천 점수: 통근·서류 통과 가능성·접수 방법·급여·마감·새 공고를 함께 본다 (높을수록 먼저) */
+export function recommend(x: {
+  min: number | null;
+  verdict: JobVerdict;
+  signal: 'green' | 'yellow' | 'red';
+  email: boolean;
+  salaryWon: number | null;
+  daysLeft: number | null;
+  isNew: boolean;
+}, c: Criteria): { score: number; why: string[] } {
+  let score = 0;
+  const why: string[] = [];
+  if (x.min !== null) {
+    if (x.min <= Math.min(20, c.commute_limit)) {
+      score += 30;
+      why.push(`가까움 ${x.min}분`);
+    } else if (x.verdict === 'ok') {
+      score += 22;
+      why.push(`통근 ${x.min}분`);
+    } else if (x.verdict === 'edge') score += 8;
+  } else score += 5;
+  if (x.signal === 'green') {
+    score += 25;
+    why.push('자격 충족');
+  } else if (x.signal === 'yellow') {
+    score += 13;
+    why.push('곧 딸 자격으로 지원 가능');
+  }
+  if (x.email) {
+    score += 15;
+    why.push('메일로 바로 지원');
+  } else score += 3;
+  if (x.salaryWon !== null) {
+    const man = Math.round(x.salaryWon / 10000);
+    if (man >= 300) {
+      score += 10;
+      why.push(`월 ${man}만원`);
+    } else if (man >= 270) score += 6;
+    else score += 2;
+  } else score += 3;
+  if (x.daysLeft !== null && x.daysLeft >= 0 && x.daysLeft <= 3) {
+    score += 5;
+    why.push(x.daysLeft === 0 ? '오늘 마감' : `마감 ${x.daysLeft}일 남음`);
+  }
+  if (x.isNew) {
+    score += 5;
+    why.push('새 공고');
+  }
+  return { score, why };
 }

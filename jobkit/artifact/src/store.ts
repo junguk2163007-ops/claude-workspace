@@ -76,7 +76,7 @@ export type Prefs = Settings & {
   drive_folder_id?: string;
 };
 
-export type JobSource = 'dghma' | 'jobkorea' | 'saramin' | 'work24';
+export type JobSource = 'dghma' | 'jobkorea' | 'saramin' | 'work24' | 'manual';
 
 /** 수집기(collector/collect.ts)가 저장하는 공고 한 건 */
 export interface JobItem {
@@ -101,6 +101,8 @@ export interface JobItem {
   email_apply: boolean;
   commute: { verdict: 'ok' | 'edge' | 'far' | 'unknown'; min: number | null; area: string | null; route: string | null; matched: string | null };
   geo?: { lat: number; lng: number } | null;
+  /** 처음 발견한 때 (ISO). NEW 표시에 쓴다 */
+  first_seen?: string;
   posted: string;
   text: string;
 }
@@ -197,7 +199,7 @@ export function useStore(): Store {
       ref.current = { db, base };
       setMode('db');
       const pending = new Set(['profile', 'photo', 'quals', 'blocks', 'prefs', 'apps', 'criteria', 'criteria_chat', 'job_emails']);
-      for (const src of ['dghma', 'jobkorea', 'saramin', 'work24'] as JobSource[])
+      for (const src of ['dghma', 'jobkorea', 'saramin', 'work24', 'manual'] as JobSource[])
         unsubs.push(
           db.doc(`${base}/jobs_${src}`).onSnapshot(
             (sn: any) => setData((prev) => ({ ...prev, jobs: { ...prev.jobs, [src]: sn.exists ? (sn.data() as JobList) : undefined } })),

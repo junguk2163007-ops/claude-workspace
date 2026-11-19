@@ -43,6 +43,8 @@ export interface JobItem {
   /** 근무지 좌표 (카카오맵 길찾기용, 도로 단위 정확도). 못 찾으면 null */
   geo: Geo | null;
   posted: string;
+  /** 처음 발견한 때 (ISO). 이전 수집 결과(JOBKIT_PREV 폴더)가 있을 때만 채운다 */
+  first_seen?: string;
   text: string;
 }
 
@@ -445,6 +447,14 @@ async function main() {
       const kept = r.items.filter((it) => keep(it, today) === 'keep');
       for (const it of kept) it.geo = await geocode(it.address);
       kept.sort((a, b) => (a.commute.min ?? 99) - (b.commute.min ?? 99));
+      // 이전 결과와 비교해 처음 본 공고에 first_seen 을 붙인다 (이미 본 공고는 원래 날짜 유지)
+      const prevFile = process.env.JOBKIT_PREV ? path.join(process.env.JOBKIT_PREV, `jobs_${source}.json`) : '';
+      if (prevFile && fs.existsSync(prevFile)) {
+        const prev = JSON.parse(fs.readFileSync(prevFile, 'utf8')) as Partial<SourceResult>;
+        const seen = new Map((prev.items ?? []).map((x) => [x.id, x.first_seen ?? '']));
+        const now = new Date().toISOString();
+        for (const it of kept) it.first_seen = seen.has(it.id) ? seen.get(it.id) || undefined : now;
+      }
       const result: SourceResult = {
         source,
         updated_at: new Date().toISOString(),

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { zipSync } from 'fflate';
-import { parsePosting, type ParsedPosting, type Category } from '../../lib/parser';
+import { parsePosting, parseSalaryAmount, type ParsedPosting, type Category } from '../../lib/parser';
 import { analyze, type Analysis, type HistoryEntry, type ReqRow, type Verdict } from '../../lib/analyze';
 import { checkProfile, composeLetter, composeResume, type LetterData, type ResumeData } from '../../lib/render/compose';
 import { gmailComposeUrl, isPortalOnly, mailBody, mailSubject, mailtoUrl } from '../../lib/mail';
@@ -27,6 +27,7 @@ import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
 import { applyChanges, criteriaPrompt, filterJob, type ChatMessage, type Criteria, type FilterResult, type JobVerdict } from './criteria';
 import { createFolder, newKey, pingUrl, relayScript, relayStatus, relayUrl, uploadJob, uploadPdf, validRelayBase } from './relay';
+import { recommend } from './criteria';
 import { estimateCommute, finalMinutes, kakaoRouteUrl, type CommuteResult, type Geo } from './commute';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -886,6 +887,7 @@ const SOURCES: { id: JobSource; label: string; short: string; home: string }[] =
   { id: 'jobkorea', label: '잡코리아', short: '잡코리아', home: 'https://www.jobkorea.co.kr/' },
   { id: 'saramin', label: '사람인', short: '사람인', home: 'https://www.saramin.co.kr/' },
   { id: 'work24', label: '그 외 (고용24)', short: '고용24', home: 'https://www.work24.go.kr/' },
+  { id: 'manual', label: '직접 추가', short: '직접', home: '' },
 ];
 type Tab = JobSource | 'all';
 
@@ -933,13 +935,13 @@ function ago(iso: string) {
   return `${Math.round(m / 1440)}일 전`;
 }
 
-function JobCard({ it, also, verdict, min, km, store, fonts, onDrafted }: { it: JobItem; also?: JobSource[]; verdict: JobVerdict; min: number | null; km: number | null; store: Store; fonts: Fonts | null; onDrafted: (id: string) => void }) {
+function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: { it: JobItem; also?: JobSource[]; why?: string[]; verdict: JobVerdict; min: number | null; km: number | null; store: Store; fonts: Fonts | null; onDrafted: (id: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const today = todaySeoul();
   // 공고에 없던 이메일을 직접 알아내 넣었으면 공고 글 끝에 붙여서 읽는다
   const extraEmail = store.jobEmails[it.id] ?? '';
-  const text = extraEmail && !it.text.includes(extraEmail) ? `${it.text}\n이메일 : ${extraEmail}` : it.text;
+  const text = jobText(it, store);
   const parsed = useMemo(() => parsePosting(text, today), [text, today]);
   const p: ParsedPosting = { ...parsed, site: parsed.site || it.site, title: parsed.title || it.title, address: parsed.address || it.address, company: parsed.company || it.company };
   const analysis = useMemo(() => analyzeFor(store, text, p, null), [text, store.quals, store.prefs, store.apps]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -978,11 +980,13 @@ function JobCard({ it, also, verdict, min, km, store, fonts, onDrafted }: { it: 
               +{SOURCES.find((x) => x.id === a)?.short}
             </span>
           ))}
+          {isFresh(it) && <span className="new-badge">NEW</span>}
           <strong>{p.site || it.company || '(단지명 미상)'}</strong> <span>{p.title || it.list_title}</span>
           {applied && <Pill tone="blue">{applied.created_at.slice(5, 10).replace('-', '/')} {applied.status}</Pill>}
         </div>
         <span className="small muted">{it.posted || ''}</span>
       </div>
+      {why && why.length > 0 && <div className="why small">👍 {why.join(' · ')}</div>}
       <CommuteLine c={{ ...it.commute, verdict, min, km }} from={store.profile.address} to={p.address || p.site} fromGeo={store.prefs.home_geo} toGeo={it.geo} />
       <dl className="job-facts">
         <div>
@@ -1125,6 +1129,14 @@ function CriteriaPanel({ c }: { c: Criteria }) {
           <dt>접수</dt>
           <dd>{c.email_only ? '이메일 접수만' : '이메일·사이트 지원 모두'}</dd>
         </div>
+        <div>
+          <dt>자격</dt>
+          <dd>{(c.hide_unqualified ?? true) ? '기사급처럼 곧 딸 수 없는 자격이 필수면 숨김' : '자격과 상관없이 모두 표시'}</dd>
+        </div>
+        <div>
+          <dt>중복</dt>
+          <dd>{(c.hide_applied ?? true) ? '이미 지원한 공고는 숨김' : '지원한 공고도 표시'}</dd>
+        </div>
       </dl>
       <div className="crit-notes">
         <span className="crit-kicker">지원 지침</span>
@@ -1254,6 +1266,29 @@ function ChatPanel({ store, stats }: { store: Store; stats: string }) {
   );
 }
 
+/** 필수로 요구하는데 곧 딸 수도 없는 자격(기사급 등). 같은 줄에 대안(기능사 등)이 있으면 막지 않는다 */
+function hardBlockers(rows: ReturnType<typeof analyze>['rows'], quals: Qualification[]): string[] {
+  const byLine = new Map<string, { block: boolean; name: string }[]>();
+  for (const r of rows) {
+    if (r.qualification_id == null || (r.category !== '필수(명시)' && r.category !== '필수로 보임')) continue;
+    const q = quals.find((x) => x.id === r.qualification_id);
+    if (!q) continue;
+    const block = !q.have && !q.promisable && r.verdict === '미충족-장벽' && !/경력/.test(q.name);
+    byLine.set(r.line, [...(byLine.get(r.line) ?? []), { block, name: q.name }]);
+  }
+  const out = new Set<string>();
+  for (const hits of byLine.values()) if (hits.every((h) => h.block)) hits.forEach((h) => out.add(h.name));
+  return [...out];
+}
+
+/** 직접 넣은 접수 이메일을 공고 글 끝에 붙인다 */
+function jobText(it: JobItem, store: Store) {
+  const e = store.jobEmails[it.id] ?? '';
+  return e && !it.text.includes(e) ? `${it.text}\n이메일 : ${e}` : it.text;
+}
+
+const isFresh = (it: JobItem) => !!it.first_seen && Date.now() - Date.parse(it.first_seen) < 36 * 3600 * 1000;
+
 function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   const [src, setSrc] = useState<Tab>('all');
   const [showEdge, setShowEdge] = useState(true);
@@ -1264,7 +1299,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   const list = src === 'all' ? null : store.jobs[src];
   const lastUpdate = SOURCES.map((s) => store.jobs[s.id]?.updated_at).filter(Boolean).sort().pop();
 
-  type Row = { it: JobItem; f: FilterResult; min: number | null; km: number | null; also?: JobSource[] };
+  type Row = { it: JobItem; f: FilterResult; min: number | null; km: number | null; also?: JobSource[]; score: number; why: string[] };
   /** 종합 탭: 여러 사이트에 같이 올라온 공고는 하나로 묶고 다른 출처를 배지로 보인다 */
   const mergeDupes = (all: Row[]): Row[] => {
     // 사이트마다 주소 쓰는 방식이 달라 제목(공백·기호 뺀 것)으로 묶는다. 너무 짧은 제목은 단지명까지 본다
@@ -1288,21 +1323,44 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
     return out;
   };
   const judged = useMemo(() => {
-    const out: Record<JobSource, Row[]> = { dghma: [], jobkorea: [], saramin: [], work24: [] };
+    const out: Record<JobSource, Row[]> = { dghma: [], jobkorea: [], saramin: [], work24: [], manual: [] };
     for (const s of SOURCES) {
       for (const it of store.jobs[s.id]?.items ?? []) {
-        const p = parsePosting(it.text, today);
+        const text = jobText(it, store);
+        const p0 = parsePosting(text, today);
+        const p: ParsedPosting = { ...p0, site: p0.site || it.site, title: p0.title || it.title, address: p0.address || it.address, company: p0.company || it.company };
         // 집↔근무지 좌표 거리와 동별 표를 함께 본 통근 추정
         const fm = finalMinutes(it.commute.min, store.prefs.home_geo, it.geo);
-        const f = filterJob({ ...it, commute: { min: fm.min } }, { title: p.title || it.title, shift: p.shift, salary_text: p.salary_text, emails: p.emails }, c);
-        out[s.id].push({ it, f, min: fm.min, km: fm.km });
+        const an = analyzeFor(store, text, p, null, fm.min !== null && fm.min <= c.commute_limit);
+        const allBlockers = hardBlockers(an.rows, store.quals);
+        // 직책이 여럿인 공고(시설책임/시설주임 등)는 기사급 요건이 한 직책에만 걸린 경우가 많아 숨기지 않고 알려만 준다
+        const titleText = p.title || it.title;
+        const multi = /(주임|기사|책임|과장|반장|직원|계장|소장|대리)\s*[\/,]\s*\S*?(주임|기사|책임|과장|반장|직원|계장|소장|대리)/.test(titleText) && !/전기기사|산업기사|전기안전관리자|선임/.test(titleText);
+        const blockers = multi ? [] : allBlockers;
+        const app = store.apps.find((a) => a.status !== '작성중' && normalizeSite(a.site) === normalizeSite(p.site) && normalizeSite(a.title) === normalizeSite(p.title));
+        const f = filterJob(
+          { ...it, commute: { min: fm.min } },
+          { title: p.title, shift: p.shift, salary_text: p.salary_text, emails: p.emails },
+          c,
+          { blockers, applied: app ? `${app.created_at.slice(5, 10).replace('-', '/')} ${app.status}` : null },
+        );
+        const amt = p.salary_text ? parseSalaryAmount(p.salary_text) : null;
+        // 연봉 표기는 월로 바꿔 비교한다
+        const salary = amt !== null && (/연봉|년봉|연\s*\d/.test(p.salary_text) || amt >= 10000000) ? Math.round(amt / 12) : amt;
+        const daysLeft = p.deadline ? Math.round((Date.parse(p.deadline) - Date.parse(today)) / 86400000) : null;
+        const r = recommend({ min: fm.min, verdict: f.verdict, signal: an.signal.level, email: p.emails.length > 0, salaryWon: salary, daysLeft, isNew: isFresh(it) }, c);
+        if (multi && allBlockers.length) {
+          r.score -= 10;
+          r.why.push(`⚠ 일부 직책은 ${allBlockers.join(', ')} 필요`);
+        }
+        out[s.id].push({ it, f, min: fm.min, km: fm.km, score: r.score, why: r.why });
       }
     }
-    for (const k of Object.keys(out) as JobSource[]) out[k].sort((a, b) => (a.min ?? 99) - (b.min ?? 99));
+    for (const k of Object.keys(out) as JobSource[]) out[k].sort((a, b) => b.score - a.score || (a.min ?? 99) - (b.min ?? 99));
     return out;
-  }, [store.jobs, store.prefs.home_geo, c, today]);
+  }, [store.jobs, store.prefs.home_geo, store.jobEmails, store.apps, store.quals, c, today]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const rows = src === 'all' ? mergeDupes(SOURCES.flatMap((s) => judged[s.id])).sort((a, b) => (a.min ?? 99) - (b.min ?? 99)) : judged[src];
+  const rows = src === 'all' ? mergeDupes(SOURCES.flatMap((s) => judged[s.id])).sort((a, b) => b.score - a.score || (a.min ?? 99) - (b.min ?? 99)) : judged[src];
   const shown = rows.filter((r) => r.f.show && (showEdge || r.f.verdict === 'ok'));
   const hidden = rows.filter((r) => !r.f.show);
   const stats = SOURCES.map((s) => `${s.label} ${judged[s.id].filter((r) => r.f.show).length}건`).join(', ');
@@ -1342,9 +1400,9 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
           <div className="source-tabs">
             <button className={cx('source-tab', 'src-all', src === 'all' && 'on')} onClick={() => setSrc('all')}>
               <span className="source-name">종합</span>
-              <span className="source-count">{mergeDupes(SOURCES.flatMap((s) => judged[s.id])).filter((r) => r.f.show).length}건 · 가까운 순</span>
+              <span className="source-count">{mergeDupes(SOURCES.flatMap((s) => judged[s.id])).filter((r) => r.f.show).length}건 · 추천순</span>
             </button>
-            {SOURCES.map((s) => {
+            {SOURCES.filter((s) => s.id !== 'manual' || store.jobs.manual?.items?.length).map((s) => {
               const n = judged[s.id].filter((r) => r.f.show).length;
               return (
                 <button key={s.id} className={cx('source-tab', `src-${s.id}`, src === s.id && 'on')} onClick={() => setSrc(s.id)}>
@@ -1360,7 +1418,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
         <div className="row wrap small list-bar">
           <span className="muted">
             {src === 'all'
-              ? `${lastUpdate ? `${ago(lastUpdate)} 갱신 · ` : ''}네 곳 합쳐 기준에 맞는 ${shown.length}건 (가까운 순)`
+              ? `${lastUpdate ? `${ago(lastUpdate)} 갱신 · ` : ''}모든 사이트 합쳐 기준에 맞는 ${shown.length}건 · 통근·자격·접수 방법·급여·마감을 함께 본 추천순`
               : list
                 ? `${ago(list.updated_at)} 갱신 · ${list.scanned}건 확인 → 기준에 맞는 ${shown.length}건`
                 : '아직 이 사이트에서 모은 공고가 없습니다.'}
@@ -1381,7 +1439,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
             <p>{rows.length ? '지금 기준에 맞는 공고가 없습니다. 오른쪽에서 기준을 넓혀 보세요.' : '아직 모은 공고가 없습니다.'}</p>
           </section>
         ) : (
-          shown.map(({ it, f, min, km, also }) => <JobCard key={it.id} it={it} also={also} verdict={f.verdict} min={min} km={km} store={store} fonts={fonts} onDrafted={() => (location.hash = '#final')} />)
+          shown.map(({ it, f, min, km, also, why }) => <JobCard key={it.id} it={it} also={also} why={why} verdict={f.verdict} min={min} km={km} store={store} fonts={fonts} onDrafted={() => (location.hash = '#final')} />)
         )}
 
         {hidden.length > 0 && (
