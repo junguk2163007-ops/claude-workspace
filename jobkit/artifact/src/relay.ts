@@ -2,9 +2,9 @@
 // 직접 넘기고(새 창으로 폼 전송), 발송기가 정민욱 Gmail 로 보내며 정민욱 Drive 에 사본을 남긴다.
 // claude.ai 연결(Gmail/Drive) 기능을 쓰지 않으므로 어느 계정·화면에서 열어도 동작한다.
 
-export const RELAY_VERSION = 7;
+export const RELAY_VERSION = 8;
 /** 팝업 없이 페이지 안 상자(iframe)로 여는 것은 v6 부터 */
-export const RELAY_FRAME_VERSION = 6;
+export const RELAY_FRAME_VERSION = 99; // claude.ai 가 페이지 안 상자를 막아 쓰지 않는다
 /** 링크로 서류를 넘겨 보내기는 v5 부터 */
 export const RELAY_SEND_VERSION = 5;
 
@@ -125,18 +125,17 @@ export function submitRelay(base: string, key: string, p: RelayPayload): void {
 /** 보내기 창 HTML (Apps Script HtmlService 안에서 돈다) */
 const SEND_PAGE = `<meta name="viewport" content="width=device-width,initial-scale=1">
 <div id="box" style="font-family:sans-serif;max-width:560px;margin:6px auto;padding:12px 16px;border-radius:12px;background:#eef4ff">
-<h3 id="t" style="margin:0 0 4px;font-size:17px">보내는 중…</h3><p id="m" style="margin:0;font-size:14.5px;line-height:1.6">잠시만 기다려 주세요.</p></div>
+<h3 id="t" style="margin:0 0 4px;font-size:17px">보내는 중…</h3><p id="m" style="margin:0;font-size:14.5px;line-height:1.6">잠시만 기다려 주세요.</p><p id="c" style="margin:6px 0 0;font-size:13px;color:#555"></p></div>
 <script>
 function show(t, m, ok) {
   document.getElementById('t').textContent = t;
   document.getElementById('m').textContent = m;
   document.getElementById('box').style.background = ok ? '#e3f7ec' : '#ffe7e4';
 }
+// 결과는 이 탭을 연 jobkit 화면에만 알린다 (Google 이 감싼 바깥 창에 보내면 결과 통로가 끊긴다)
 function targets() {
   var t = [];
-  try { t.push(window.top.opener); } catch (e) {}
-  try { t.push(window.opener); } catch (e) {}
-  try { var w = window; for (var i = 0; i < 6 && w.parent && w.parent !== w; i++) { w = w.parent; t.push(w); } } catch (e) {}
+  try { if (window.top.opener) t.push(window.top.opener); } catch (e) {}
   return t;
 }
 function signal(r, rid, kind) {
@@ -144,7 +143,14 @@ function signal(r, rid, kind) {
   targets().forEach(function (w) { try { if (w) w.postMessage(m, '*'); } catch (e) {} });
 }
 function closeSoon() {
-  setTimeout(function () { try { window.top.close(); } catch (e) {} }, 1500);
+  var n = 3;
+  var tick = function () {
+    if (n <= 0) { try { window.top.close(); } catch (e) {} return; }
+    document.getElementById('c').textContent = n + '초 뒤 이 창이 저절로 닫힙니다.';
+    n--;
+    setTimeout(tick, 1000);
+  };
+  tick();
 }
 function decode(s) {
   s = String(s || '').replace(/^#/, '').replace(/-/g, '+').replace(/_/g, '/');
@@ -156,9 +162,8 @@ function decode(s) {
 google.script.url.getLocation(function (loc) {
   var d;
   try { d = decode(loc.hash); } catch (e) { show('보낼 서류를 읽지 못했습니다', 'jobkit 의 보내기 버튼으로 다시 열어 주세요. 메일은 나가지 않았습니다.', false); return; }
-  signal({ ok: true, title: 'ready', msg: '' }, d.rid, 'ready');
   google.script.run
-    .withSuccessHandler(function (r) { show(r.title, r.msg + (r.ok ? ' (이 창은 곧 저절로 닫힙니다)' : ''), r.ok); signal(r, d.rid); if (r.ok) closeSoon(); })
+    .withSuccessHandler(function (r) { show(r.title, r.msg, r.ok); signal(r, d.rid); if (r.ok) closeSoon(); })
     .withFailureHandler(function (err) { var r = { ok: false, title: '보내지 못했습니다', msg: String((err && err.message) || err) + ' — 메일은 나가지 않았습니다.' }; show(r.title, r.msg, false); signal(r, d.rid); })
     .sendFromPage(d);
 });
@@ -239,7 +244,7 @@ export function relayScript(key: string): string {
     '      atts.forEach(function (b) { sub.createFile(b); });',
     "      sub.createFile('메일.txt', '받는 사람: ' + p.to + '\\n제목: ' + p.subject + '\\n\\n' + p.body);",
     '    } catch (x) {}',
-    "    return { ok: true, title: '보냈습니다 ✓', msg: p.to + ' 에게 \"' + p.subject + '\" 메일을 첨부 ' + atts.length + '개와 함께 보냈습니다. jobkit 으로 돌아가 [보냈습니다가 떴어요]를 누르면 지원 이력에 기록됩니다.' };",
+    "    return { ok: true, title: '보냈습니다 ✓', msg: p.to + ' 에게 \"' + p.subject + '\" 메일을 첨부 ' + atts.length + '개와 함께 보냈습니다. jobkit 지원 이력에도 기록됩니다.' };",
     '  } catch (err) {',
     "    return { ok: false, title: '보내지 못했습니다', msg: String(err && err.message || err) + ' — 메일은 나가지 않았습니다.' };",
     '  } finally {',
@@ -258,10 +263,9 @@ export function relayScript(key: string): string {
     "  var data = { jobkit: 'relay', v: " + RELAY_VERSION + ", rid: String(rid || ''), ok: !!ok, msg: title + ' ' + msg };",
     '  if (extra) for (var k in extra) data[k] = extra[k];',
     "  var sig = rid ? '<script>(function(){var m=' + JSON.stringify(data).replace(/</g, '\\\\u003c').replace(/\\u2028/g, '\\\\u2028').replace(/\\u2029/g, '\\\\u2029') + ';' +",
-    "    'var t=[],op=null;try{op=window.top.opener;t.push(op)}catch(e){}try{t.push(window.opener)}catch(e){}' +",
-    "    'try{var w=window;for(var i=0;i<6&&w.parent&&w.parent!==w;i++){w=w.parent;t.push(w)}}catch(e){}' +",
+    "    'var t=[];try{if(window.top.opener)t.push(window.top.opener)}catch(e){}' +",
     "    't.forEach(function(w){try{if(w)w.postMessage(m,\"*\")}catch(e){}});' +",
-    "    'if(m.ok){setTimeout(function(){try{window.top.close()}catch(e){}},1500)}})();<\\/script>' : '';",
+    "    'if(m.ok){setTimeout(function(){try{window.top.close()}catch(e){}},3000)}})();<\\/script>' : '';",
     "  var h = '<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">' +",
     "    '<div style=\"font-family:sans-serif;max-width:560px;margin:6px auto;padding:12px 16px;border-radius:12px;background:' + (ok ? '#e3f7ec' : '#ffe7e4') + '\">' +",
     "    '<h3 style=\"margin:0 0 4px;font-size:17px\">' + esc(title) + '</h3><p style=\"margin:0;font-size:14.5px;line-height:1.6\">' + esc(msg) + '</p></div>' + sig;",
