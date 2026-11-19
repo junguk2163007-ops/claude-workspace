@@ -1,99 +1,34 @@
-// 원클릭 발송: 서류를 Google Drive 폴더에 올리고, 정민욱 계정(mwjung2002)에 설치한
-// Apps Script 웹앱(발송기)이 그 파일을 첨부해 정민욱 Gmail 로 보낸다.
-// 이 페이지에 연결된 Gmail 은 개인 계정이라 보내는 사람을 바꿀 수 없기 때문.
+// 원클릭 발송: 페이지가 서류(PDF)를 정민욱 계정(mwjung2002)에 설치한 Apps Script 웹앱(발송기)으로
+// 직접 넘기고(새 창으로 폼 전송), 발송기가 정민욱 Gmail 로 보내며 정민욱 Drive 에 사본을 남긴다.
+// claude.ai 연결(Gmail/Drive) 기능을 쓰지 않으므로 어느 계정·화면에서 열어도 동작한다.
 
-const DRIVE = 'Google Drive';
+export const RELAY_VERSION = 2;
 
 export interface RelayFile {
-  id: string;
   name: string;
+  type: string;
+  b64: string;
 }
 
-export interface RelayJob {
+export interface RelayPayload {
+  rid: string;
   to: string;
   subject: string;
   body: string;
   from_name: string;
+  site: string;
   files: RelayFile[];
 }
 
-async function mcpNs(): Promise<any> {
-  const c = (window as any).claude;
-  if (!c?.use) return null;
-  try {
-    return await c.use('mcp');
-  } catch {
-    return null;
-  }
+export function relayUrlOk(s: string) {
+  return /^https:\/\/script\.google\.com\/macros\/(u\/\d+\/)?s\/[A-Za-z0-9_-]+\/exec$/.test(s.trim());
 }
-
-async function drive(tool: string, args: Record<string, unknown>): Promise<any> {
-  const mcp = await mcpNs();
-  if (!mcp) throw new Error('이 화면에서는 Google Drive를 쓸 수 없습니다. claude.ai 에서 이 페이지를 열어 주세요.');
-  const r = await mcp.callTool(DRIVE, tool, args, { cache: false });
-  return r?.payload ?? {};
-}
-
-const idOf = (p: any): string => p?.id ?? p?.file?.id ?? '';
-
-/** 서류 폴더를 만들고 발송 계정에 편집 권한을 준다 (처음 한 번) */
-export async function createFolder(sender: string): Promise<string> {
-  const f = await drive('create_file', { title: 'jobkit 지원서 (정민욱)', contentMimeType: 'application/vnd.google-apps.folder' });
-  const id = idOf(f);
-  if (!id) throw new Error('Drive 폴더를 만들지 못했습니다.');
-  await drive('share_file', { fileId: id, emailAddress: sender, role: 'writer' });
-  return id;
-}
-
-export async function uploadPdf(folder: string, name: string, b64: string, type = 'application/pdf'): Promise<string> {
-  const f = await drive('create_file', { title: name, parentId: folder, base64Content: b64, contentMimeType: type, disableConversionToGoogleType: true });
-  const id = idOf(f);
-  if (!id) throw new Error(`${name} 을(를) Drive에 올리지 못했습니다.`);
-  return id;
-}
-
-export async function uploadJob(folder: string, title: string, job: RelayJob): Promise<string> {
-  const f = await drive('create_file', {
-    title,
-    parentId: folder,
-    textContent: JSON.stringify(job),
-    contentMimeType: 'application/json',
-    disableConversionToGoogleType: true,
-  });
-  const id = idOf(f);
-  if (!id) throw new Error('발송 요청 파일을 Drive에 올리지 못했습니다.');
-  return id;
-}
-
-export type RelayStatus = { state: 'waiting' } | { state: 'sent'; threadId: string | null } | { state: 'failed'; why: string };
-
-/** 발송기가 요청 파일 이름 앞에 "보냄 …" / "실패 …" 를 붙인다 */
-export async function relayStatus(jobId: string): Promise<RelayStatus> {
-  const m = await drive('get_file_metadata', { fileId: jobId, excludeContentSnippets: true });
-  const title: string = m?.title ?? m?.name ?? '';
-  if (title.startsWith('보냄')) {
-    const t = title.split(' ')[1];
-    return { state: 'sent', threadId: t && t !== '-' ? t : null };
-  }
-  if (title.startsWith('실패')) return { state: 'failed', why: title.replace(/^실패\s*/, '').split(' | ')[0] };
-  return { state: 'waiting' };
-}
-
-export function relayUrl(base: string, key: string, jobId: string) {
-  const u = new URL(base.trim());
-  u.searchParams.set('k', key);
-  u.searchParams.set('j', jobId);
-  return u.toString();
-}
+export const validRelayBase = relayUrlOk;
 
 export function pingUrl(base: string) {
   const u = new URL(base.trim());
   u.searchParams.set('ping', '1');
   return u.toString();
-}
-
-export function validRelayBase(s: string) {
-  return /^https:\/\/script\.google\.com\/macros\/(u\/\d+\/)?s\/[A-Za-z0-9_-]+\/exec$/.test(s.trim());
 }
 
 export function newKey() {
@@ -102,35 +37,78 @@ export function newKey() {
   return Array.from(a, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 24);
 }
 
+/**
+ * 폼을 만들어 발송기로 보낸다. 반드시 클릭 처리 안에서 (await 전에) 불러야 새 창이 막히지 않는다.
+ * 새 창 이름을 돌려준다.
+ */
+export function submitRelay(base: string, key: string, p: RelayPayload): void {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = base.trim();
+  form.target = '_blank';
+  form.acceptCharset = 'UTF-8';
+  form.style.display = 'none';
+  const add = (name: string, value: string) => {
+    const t = document.createElement('textarea');
+    t.name = name;
+    t.value = value;
+    form.appendChild(t);
+  };
+  add('k', key);
+  add('v', String(RELAY_VERSION));
+  add('rid', p.rid);
+  add('to', p.to);
+  add('subject', p.subject);
+  add('body', p.body);
+  add('from_name', p.from_name);
+  add('site', p.site);
+  add('files', JSON.stringify(p.files));
+  document.body.appendChild(form);
+  try {
+    form.submit();
+  } finally {
+    setTimeout(() => form.remove(), 1000);
+  }
+}
+
 /** 정민욱 계정 Apps Script 에 붙여넣을 발송기 코드 */
 export function relayScript(key: string): string {
   return [
-    '// jobkit 발송기 — 이 프로젝트를 만든 Google 계정(정민욱) Gmail 로 지원 메일을 보냅니다.',
-    '// jobkit 페이지가 Google Drive 에 올린 서류만 첨부해 보내며, 열쇠(KEY)가 맞을 때만 동작합니다.',
+    '// jobkit 발송기 v' + RELAY_VERSION + ' — 이 프로젝트를 만든 Google 계정(정민욱) Gmail 로 지원 메일을 보냅니다.',
+    '// jobkit 페이지가 넘긴 서류를 첨부해 보내고, 내 Drive 의 "jobkit 지원서" 폴더에 사본을 남깁니다.',
+    '// 열쇠(KEY)가 맞을 때만 동작하며, 같은 지원서는 두 번 보내지 않습니다.',
     "var KEY = '" + key + "';",
+    "var FOLDER = 'jobkit 지원서';",
     '',
     'function doGet(e) {',
     '  var p = (e && e.parameter) || {};',
-    "  if (p.ping) return page('연결됨 ✓', Session.getEffectiveUser().getEmail() + ' 계정으로 보냅니다. 이 창은 닫아도 됩니다.', true);",
-    "  if (p.k !== KEY) return page('열쇠가 다릅니다', 'jobkit 설정에서 발송기 코드를 다시 복사해 붙여넣고 새 버전으로 배포해 주세요.', false);",
+    "  if (p.ping) return page('연결됨 ✓ (v" + RELAY_VERSION + ")', Session.getEffectiveUser().getEmail() + ' 계정으로 보냅니다. 이 창은 닫아도 됩니다.', true);",
+    "  return page('jobkit 발송기', 'jobkit 페이지에서 보내기 버튼을 눌러 사용합니다.', true);",
+    '}',
+    '',
+    'function doPost(e) {',
+    '  var p = (e && e.parameter) || {};',
+    "  if (p.k !== KEY) return page('열쇠가 다릅니다', 'jobkit 설정에서 발송기 코드를 다시 복사해 붙여넣고 새 버전으로 배포해 주세요. 메일은 나가지 않았습니다.', false);",
     '  var lock = LockService.getScriptLock();',
     '  lock.waitLock(30000);',
-    '  var jf = null;',
     '  try {',
-    '    jf = DriveApp.getFileById(p.j);',
-    "    if (jf.getName().indexOf('보냄') === 0) return page('이미 보낸 지원서입니다', '같은 메일을 두 번 보내지 않았습니다. 이 창은 닫아도 됩니다.', true);",
-    "    var job = JSON.parse(jf.getBlob().getDataAsString('UTF-8'));",
-    "    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(job.to)) throw new Error('받는 사람 주소가 이상합니다: ' + job.to);",
-    '    var atts = job.files.map(function (f) { return DriveApp.getFileById(f.id).getBlob().setName(f.name); });',
-    '    GmailApp.sendEmail(job.to, job.subject, job.body, { attachments: atts, name: job.from_name });',
-    '    Utilities.sleep(2500);',
-    "    var th = GmailApp.search('in:sent to:' + job.to + ' newer_than:1h', 0, 1);",
-    "    jf.setName('보냄 ' + (th.length ? th[0].getId() : '-') + ' ' + jf.getName());",
-    "    return page('보냈습니다 ✓', job.to + ' 에게 \"' + job.subject + '\" 메일을 보냈습니다. 이 창은 닫아도 됩니다.', true);",
+    '    var props = PropertiesService.getScriptProperties();',
+    "    if (p.rid && props.getProperty('sent_' + p.rid)) return page('이미 보낸 지원서입니다', '같은 메일을 두 번 보내지 않았습니다. 이 창은 닫아도 됩니다.', true);",
+    "    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(p.to || '')) throw new Error('받는 사람 주소가 이상합니다: ' + p.to);",
+    "    var files = JSON.parse(p.files || '[]');",
+    '    var atts = files.map(function (f) { return Utilities.newBlob(Utilities.base64Decode(f.b64), f.type, f.name); });',
+    '    GmailApp.sendEmail(p.to, p.subject, p.body, { attachments: atts, name: p.from_name });',
+    "    if (p.rid) props.setProperty('sent_' + p.rid, new Date().toISOString());",
+    '    try {',
+    '      var it = DriveApp.getFoldersByName(FOLDER);',
+    '      var root = it.hasNext() ? it.next() : DriveApp.createFolder(FOLDER);',
+    "      var sub = root.createFolder(Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH.mm') + ' ' + (p.site || p.to));",
+    '      atts.forEach(function (b) { sub.createFile(b); });',
+    "      sub.createFile('메일.txt', '받는 사람: ' + p.to + '\\n제목: ' + p.subject + '\\n\\n' + p.body);",
+    '    } catch (x) {}',
+    "    return page('보냈습니다 ✓', p.to + ' 에게 \"' + p.subject + '\" 메일을 첨부 ' + atts.length + '개와 함께 보냈습니다. 이 창은 닫아도 됩니다.', true);",
     '  } catch (err) {',
-    "    var msg = String(err && err.message || err);",
-    "    if (jf) { try { jf.setName('실패 ' + msg.slice(0, 80) + ' | ' + jf.getName().replace(/^실패 .*? \\| /, '')); } catch (x) {} }",
-    "    return page('보내지 못했습니다', msg, false);",
+    "    return page('보내지 못했습니다', String(err && err.message || err) + ' — 메일은 나가지 않았습니다. jobkit 에서 [되돌리기]를 눌러 주세요.', false);",
     '  } finally {',
     '    lock.releaseLock();',
     '  }',
