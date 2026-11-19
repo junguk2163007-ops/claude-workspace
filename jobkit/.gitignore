@@ -12,3 +12,5 @@ data/
 tests/.tmp/
 backups/
 artifact/dist/
+collector/dist/
+collector/out/

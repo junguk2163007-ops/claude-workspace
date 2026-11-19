@@ -184,6 +184,23 @@ select.mini { padding: 3px 6px; font-size: 12.5px; width: auto; }
 .ack { white-space: normal; font-weight: 600; }
 .confirm { border: 2px solid var(--accent); border-radius: 8px; padding: 12px; background: var(--accent-soft); }
 .final { max-width: 900px; width: 100%; margin: 0 auto; }
+.source-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.source-tab { font: inherit; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; text-align: left; }
+.source-tab:hover { background: var(--surface-2); }
+.source-tab.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.source-name { font-weight: 700; font-size: 14.5px; }
+.source-count { font-size: 12.5px; color: var(--muted); }
+@media (max-width: 560px) { .source-tabs { grid-template-columns: 1fr; } }
+.jobs { max-width: 980px; width: 100%; margin: 0 auto; }
+.job { display: flex; flex-direction: column; gap: 10px; }
+.job-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.job-title { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 15px; }
+.job-title span { color: var(--muted); }
+.job-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 4px 20px; margin: 0; }
+.job-facts div { display: flex; gap: 10px; min-width: 0; font-size: 13.5px; }
+.job-facts dt { width: 60px; flex: none; color: var(--muted); }
+.job-facts dd { margin: 0; min-width: 0; }
+.commute-line { gap: 8px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 <div id="root"></div>

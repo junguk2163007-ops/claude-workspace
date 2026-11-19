@@ -22,9 +22,10 @@ import {
   type Settings,
 } from '../../lib/types';
 import { drawPage, FONT_FAMILY, layoutLetter, layoutResume, loadFonts, toPdf, type Fonts, type Laid, type Page, type Photo } from './pdfdoc';
-import { EMPTY_PROFILE, useStore, type AppRec, type Prefs, type Store } from './store';
+import { EMPTY_PROFILE, useStore, type AppRec, type JobItem, type JobSource, type Prefs, type Store } from './store';
 import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
+import { COMMUTE_LIMIT, estimateCommute, kakaoRouteUrl, type CommuteResult } from './commute';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -560,6 +561,62 @@ function idNum(id: string) {
   return Math.abs(h) || 1;
 }
 
+/** 통근 표 기준 30분 이내면 근거리 (지원동기 거리 문장·통근 경고에 쓰임) */
+function analysisSettings(store: Store, parsed: ParsedPosting) {
+  const c = estimateCommute(parsed.address, parsed.site);
+  return { ...store.prefs, near_keywords: c.verdict === 'ok' && parsed.address.trim() ? [parsed.address.trim()] : [] };
+}
+
+function analyzeFor(store: Store, text: string, parsed: ParsedPosting, currentId: string | null) {
+  return analyze(text, parsed, {
+    qualifications: store.quals,
+    settings: analysisSettings(store, parsed),
+    history: historyOf(store.apps),
+    today: todaySeoul(),
+    currentApplicationId: currentId ? idNum(currentId) : null,
+  });
+}
+
+/** 공고 하나로 이력서·자소서·메일을 만들어 "작성중" 지원 건으로 만든다 */
+function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs: string[], reuse: AppRec | null) {
+  const today = todaySeoul();
+  const analysis = analyzeFor(store, text, parsed, reuse?.id ?? null);
+  const profile = { ...store.profile, photo_file: store.photo ? 'photo' : null };
+  const input = { profile, blocks: store.blocks, parsed, analysis, today };
+  const resumeData = composeResume(input);
+  const letterData = composeLetter(input);
+  const subj = mailSubject(parsed, store.profile.name);
+  const mb = mailBody({ template: store.blocks.mail_body, parsed, profile: store.profile, settings: store.prefs, extraDocs });
+  const recipient = parsed.emails[0] ?? '';
+  const now = new Date().toISOString();
+  const keep = reuse && reuse.status === '작성중' ? reuse : null;
+  const rec: AppRec = {
+    id: keep ? keep.id : newId(),
+    created_at: keep ? keep.created_at : now,
+    updated_at: now,
+    site: parsed.site.trim(),
+    title: parsed.title.trim(),
+    company: parsed.company.trim(),
+    address: parsed.address.trim(),
+    phone: parsed.phone.trim(),
+    emails: parsed.emails,
+    deadline: parsed.deadline,
+    shift: parsed.shift,
+    salary_text: parsed.salary_text,
+    required_phrase: parsed.required_phrase,
+    posting_text: text,
+    parsed,
+    mail_subject: subj,
+    mail_body: mb,
+    selected_email: recipient || null,
+    extra_docs: extraDocs,
+    status: '작성중',
+    memo: keep ? keep.memo : '',
+    snapshot: { resume: resumeData, letter: letterData, photo: store.photo },
+  };
+  return { rec, resumeData, letterData, subj, mb, recipient };
+}
+
 function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   const [text, setText] = useState('');
   const [analyzedText, setAnalyzedText] = useState('');
@@ -577,16 +634,8 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   const today = todaySeoul();
   const app = store.apps.find((a) => a.id === appId) ?? null;
 
-  const analysis = useMemo(() => {
-    if (!parsed) return null;
-    return analyze(analyzedText, parsed, {
-      qualifications: store.quals,
-      settings: store.prefs,
-      history: historyOf(store.apps),
-      today,
-      currentApplicationId: appId ? idNum(appId) : null,
-    });
-  }, [parsed, analyzedText, store.quals, store.prefs, store.apps, appId, today]);
+  const analysis = useMemo(() => (parsed ? analyzeFor(store, analyzedText, parsed, appId) : null), [parsed, analyzedText, store.quals, store.prefs, store.apps, appId, today]);
+  const commute = parsed ? estimateCommute(parsed.address, parsed.site) : null;
 
   const check = checkProfile({ ...store.profile, photo_file: store.photo ? 'photo' : null });
 
@@ -610,44 +659,11 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
     if (!parsed.site.trim() || !parsed.title.trim()) return setError('단지/사업장명과 직책을 먼저 입력하세요.');
     setBusy(true);
     setError(null);
-    const profile = { ...store.profile, photo_file: store.photo ? 'photo' : null };
-    const input = { profile, blocks: store.blocks, parsed, analysis, today };
-    const resumeData = composeResume(input);
-    const letterData = composeLetter(input);
-    const b = buildFromData(fonts, resumeData, letterData, store.photo);
-    setBuilt(b);
-    const subj = mailSubject(parsed, store.profile.name);
-    const mb = mailBody({ template: store.blocks.mail_body, parsed, profile: store.profile, settings: store.prefs, extraDocs });
+    const { rec, resumeData, letterData, subj, mb, recipient } = buildDraft(store, analyzedText, parsed, extraDocs, app);
+    setBuilt(buildFromData(fonts, resumeData, letterData, store.photo));
     setSubject(subj);
     setBody(mb);
-    const recipient = parsed.emails[0] ?? '';
     setTo(recipient);
-    const now = new Date().toISOString();
-    const reuse = app && app.status === '작성중';
-    const rec: AppRec = {
-      id: reuse ? app.id : newId(),
-      created_at: reuse ? app.created_at : now,
-      updated_at: now,
-      site: parsed.site.trim(),
-      title: parsed.title.trim(),
-      company: parsed.company.trim(),
-      address: parsed.address.trim(),
-      phone: parsed.phone.trim(),
-      emails: parsed.emails,
-      deadline: parsed.deadline,
-      shift: parsed.shift,
-      salary_text: parsed.salary_text,
-      required_phrase: parsed.required_phrase,
-      posting_text: analyzedText,
-      parsed,
-      mail_subject: subj,
-      mail_body: mb,
-      selected_email: recipient || null,
-      extra_docs: extraDocs,
-      status: '작성중',
-      memo: reuse ? app.memo : '',
-      snapshot: { resume: resumeData, letter: letterData, photo: store.photo },
-    };
     setAppId(rec.id);
     try {
       await store.saveApp(rec);
@@ -714,6 +730,12 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
               <ParsedForm value={parsed} onChange={setParsed} />
             </section>
             <Summary p={parsed} />
+            {commute && (
+              <section className="card">
+                <h2>통근</h2>
+                <CommuteLine c={commute} from={store.profile.address} to={parsed.address || parsed.site} />
+              </section>
+            )}
             <ReqTable rows={analysis.rows} />
             <Signal s={analysis.signal} />
             {analysis.warnings.length > 0 && (
@@ -809,6 +831,220 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------- 공고 찾기 ----------
+
+/** 예약 작업(공고 수집)의 id. [지금 새로 찾기]가 이 작업을 바로 실행한다. 비어 있으면 버튼을 숨긴다. */
+const REFRESH_TRIGGER_ID = '';
+
+const SOURCES: { id: JobSource; label: string; home: string }[] = [
+  { id: 'dghma', label: '대구주택관리사협회', home: 'https://www.dghma.org/pg/bbs/board.php?bo_table=recruit_new_3' },
+  { id: 'jobkorea', label: '잡코리아', home: 'https://www.jobkorea.co.kr/' },
+  { id: 'saramin', label: '사람인', home: 'https://www.saramin.co.kr/' },
+];
+
+function CommuteBadge({ c }: { c: Pick<CommuteResult, 'verdict' | 'min'> }) {
+  if (c.verdict === 'ok') return <Pill tone="green">약 {c.min}분</Pill>;
+  if (c.verdict === 'edge') return <Pill tone="yellow">약 {c.min}분 · 경계</Pill>;
+  if (c.verdict === 'far') return <Pill tone="red">약 {c.min}분 · 멂</Pill>;
+  return <Pill tone="gray">통근 확인 필요</Pill>;
+}
+
+function CommuteLine({ c, from, to }: { c: Pick<CommuteResult, 'verdict' | 'min' | 'area' | 'route'>; from: string; to: string }) {
+  return (
+    <div className="row wrap small commute-line">
+      <CommuteBadge c={c} />
+      <span className="muted">
+        {c.area ? `${c.area}` : '지역 미상'}
+        {c.route ? ` · ${c.route}` : ''}
+      </span>
+      {from && to && (
+        <a href={kakaoRouteUrl(from, to)} target="_blank" rel="noreferrer noopener">
+          카카오맵 길찾기
+        </a>
+      )}
+    </div>
+  );
+}
+
+function ago(iso: string) {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return '방금';
+  if (m < 60) return `${m}분 전`;
+  if (m < 60 * 24) return `${Math.round(m / 60)}시간 전`;
+  return `${Math.round(m / 1440)}일 전`;
+}
+
+function JobCard({ it, store, fonts, onDrafted }: { it: JobItem; store: Store; fonts: Fonts | null; onDrafted: (id: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const today = todaySeoul();
+  const parsed = useMemo(() => parsePosting(it.text, today), [it.text, today]);
+  const p: ParsedPosting = { ...parsed, site: parsed.site || it.site, title: parsed.title || it.title, address: parsed.address || it.address, company: parsed.company || it.company };
+  const analysis = useMemo(() => analyzeFor(store, it.text, p, null), [it.text, store.quals, store.prefs, store.apps]); // eslint-disable-line react-hooks/exhaustive-deps
+  const applied = store.apps.find((a) => a.status !== '작성중' && normalizeSite(a.site) === normalizeSite(p.site) && normalizeSite(a.title) === normalizeSite(p.title));
+  const draft = store.apps.find((a) => a.status === '작성중' && a.posting_text === it.text);
+  const lamp = { green: '🟢', yellow: '🟡', red: '🔴' }[analysis.signal.level];
+  const req = analysis.rows.filter((r) => r.category !== '우대' && r.verdict !== '충족' && r.qualification_name).map((r) => r.qualification_name);
+
+  async function apply() {
+    if (!fonts) return;
+    if (!p.site.trim() || !p.title.trim()) return setErr('단지명이나 직책을 읽지 못했습니다. [직접 확인]으로 지원서 작성에서 고쳐 주세요.');
+    setBusy(true);
+    setErr(null);
+    try {
+      const { rec } = buildDraft(store, it.text, p, p.submit_docs.includes('자격증 사본') ? ['자격증 사본'] : [], draft ?? null);
+      await store.saveApp(rec);
+      onDrafted(rec.id);
+    } catch {
+      setErr('서류를 저장하지 못했습니다. 잠시 뒤 다시 누르세요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <article className="card job">
+      <div className="job-head">
+        <div className="job-title">
+          <strong>{p.site || it.company || '(단지명 미상)'}</strong> <span>{p.title || it.list_title}</span>
+          {applied && <Pill tone="blue">{applied.created_at.slice(5, 10).replace('-', '/')} {applied.status}</Pill>}
+        </div>
+        <span className="small muted">{it.posted || ''}</span>
+      </div>
+      <CommuteLine c={it.commute} from={store.profile.address} to={p.address || p.site} />
+      <dl className="job-facts">
+        <div>
+          <dt>주소</dt>
+          <dd>{p.address || '-'}</dd>
+        </div>
+        <div>
+          <dt>급여</dt>
+          <dd>{p.salary_text || '-'}</dd>
+        </div>
+        <div>
+          <dt>근무</dt>
+          <dd>
+            {p.shift}
+            {p.shift_text ? ` · ${p.shift_text}` : ''}
+          </dd>
+        </div>
+        <div>
+          <dt>마감</dt>
+          <dd>{p.deadline ? koreanDate(p.deadline) : p.deadline_text || '채용시까지'}</dd>
+        </div>
+        <div>
+          <dt>접수</dt>
+          <dd>{p.emails.length ? `이메일 ${p.emails[0]}` : p.apply_channels.filter((c) => c !== 'email').join(', ') || '사이트 지원'}</dd>
+        </div>
+        <div>
+          <dt>서류 통과</dt>
+          <dd>
+            {lamp} {analysis.signal.title.replace('서류 통과 예상 난이도: ', '')}
+            {req.length > 0 && <span className="muted"> · 부족: {req.join(', ')}</span>}
+          </dd>
+        </div>
+      </dl>
+      {err && <Notice level="danger">{err}</Notice>}
+      <div className="row wrap">
+        {p.emails.length > 0 ? (
+          draft ? (
+            <a className="btn btn-primary" href="#final">
+              최종확인에서 보내기 →
+            </a>
+          ) : (
+            <Btn kind="primary" onClick={apply} disabled={busy || !fonts || !!applied}>
+              {busy ? '서류 만드는 중…' : applied ? '이미 지원함' : '지원'}
+            </Btn>
+          )
+        ) : (
+          <a className="btn btn-primary" href={it.url} target="_blank" rel="noreferrer noopener">
+            사이트에서 지원
+          </a>
+        )}
+        <a className="btn btn-quiet" href={it.url} target="_blank" rel="noreferrer noopener">
+          공고 원문
+        </a>
+      </div>
+    </article>
+  );
+}
+
+function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
+  const [src, setSrc] = useState<JobSource>('dghma');
+  const [showEdge, setShowEdge] = useState(true);
+  const [refresh, setRefresh] = useState<{ level: 'ok' | 'warn' | 'danger'; text: string } | null>(null);
+  const list = store.jobs[src];
+  const items = (list?.items ?? []).filter((it) => showEdge || it.commute.verdict === 'ok');
+
+  async function runNow() {
+    setRefresh(null);
+    try {
+      const mcp = await (window as any).claude?.use?.('mcp');
+      if (!mcp) throw { code: 'not_granted' };
+      await mcp.callTool('Claude Code Remote', 'fire_trigger', { trigger_id: REFRESH_TRIGGER_ID });
+      setRefresh({ level: 'ok', text: '새로 찾기를 시작했습니다. 5~10분 뒤 이 목록이 저절로 바뀝니다.' });
+    } catch (e) {
+      const code = (e as { code?: string })?.code;
+      setRefresh({
+        level: 'warn',
+        text:
+          code === 'not_in_manifest' || code === 'approval_required'
+            ? '이 페이지가 Claude Code를 쓰도록 허락해야 합니다. 다시 누르면 허락 창이 뜹니다.'
+            : '지금은 새로 찾기를 시작하지 못했습니다. 정해진 시간(하루 3번)에 자동으로 갱신됩니다.',
+      });
+    }
+  }
+
+  return (
+    <div className="stack jobs">
+      <section className="card stack-s">
+        <div className="card-head">
+          <h2>공고 찾기</h2>
+          {REFRESH_TRIGGER_ID && <Btn onClick={runNow}>지금 새로 찾기</Btn>}
+        </div>
+        <p className="small">
+          {store.profile.address || '집 주소 미입력'} 출발, 대중교통 편도 <b>{COMMUTE_LIMIT}분 이내</b>(최대 35분) 공고만 모았습니다. 시간은 지하철 3호선·버스 기준 추정(±5분)이고, 정확한 시간은 각 공고의
+          &quot;카카오맵 길찾기&quot;로 확인하세요.
+        </p>
+        <div className="source-tabs">
+          {SOURCES.map((s) => {
+            const l = store.jobs[s.id];
+            return (
+              <button key={s.id} className={cx('source-tab', src === s.id && 'on')} onClick={() => setSrc(s.id)}>
+                <span className="source-name">{s.label}</span>
+                <span className="source-count">{l ? `${l.items.length}건` : '아직 없음'}</span>
+              </button>
+            );
+          })}
+        </div>
+        {refresh && <Notice level={refresh.level}>{refresh.text}</Notice>}
+      </section>
+
+      <div className="row wrap small">
+        <span className="muted">
+          {list ? `${ago(list.updated_at)} 갱신 · 공고 ${list.scanned}건 확인 → 조건 맞는 ${list.items.length}건` : '아직 이 사이트에서 모은 공고가 없습니다.'}
+        </span>
+        <label className="check">
+          <input type="checkbox" id="jobs-edge" checked={showEdge} onChange={(e) => setShowEdge(e.target.checked)} />
+          31~35분·확인 필요도 보기
+        </label>
+        <a href={SOURCES.find((s) => s.id === src)!.home} target="_blank" rel="noreferrer noopener">
+          사이트 열기
+        </a>
+      </div>
+      {list && list.errors.length > 0 && <Notice level="warn">일부 공고를 읽지 못했습니다 ({list.errors.length}건).</Notice>}
+
+      {items.length === 0 ? (
+        <section className="card empty">
+          <p>{list ? '지금은 통근 조건에 맞는 공고가 없습니다.' : '첫 수집이 끝나면 여기에 공고가 나옵니다.'}</p>
+        </section>
+      ) : (
+        items.map((it) => <JobCard key={it.id} it={it} store={store} fonts={fonts} onDrafted={() => (location.hash = '#final')} />)
+      )}
     </div>
   );
 }
@@ -930,7 +1166,26 @@ function sendErrorText(e: unknown): { text: string; ambiguous: boolean } {
   }
 }
 
+type AccountCheck = { state: 'idle' | 'checking' } | { state: 'found'; email: string } | { state: 'unknown'; why: string };
+
+/** 연결된 Gmail 계정의 실제 주소: 보낸편지함 최근 메일의 발신 주소로 확인한다 */
+async function connectedGmail(): Promise<AccountCheck> {
+  const mcp = await (window as any).claude?.use?.('mcp');
+  if (!mcp) return { state: 'unknown', why: '이 화면에서는 Gmail을 쓸 수 없습니다.' };
+  try {
+    const r = await mcp.callTool('Gmail', 'search_threads', { query: 'in:sent', pageSize: 1, view: 'THREAD_VIEW_METADATA_ONLY' }, { cache: false });
+    const p = (r?.payload ?? {}) as { threads?: { messages?: { sender?: string }[] }[] };
+    const sender = p.threads?.[0]?.messages?.[0]?.sender;
+    const email = sender?.match(/[^\s<>]+@[^\s<>]+/)?.[0]?.toLowerCase();
+    return email ? { state: 'found', email } : { state: 'unknown', why: '보낸편지함이 비어 있어 주소를 확인하지 못했습니다.' };
+  } catch (e) {
+    return { state: 'unknown', why: sendErrorText(e).text };
+  }
+}
+
 function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts }) {
+  const [account, setAccount] = useState<AccountCheck>({ state: 'idle' });
+  const [ackAccount, setAckAccount] = useState(false);
   const [to, setTo] = useState(a.selected_email ?? a.emails[0] ?? '');
   const [subject, setSubject] = useState(a.mail_subject);
   const [body, setBody] = useState(a.mail_body);
@@ -1106,8 +1361,35 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
             <br />
             첨부 2개 (이력서·자기소개서 PDF)
           </div>
+          {account.state === 'checking' && <div className="small">연결된 Gmail 주소를 확인하는 중…</div>}
+          {account.state === 'found' && account.email === (store.prefs.sender_email ?? '').toLowerCase() && (
+            <div className="small ok-text">✓ 연결된 Gmail: {account.email}</div>
+          )}
+          {account.state === 'found' && account.email !== (store.prefs.sender_email ?? '').toLowerCase() && (
+            <Notice level="danger">
+              지금 연결된 Gmail은 <b>{account.email}</b>입니다. 이대로 보내면 이 주소에서 나갑니다. claude.ai 설정 → 커넥터에서 Gmail을 <b>{store.prefs.sender_email}</b> 계정으로 다시 연결한 뒤 보내세요.
+            </Notice>
+          )}
+          {account.state === 'unknown' && (
+            <>
+              <Notice level="warn">연결된 Gmail 주소를 확인하지 못했습니다. {account.why}</Notice>
+              <label className="check ack">
+                <input type="checkbox" id={`fin-acc-${a.id}`} checked={ackAccount} onChange={(e) => setAckAccount(e.target.checked)} />
+                연결된 Gmail이 {store.prefs.sender_email} 인 것을 직접 확인했습니다
+              </label>
+            </>
+          )}
           <div className="row">
-            <Btn kind="primary" onClick={send}>
+            <Btn
+              kind="primary"
+              onClick={send}
+              disabled={
+                !(
+                  (account.state === 'found' && account.email === (store.prefs.sender_email ?? '').toLowerCase()) ||
+                  (account.state === 'unknown' && ackAccount)
+                )
+              }
+            >
               지금 보내기
             </Btn>
             <Btn kind="quiet" onClick={() => setStage('edit')}>
@@ -1124,6 +1406,9 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
             onClick={async () => {
               await persistEdits();
               setStage('confirm');
+              setAckAccount(false);
+              setAccount({ state: 'checking' });
+              setAccount(await connectedGmail());
             }}
           >
             {stage === 'sending' ? '보내는 중…' : 'Gmail로 발송'}
@@ -1984,6 +2269,7 @@ function PrefsView({ store }: { store: Store }) {
 // ---------- 앱 ----------
 
 const VIEWS = [
+  { id: 'jobs', label: '공고 찾기' },
   { id: 'apply', label: '지원서 작성' },
   { id: 'final', label: '최종확인' },
   { id: 'history', label: '지원 이력' },
@@ -1994,7 +2280,7 @@ type ViewId = (typeof VIEWS)[number]['id'];
 
 function readHash(): ViewId {
   const h = location.hash.replace('#', '');
-  return (VIEWS.find((v) => v.id === h)?.id ?? 'apply') as ViewId;
+  return (VIEWS.find((v) => v.id === h)?.id ?? 'jobs') as ViewId;
 }
 
 function App() {
@@ -2032,6 +2318,7 @@ function App() {
         {store.error && <Notice level="danger">{store.error}</Notice>}
         {fontError && <Notice level="danger">{fontError}</Notice>}
         {view === 'apply' && <ApplyView store={store} fonts={fonts} />}
+        {view === 'jobs' && <JobsView store={store} fonts={fonts} />}
         {view === 'final' && <FinalView store={store} fonts={fonts} />}
         {view === 'history' && <HistoryView store={store} fonts={fonts} />}
         {view === 'profile' && <ProfileView key={store.mode} store={store} />}

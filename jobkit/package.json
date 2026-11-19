@@ -8,7 +8,8 @@
     "start": "next start -p 3000",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "backup": "node scripts/backup.mjs"
+    "backup": "node scripts/backup.mjs",
+    "collect": "node collector/build.mjs && NODE_USE_ENV_PROXY=1 node collector/dist/collect.cjs collector/out"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

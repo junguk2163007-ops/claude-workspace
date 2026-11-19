@@ -60,6 +60,39 @@ export interface AppRec {
 /** 앱 설정 + 발송 계정 (최종확인 화면용) */
 export type Prefs = Settings & { sender_email?: string };
 
+export type JobSource = 'dghma' | 'jobkorea' | 'saramin';
+
+/** 수집기(collector/collect.ts)가 저장하는 공고 한 건 */
+export interface JobItem {
+  id: string;
+  source: JobSource;
+  url: string;
+  list_title: string;
+  site: string;
+  title: string;
+  company: string;
+  address: string;
+  salary: string;
+  shift: string;
+  deadline: string | null;
+  deadline_text: string;
+  emails: string[];
+  apply_channels: string[];
+  email_apply: boolean;
+  commute: { verdict: 'ok' | 'edge' | 'far' | 'unknown'; min: number | null; area: string | null; route: string | null; matched: string | null };
+  posted: string;
+  text: string;
+}
+
+export interface JobList {
+  source: JobSource;
+  updated_at: string;
+  scanned: number;
+  kept: number;
+  errors: string[];
+  items: JobItem[];
+}
+
 export interface StoreData {
   profile: ProfileData;
   photo: string | null;
@@ -67,6 +100,7 @@ export interface StoreData {
   blocks: Blocks;
   prefs: Prefs;
   apps: AppRec[];
+  jobs: Partial<Record<JobSource, JobList>>;
 }
 
 export type StoreMode = 'loading' | 'db' | 'memory';
@@ -102,6 +136,7 @@ export function useStore(): Store {
     blocks: DEFAULT_BLOCKS,
     prefs: DEFAULT_PREFS,
     apps: [],
+    jobs: {},
   });
   const [mode, setMode] = useState<StoreMode>('loading');
   const [slow, setSlow] = useState(false);
@@ -126,6 +161,13 @@ export function useStore(): Store {
       ref.current = { db, base };
       setMode('db');
       const pending = new Set(['profile', 'photo', 'quals', 'blocks', 'prefs', 'apps']);
+      for (const src of ['dghma', 'jobkorea', 'saramin'] as JobSource[])
+        unsubs.push(
+          db.doc(`${base}/jobs_${src}`).onSnapshot(
+            (sn: any) => setData((prev) => ({ ...prev, jobs: { ...prev.jobs, [src]: sn.exists ? (sn.data() as JobList) : undefined } })),
+            () => {},
+          ),
+        );
       const done = (k: string, fromCache: boolean) => {
         if (fromCache) return;
         pending.delete(k);
