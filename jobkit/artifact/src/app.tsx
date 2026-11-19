@@ -1469,6 +1469,8 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
         const salary = amt !== null && (/연봉|년봉|연\s*\d/.test(p.salary_text) || amt >= 10000000) ? Math.round(amt / 12) : amt;
         const daysLeft = p.deadline ? Math.round((Date.parse(p.deadline) - Date.parse(today)) / 86400000) : null;
         const r = recommend({ min: fm.min, verdict: f.verdict, signal: an.signal.level, email: p.emails.length > 0, salaryWon: salary, daysLeft, isNew: isFresh(it) }, c);
+        // 테스트 공고는 만들자마자 바로 보이게 맨 위로
+        if (it.id.startsWith('manual-test')) r.score = 1e6 + (it.first_seen ? Date.parse(it.first_seen) / 1000 - 1.79e9 : 0);
         if (multi && allBlockers.length) {
           r.score -= 10;
           r.why.push(`⚠ 일부 직책은 ${allBlockers.join(', ')} 필요`);
