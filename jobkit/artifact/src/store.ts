@@ -51,14 +51,21 @@ export interface AppRec {
   status: ApplicationStatus;
   memo: string;
   snapshot: Snapshot | null;
+  /** 최종확인 화면에서 Gmail 로 보낸 기록 */
+  sent_at?: string | null;
+  send_state?: 'sent' | 'unknown' | null;
+  gmail_url?: string | null;
 }
+
+/** 앱 설정 + 발송 계정 (최종확인 화면용) */
+export type Prefs = Settings & { sender_email?: string };
 
 export interface StoreData {
   profile: ProfileData;
   photo: string | null;
   quals: Qualification[];
   blocks: Blocks;
-  prefs: Settings;
+  prefs: Prefs;
   apps: AppRec[];
 }
 
@@ -72,7 +79,7 @@ export interface Store extends StoreData {
   savePhoto(dataUrl: string | null): Promise<void>;
   saveQuals(q: Qualification[]): Promise<void>;
   saveBlocks(b: Blocks): Promise<void>;
-  savePrefs(s: Settings): Promise<void>;
+  savePrefs(s: Prefs): Promise<void>;
   saveApp(a: AppRec): Promise<void>;
   patchApp(id: string, patch: Partial<AppRec>): Promise<void>;
   deleteApp(id: string): Promise<void>;
@@ -139,7 +146,7 @@ export function useStore(): Store {
       sub('photo', (d) => ({ photo: (d?.dataUrl as string) || null }));
       sub('quals', (d) => ({ quals: d && Array.isArray(d.list) ? (d.list as Qualification[]) : DEFAULT_QUALS }));
       sub('blocks', (d) => ({ blocks: d ? ({ ...DEFAULT_BLOCKS, ...(d as object) } as Blocks) : DEFAULT_BLOCKS }));
-      sub('prefs', (d) => ({ prefs: d ? ({ ...DEFAULT_PREFS, ...(d as object) } as Settings) : DEFAULT_PREFS }));
+      sub('prefs', (d) => ({ prefs: d ? ({ ...DEFAULT_PREFS, ...(d as object) } as Prefs) : DEFAULT_PREFS }));
       unsubs.push(
         db
           .doc(`${base}/apps`)

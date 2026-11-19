@@ -22,7 +22,7 @@ import {
   type Settings,
 } from '../../lib/types';
 import { drawPage, FONT_FAMILY, layoutLetter, layoutResume, loadFonts, toPdf, type Fonts, type Laid, type Page, type Photo } from './pdfdoc';
-import { EMPTY_PROFILE, useStore, type AppRec, type Store } from './store';
+import { EMPTY_PROFILE, useStore, type AppRec, type Prefs, type Store } from './store';
 import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
 
@@ -694,7 +694,7 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
               <li>공고를 붙여넣고 [분석]</li>
               <li>단지·직책·필수 기재 문구 확인, 요건 비교 보기</li>
               <li>[서류 생성] → 이력서·자기소개서 PDF 저장</li>
-              <li>Gmail 새 메일 열기 → PDF 첨부 → 보내기 → [지원함으로 기록]</li>
+              <li><a href="#final">최종확인</a> 탭에서 받는 사람·제목·첨부를 확인하고 [발송]</li>
             </ol>
             {check.required.length > 0 && (
               <Notice level="warn">
@@ -791,6 +791,11 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
                   상태 <Pill tone={app?.status === '작성중' || !app ? 'gray' : 'green'}>{app?.status ?? '저장 안 됨'}</Pill>
                 </span>
                 {app && app.status !== '작성중' && <span className="small muted">지원 이력에 기록했습니다. 다시 생성하면 새 건으로 저장됩니다.</span>}
+                {app && app.status === '작성중' && (
+                  <a className="btn btn-primary" href="#final" onClick={saveMail}>
+                    최종확인 →
+                  </a>
+                )}
               </section>
             </>
           ) : (
@@ -804,6 +809,378 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------- 최종확인 · 발송 ----------
+
+function toBase64(bytes: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+const EMAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** 메일 본문의 "요청하신 ○○도 함께 첨부하였습니다." 문장 */
+const EXTRA_SENTENCE = /\s?요청하신 [^\n]*?도 함께 첨부하였습니다\./;
+/** connector 호출 입력 한도(1 MiB) 안에 들어가도록 잡은 추가 첨부 상한 */
+const EXTRA_LIMIT_BYTES = 380 * 1024;
+
+interface ExtraFile {
+  name: string;
+  type: string;
+  b64: string;
+  size: number;
+}
+
+interface Check {
+  level: 'ok' | 'warn' | 'block';
+  text: string;
+}
+
+/** 보내기 전에 볼 항목. block 이 하나라도 있으면 보낼 수 없다. */
+function checksFor(a: AppRec, store: Store, built: Built | null, to: string, subject: string, body: string, extras: ExtraFile[]): Check[] {
+  const out: Check[] = [];
+  const sender = (store.prefs.sender_email ?? '').trim().toLowerCase();
+  const profileEmail = store.profile.email.trim().toLowerCase();
+  out.push(EMAIL_OK.test(to) ? { level: 'ok', text: `받는 사람: ${to}` } : { level: 'block', text: '받는 사람 이메일이 없거나 형식이 틀렸습니다.' });
+  if (a.required_phrase) {
+    out.push(
+      subject.includes(a.required_phrase)
+        ? { level: 'ok', text: `메일 제목에 필수 문구 "${a.required_phrase}" 포함` }
+        : { level: 'block', text: `메일 제목에 필수 문구 "${a.required_phrase}"가 없습니다.` },
+    );
+    if (a.snapshot)
+      out.push(
+        a.snapshot.resume.target === a.required_phrase
+          ? { level: 'ok', text: '이력서 상단에 필수 문구 그대로 표기' }
+          : { level: 'block', text: '이력서 상단 표기가 필수 문구와 다릅니다. 지원서 작성에서 서류를 다시 만드세요.' },
+      );
+  }
+  if (!a.snapshot || !built) out.push({ level: 'block', text: '첨부할 서류가 없습니다. 지원서 작성에서 [서류 생성]을 다시 누르세요.' });
+  else {
+    out.push(
+      built.resume.pages.length === 1 && !built.resume.overflow
+        ? { level: 'ok', text: '이력서 1페이지' }
+        : { level: 'warn', text: `이력서가 ${built.resume.pages.length}페이지입니다.` },
+    );
+    out.push(a.snapshot.photo ? { level: 'ok', text: '이력서에 증명사진 들어감' } : { level: 'warn', text: '이력서에 사진이 없습니다(빈 칸으로 나감).' });
+    const r = a.snapshot.resume;
+    const missing = [!r.name && '이름', !r.phone && '연락처', !r.email && '이메일', !r.address && '주소', !r.birth && '생년월일'].filter(Boolean);
+    if (missing.length) out.push({ level: 'warn', text: `이력서 인적사항이 비어 있습니다: ${missing.join(', ')}` });
+  }
+  const extraSize = extras.reduce((n, f) => n + f.size, 0);
+  if (EXTRA_SENTENCE.test(body) && extras.length === 0)
+    out.push({ level: 'block', text: '본문에 추가 서류를 "함께 첨부"했다고 적혀 있는데 추가 첨부 파일이 없습니다. 파일을 넣거나 그 문장을 빼세요.' });
+  else if (extras.length)
+    out.push(
+      extraSize > EXTRA_LIMIT_BYTES
+        ? { level: 'block', text: '추가 첨부가 너무 커서 여기서는 보낼 수 없습니다. 사진을 줄이거나 Gmail 작성창으로 직접 보내세요.' }
+        : { level: 'ok', text: `추가 첨부 ${extras.length}개: ${extras.map((f) => f.name).join(', ')}` },
+    );
+  const today = todaySeoul();
+  if (a.deadline && a.deadline < today) out.push({ level: 'warn', text: `마감일이 지났습니다 (${koreanDate(a.deadline)}).` });
+  const docs = a.parsed?.submit_docs ?? [];
+  if (docs.includes('주민등록등본') || docs.includes('통장 사본'))
+    out.push({ level: 'warn', text: '공고가 등본·통장 사본을 요구합니다. 이 메일에는 들어가지 않습니다. 따로 보내거나 합격 후 제출 가능한지 문의하세요.' });
+  const dup = store.apps.filter((x) => x.id !== a.id && x.status !== '작성중' && normalizeSite(x.site) === normalizeSite(a.site));
+  if (dup.length) out.push({ level: 'warn', text: `같은 단지에 이미 지원한 기록이 있습니다 (${dup.map((d) => d.created_at.slice(0, 10)).join(', ')}).` });
+  if (!sender) out.push({ level: 'block', text: '설정에서 "발송 Gmail 계정"을 먼저 적어 주세요. 어느 주소로 나가는지 확인한 뒤에만 보낼 수 있습니다.' });
+  else if (sender !== profileEmail)
+    out.push({
+      level: 'warn',
+      text: `보내는 계정(${sender})이 이력서 이메일(${profileEmail || '-'})과 다릅니다. 받는 쪽에는 ${sender}에서 온 메일로 보입니다. 본문 끝에 이력서 이메일을 회신 주소로 덧붙입니다.`,
+    });
+  else out.push({ level: 'ok', text: `보내는 계정: ${sender}` });
+  return out;
+}
+
+function finalBodyFor(body: string, store: Store): string {
+  const sender = (store.prefs.sender_email ?? '').trim().toLowerCase();
+  const email = store.profile.email.trim();
+  if (sender && email && sender !== email.toLowerCase() && !body.includes(email)) return `${body.replace(/\s+$/, '')}\n이메일: ${email}`;
+  return body;
+}
+
+function sendErrorText(e: unknown): { text: string; ambiguous: boolean } {
+  const code = (e as { code?: string })?.code ?? 'upstream_error';
+  const msg = (e as { message?: string })?.message ?? '';
+  switch (code) {
+    case 'needs_reauth':
+      return { text: 'Gmail 연결이 만료됐습니다. claude.ai 설정 → 커넥터에서 Gmail을 다시 연결한 뒤 보내세요. 메일은 나가지 않았습니다.', ambiguous: false };
+    case 'server_not_connected':
+    case 'server_not_found':
+      return { text: '이 claude.ai 계정에 Gmail이 연결되어 있지 않습니다. 설정 → 커넥터에서 Gmail을 추가하세요. 메일은 나가지 않았습니다.', ambiguous: false };
+    case 'selection_required':
+      return { text: 'Gmail 연결이 여러 개라 어느 것을 쓸지 골라야 합니다. 화면에 뜨는 선택 창에서 고른 뒤 다시 누르세요.', ambiguous: false };
+    case 'not_in_manifest':
+    case 'approval_required':
+    case 'consent_required':
+      return { text: '이 페이지가 Gmail을 쓰도록 허락해야 보낼 수 있습니다. 다시 누르면 허락 창이 뜹니다. 메일은 나가지 않았습니다.', ambiguous: false };
+    case 'blocked_by_policy':
+      return { text: '조직 정책으로 이 페이지에서 Gmail 발송이 막혀 있습니다.', ambiguous: false };
+    case 'tool_error':
+      return { text: `Gmail이 발송을 거절했습니다${msg ? `: ${msg.slice(0, 200)}` : ''}`, ambiguous: false };
+    case 'bad_request':
+    case 'transform_error':
+      return { text: '보낼 내용을 만들지 못했습니다(첨부 크기 등). 메일은 나가지 않았습니다.', ambiguous: false };
+    default:
+      return { text: '발송됐는지 확실하지 않습니다. Gmail 보낸편지함을 먼저 확인하고, 없을 때만 다시 보내세요.', ambiguous: true };
+  }
+}
+
+function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts }) {
+  const [to, setTo] = useState(a.selected_email ?? a.emails[0] ?? '');
+  const [subject, setSubject] = useState(a.mail_subject);
+  const [body, setBody] = useState(a.mail_body);
+  const [ackWarn, setAckWarn] = useState(false);
+  const [stage, setStage] = useState<'edit' | 'confirm' | 'sending'>('edit');
+  const [error, setError] = useState<{ text: string; ambiguous: boolean } | null>(null);
+  const [ackUnknown, setAckUnknown] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
+  const [extras, setExtras] = useState<ExtraFile[]>([]);
+  const built = useMemo(() => (a.snapshot ? buildFromData(fonts, a.snapshot.resume, a.snapshot.letter, a.snapshot.photo) : null), [a.snapshot, fonts]);
+  const checks = checksFor(a, store, built, to, subject, body, extras);
+  const blocks = checks.filter((c) => c.level === 'block');
+  const warns = checks.filter((c) => c.level === 'warn');
+  const finalBody = finalBodyFor(body, store);
+  const name = store.profile.name || '지원자';
+  const files = { resume: docFileName('이력서', name, a.site, 'pdf'), letter: docFileName('자기소개서', name, a.site, 'pdf') };
+  const unknownLock = a.send_state === 'unknown' && !ackUnknown;
+  const canSend = !blocks.length && (!warns.length || ackWarn) && !unknownLock && store.mode === 'db';
+
+  async function persistEdits() {
+    if (subject !== a.mail_subject || body !== a.mail_body || to !== (a.selected_email ?? ''))
+      await store.patchApp(a.id, { mail_subject: subject, mail_body: body, selected_email: to || null }).catch(() => {});
+  }
+
+  async function send() {
+    if (!built || !a.snapshot) return;
+    setStage('sending');
+    setError(null);
+    try {
+      const mcp = await (window as any).claude?.use?.('mcp');
+      if (!mcp) {
+        setError({ text: '이 화면에서는 Gmail로 보낼 수 없습니다. claude.ai에서 이 페이지를 열어 주세요. 메일은 나가지 않았습니다.', ambiguous: false });
+        setStage('edit');
+        return;
+      }
+      const resume = await toPdf(fonts, built.resume.pages, '이력서', dataUrlToPhoto(built.photo));
+      const letter = await toPdf(fonts, built.letter.pages, '자기소개서', null);
+      const res = await mcp.callTool('Gmail', 'send_message', {
+        to: [to],
+        subject,
+        body: finalBody,
+        attachments: [
+          { content: toBase64(resume), filename: files.resume, mimeType: 'application/pdf' },
+          { content: toBase64(letter), filename: files.letter, mimeType: 'application/pdf' },
+          ...extras.map((f) => ({ content: f.b64, filename: f.name, mimeType: f.type })),
+        ],
+      });
+      const p = (res?.payload ?? {}) as { viewUrl?: string };
+      await store
+        .patchApp(a.id, {
+          status: '지원함',
+          mail_subject: subject,
+          mail_body: finalBody,
+          selected_email: to,
+          sent_at: new Date().toISOString(),
+          send_state: 'sent',
+          gmail_url: p.viewUrl ?? null,
+        })
+        .catch(() => {});
+    } catch (e) {
+      const err = sendErrorText(e);
+      setError(err);
+      if (err.ambiguous) await store.patchApp(a.id, { send_state: 'unknown', mail_subject: subject, mail_body: finalBody, selected_email: to }).catch(() => {});
+      setStage('edit');
+    }
+  }
+
+  return (
+    <section className="card stack final-card">
+      <div className="card-head">
+        <h2>
+          {a.site} <span className="muted">{a.title}</span>
+        </h2>
+        <span className="small muted">{a.created_at.slice(0, 10)} 작성</span>
+      </div>
+
+      <ul className="checks-list">
+        {checks.map((c, i) => (
+          <li key={i} className={`chk chk-${c.level}`}>
+            <span aria-hidden="true">{c.level === 'ok' ? '✓' : c.level === 'warn' ? '!' : '✕'}</span>
+            {c.text}
+          </li>
+        ))}
+      </ul>
+
+      {a.emails.length > 1 ? (
+        <Field label="받는 사람">
+          <select id={`fin-to-${a.id}`} value={to} onChange={(e) => setTo(e.target.value)} onBlur={persistEdits}>
+            {a.emails.map((e) => (
+              <option key={e}>{e}</option>
+            ))}
+          </select>
+        </Field>
+      ) : (
+        <Field label="받는 사람">
+          <input id={`fin-to-${a.id}`} value={to} onChange={(e) => setTo(e.target.value.trim())} onBlur={persistEdits} />
+        </Field>
+      )}
+      <Field label="제목">
+        <input id={`fin-subj-${a.id}`} value={subject} onChange={(e) => setSubject(e.target.value)} onBlur={persistEdits} />
+      </Field>
+      <Field label="본문 (보낼 때 이대로 나갑니다)">
+        <textarea id={`fin-body-${a.id}`} rows={12} value={body} onChange={(e) => setBody(e.target.value)} onBlur={persistEdits} />
+      </Field>
+      {finalBody !== body && <div className="small muted">보낼 때 본문 끝에 &quot;이메일: {store.profile.email}&quot;이 덧붙습니다.</div>}
+
+      <div className="attach">
+        <span className="field-label">첨부</span>
+        <div className="row wrap">
+          <span className="file-chip">📄 {files.resume}</span>
+          <span className="file-chip">📄 {files.letter}</span>
+          {extras.map((f, i) => (
+            <span key={i} className="file-chip">
+              📎 {f.name}{' '}
+              <button className="chip-x" aria-label={`${f.name} 빼기`} onClick={() => setExtras(extras.filter((_, j) => j !== i))}>
+                ×
+              </button>
+            </span>
+          ))}
+          <Btn kind="quiet" onClick={() => setShowDocs(!showDocs)}>
+            {showDocs ? '서류 접기' : '서류 보기'}
+          </Btn>
+        </div>
+        <div className="row wrap">
+          <label className="btn btn-plain file-btn">
+            + 추가 서류 첨부 (자격증 사본 등)
+            <input
+              id={`fin-extra-${a.id}`}
+              type="file"
+              multiple
+              accept="application/pdf,image/jpeg,image/png"
+              onChange={async (e) => {
+                const list = Array.from(e.target.files ?? []);
+                e.target.value = '';
+                const read = await Promise.all(
+                  list.map(async (f) => ({ name: f.name, type: f.type || 'application/octet-stream', size: f.size, b64: toBase64(new Uint8Array(await f.arrayBuffer())) })),
+                );
+                setExtras([...extras, ...read]);
+              }}
+            />
+          </label>
+          {EXTRA_SENTENCE.test(body) && (
+            <Btn kind="quiet" onClick={() => setBody(body.replace(EXTRA_SENTENCE, ''))}>
+              본문에서 &quot;함께 첨부&quot; 문장 빼기
+            </Btn>
+          )}
+          <span className="small muted">추가 첨부 파일은 이 화면에서만 쓰고 저장하지 않습니다.</span>
+        </div>
+      </div>
+      {showDocs && built && <DocPreviewCard fonts={fonts} built={built} name={name} site={a.site} title="첨부할 서류" />}
+
+      {warns.length > 0 && (
+        <label className="check ack">
+          <input type="checkbox" id={`fin-ack-${a.id}`} checked={ackWarn} onChange={(e) => setAckWarn(e.target.checked)} />위 ! 항목을 확인했고 그대로 보냅니다
+        </label>
+      )}
+      {a.send_state === 'unknown' && (
+        <label className="check ack">
+          <input type="checkbox" id={`fin-unk-${a.id}`} checked={ackUnknown} onChange={(e) => setAckUnknown(e.target.checked)} />
+          Gmail 보낸편지함을 확인했는데 이 메일이 없습니다
+        </label>
+      )}
+      {error && <Notice level={error.ambiguous ? 'warn' : 'danger'}>{error.text}</Notice>}
+      {store.mode !== 'db' && <Notice level="warn">저장소에 연결된 claude.ai 화면에서만 보낼 수 있습니다.</Notice>}
+
+      {stage === 'confirm' ? (
+        <div className="confirm stack-s">
+          <strong>정말 보낼까요? 보낸 메일은 되돌릴 수 없습니다.</strong>
+          <div className="small">
+            {store.prefs.sender_email} → {to}
+            <br />
+            제목: {subject}
+            <br />
+            첨부 2개 (이력서·자기소개서 PDF)
+          </div>
+          <div className="row">
+            <Btn kind="primary" onClick={send}>
+              지금 보내기
+            </Btn>
+            <Btn kind="quiet" onClick={() => setStage('edit')}>
+              취소
+            </Btn>
+          </div>
+        </div>
+      ) : (
+        <div className="row wrap">
+          <Btn
+            kind="primary"
+            className="big"
+            disabled={!canSend || stage === 'sending'}
+            onClick={async () => {
+              await persistEdits();
+              setStage('confirm');
+            }}
+          >
+            {stage === 'sending' ? '보내는 중…' : 'Gmail로 발송'}
+          </Btn>
+          <a className="btn btn-quiet" href={gmailComposeUrl(to, subject, finalBody)} target="_blank" rel="noreferrer noopener">
+            Gmail 작성창으로 직접 보내기
+          </a>
+          {blocks.length > 0 && <span className="small warn-text">✕ 항목을 먼저 해결해야 보낼 수 있습니다.</span>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FinalView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
+  const drafts = store.apps.filter((a) => a.status === '작성중');
+  const sent = store.apps.filter((a) => a.send_state === 'sent').slice(0, 5);
+  return (
+    <div className="final stack">
+      <section className="card stack-s">
+        <h2>최종확인</h2>
+        <p className="small">
+          지원서 작성에서 만든 서류가 여기에 모입니다. 받는 사람·제목·본문·첨부를 확인하고 <b>Gmail로 발송</b>을 누르면 바로 나갑니다. 보내면 지원 이력에 &quot;지원함&quot;으로 기록됩니다.
+        </p>
+        <p className="small muted">
+          발송 계정: {store.prefs.sender_email ? <b>{store.prefs.sender_email}</b> : <a href="#prefs">설정에서 먼저 지정하세요</a>} · 이 페이지를 연 claude.ai 계정에 연결된 Gmail로 보냅니다.
+        </p>
+      </section>
+      {!fonts && <Notice>폰트를 불러오는 중입니다.</Notice>}
+      {fonts && drafts.length === 0 && (
+        <section className="card empty">
+          <p>
+            보낼 준비가 된 지원서가 없습니다.
+            <br />
+            <a href="#apply">지원서 작성</a>에서 공고를 분석하고 [서류 생성]을 누르세요.
+          </p>
+        </section>
+      )}
+      {fonts && drafts.map((a) => <FinalCard key={a.id} a={a} store={store} fonts={fonts} />)}
+      {sent.length > 0 && (
+        <section className="card stack-s">
+          <h2>최근 보낸 지원</h2>
+          {sent.map((a) => (
+            <div key={a.id} className="row wrap small">
+              <Pill tone="green">발송</Pill>
+              <span>{a.sent_at ? a.sent_at.slice(0, 16).replace('T', ' ') : ''}</span>
+              <b>{a.site}</b>
+              <span className="muted">{a.selected_email}</span>
+              {a.gmail_url && (
+                <a href={a.gmail_url} target="_blank" rel="noreferrer noopener">
+                  Gmail에서 보기
+                </a>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
     </div>
   );
 }
@@ -973,6 +1350,16 @@ function HistoryView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
                     <div className="small">
                       <span className="muted">제목</span> {sel.mail_subject}
                     </div>
+                    {sel.sent_at && (
+                      <div className="small">
+                        <span className="muted">발송</span> {sel.sent_at.slice(0, 16).replace('T', ' ')}{' '}
+                        {sel.gmail_url && (
+                          <a href={sel.gmail_url} target="_blank" rel="noreferrer noopener">
+                            Gmail에서 보기
+                          </a>
+                        )}
+                      </div>
+                    )}
                     <pre className="pre">{sel.mail_body}</pre>
                   </div>
                 )}
@@ -1446,6 +1833,7 @@ function ProfileView({ store }: { store: Store }) {
 function PrefsView({ store }: { store: Store }) {
   const [kw, setKw] = useState(store.prefs.near_keywords.join('\n'));
   const [sig, setSig] = useState(store.prefs.mail_signature);
+  const [sender, setSender] = useState(store.prefs.sender_email ?? '');
   const [msg, setMsg] = useState<{ text: string; level: 'ok' | 'warn' | 'danger' } | null>(null);
   const [importText, setImportText] = useState('');
   const [confirmImport, setConfirmImport] = useState(false);
@@ -1453,10 +1841,11 @@ function PrefsView({ store }: { store: Store }) {
   useEffect(() => {
     setKw(store.prefs.near_keywords.join('\n'));
     setSig(store.prefs.mail_signature);
+    setSender(store.prefs.sender_email ?? '');
   }, [store.prefs]);
 
   async function save() {
-    const s: Settings = { near_keywords: splitList(kw), mail_signature: sig };
+    const s: Prefs = { near_keywords: splitList(kw), mail_signature: sig, sender_email: sender.trim().toLowerCase() };
     try {
       await store.savePrefs(s);
       setMsg({ text: '저장했습니다.', level: 'ok' });
@@ -1508,6 +1897,12 @@ function PrefsView({ store }: { store: Store }) {
           <Field label="메일 본문 끝 {SIGNATURE} 자리" hint="{name} {phone} {email} 은 프로필 값으로 바뀝니다.">
             <textarea id="pref-sig" rows={4} value={sig} onChange={(e) => setSig(e.target.value)} />
           </Field>
+          <Field
+            label="발송 Gmail 계정 (최종확인에서 바로 보낼 때 쓰는 주소)"
+            hint="이 페이지를 연 claude.ai 계정에 연결된 Gmail 주소를 적으세요. 받는 쪽에는 이 주소가 보낸 사람으로 보입니다. 비워 두면 바로 보내기가 꺼집니다."
+          >
+            <input id="pref-sender" type="email" value={sender} onChange={(e) => setSender(e.target.value)} placeholder="예: someone@gmail.com" />
+          </Field>
           <div className="row">
             <Btn kind="primary" onClick={save}>
               설정 저장
@@ -1555,6 +1950,7 @@ function PrefsView({ store }: { store: Store }) {
 
 const VIEWS = [
   { id: 'apply', label: '지원서 작성' },
+  { id: 'final', label: '최종확인' },
   { id: 'history', label: '지원 이력' },
   { id: 'profile', label: '프로필·문구' },
   { id: 'prefs', label: '설정' },
@@ -1601,6 +1997,7 @@ function App() {
         {store.error && <Notice level="danger">{store.error}</Notice>}
         {fontError && <Notice level="danger">{fontError}</Notice>}
         {view === 'apply' && <ApplyView store={store} fonts={fonts} />}
+        {view === 'final' && <FinalView store={store} fonts={fonts} />}
         {view === 'history' && <HistoryView store={store} fonts={fonts} />}
         {view === 'profile' && <ProfileView key={store.mode} store={store} />}
         {view === 'prefs' && <PrefsView store={store} />}

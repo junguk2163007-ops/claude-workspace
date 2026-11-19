@@ -172,6 +172,18 @@ select.mini { padding: 3px 6px; font-size: 12.5px; width: auto; }
 .qual-name { flex: 1 1 180px; font-weight: 600; }
 .qual-top select { width: auto; }
 .blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 18px 24px; }
+.checks-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.chk { display: flex; gap: 8px; align-items: baseline; font-size: 13.5px; padding: 5px 9px; border-radius: 5px; }
+.chk span { font-weight: 700; width: 14px; flex: none; text-align: center; }
+.chk-ok { background: var(--g-bg); color: var(--g-fg); }
+.chk-warn { background: var(--y-bg); color: var(--y-fg); }
+.chk-block { background: var(--r-bg); color: var(--r-fg); }
+.chip-x { border: 0; background: none; color: inherit; cursor: pointer; font-size: 14px; padding: 0 2px; }
+.file-chip { border: 1px solid var(--line); background: var(--surface-2); border-radius: 5px; padding: 4px 9px; font-size: 13px; }
+.attach { display: flex; flex-direction: column; gap: 4px; }
+.ack { white-space: normal; font-weight: 600; }
+.confirm { border: 2px solid var(--accent); border-radius: 8px; padding: 12px; background: var(--accent-soft); }
+.final { max-width: 900px; width: 100%; margin: 0 auto; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 <div id="root"></div>
