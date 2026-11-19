@@ -2,7 +2,7 @@
 // 직접 넘기고(새 창으로 폼 전송), 발송기가 정민욱 Gmail 로 보내며 정민욱 Drive 에 사본을 남긴다.
 // claude.ai 연결(Gmail/Drive) 기능을 쓰지 않으므로 어느 계정·화면에서 열어도 동작한다.
 
-export const RELAY_VERSION = 8;
+export const RELAY_VERSION = 9;
 /** 팝업 없이 페이지 안 상자(iframe)로 여는 것은 v6 부터 */
 export const RELAY_FRAME_VERSION = 99; // claude.ai 가 페이지 안 상자를 막아 쓰지 않는다
 /** 링크로 서류를 넘겨 보내기는 v5 부터 */
@@ -143,9 +143,9 @@ function signal(r, rid, kind) {
   targets().forEach(function (w) { try { if (w) w.postMessage(m, '*'); } catch (e) {} });
 }
 function closeSoon() {
-  var n = 3;
+  var n = 5;
   var tick = function () {
-    if (n <= 0) { try { window.top.close(); } catch (e) {} return; }
+    if (n <= 0) { try { window.top.close(); } catch (e) {} document.getElementById('c').textContent = '창이 닫히지 않으면 직접 닫아 주세요.'; return; }
     document.getElementById('c').textContent = n + '초 뒤 이 창이 저절로 닫힙니다.';
     n--;
     setTimeout(tick, 1000);
@@ -265,10 +265,11 @@ export function relayScript(key: string): string {
     "  var sig = rid ? '<script>(function(){var m=' + JSON.stringify(data).replace(/</g, '\\\\u003c').replace(/\\u2028/g, '\\\\u2028').replace(/\\u2029/g, '\\\\u2029') + ';' +",
     "    'var t=[];try{if(window.top.opener)t.push(window.top.opener)}catch(e){}' +",
     "    't.forEach(function(w){try{if(w)w.postMessage(m,\"*\")}catch(e){}});' +",
-    "    'if(m.ok){setTimeout(function(){try{window.top.close()}catch(e){}},3000)}})();<\\/script>' : '';",
+    "    'if(m.ok){var n=5,el=document.getElementById(\"cd\");var tk=function(){if(n<=0){try{window.top.close()}catch(e){}if(el)el.textContent=\"창이 닫히지 않으면 직접 닫아 주세요.\";return}if(el)el.textContent=n+\"초 뒤 이 창이 저절로 닫힙니다.\";n--;setTimeout(tk,1000)};tk()}})();<\\/script>' : '';",
     "  var h = '<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">' +",
     "    '<div style=\"font-family:sans-serif;max-width:560px;margin:6px auto;padding:12px 16px;border-radius:12px;background:' + (ok ? '#e3f7ec' : '#ffe7e4') + '\">' +",
-    "    '<h3 style=\"margin:0 0 4px;font-size:17px\">' + esc(title) + '</h3><p style=\"margin:0;font-size:14.5px;line-height:1.6\">' + esc(msg) + '</p></div>' + sig;",
+    "    '<h3 style=\"margin:0 0 4px;font-size:17px\">' + esc(title) + '</h3><p style=\"margin:0;font-size:14.5px;line-height:1.6\">' + esc(msg) + '</p>' +",
+    "    (rid && ok ? '<p id=\"cd\" style=\"margin:6px 0 0;font-size:13px;color:#555\"></p>' : '') + '</div>' + sig;",
     "  return HtmlService.createHtmlOutput(h).setTitle('jobkit 발송').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);",
     '}',
     '',

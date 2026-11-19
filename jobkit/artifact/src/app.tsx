@@ -2542,7 +2542,7 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
           )}
           {relayMsg && <Notice level={relayMsg.level}>{relayMsg.text}</Notice>}
           {a.send_state === 'relay' && pendingFor < (frame ? 25000 : 10000) && !frame && (
-            <Notice level="info">새 탭에서 보내는 중입니다… 다 보내면 탭이 저절로 닫히고 여기에 &quot;완료했습니다 ✓&quot;가 뜹니다.</Notice>
+            <Notice level="info">새 탭에서 보내는 중입니다… 탭에 &quot;보냈습니다 ✓&quot;가 뜨고 5초 뒤 저절로 닫힙니다. 이 화면으로 돌아오면 바로 &quot;지원함&quot;으로 바뀝니다.</Notice>
           )}
           {a.send_state === 'relay' && pendingFor >= (frame ? 25000 : 10000) && (
             <Notice level="warn">
@@ -3781,7 +3781,7 @@ function App() {
   const store = useStore();
   const { fonts, error: fontError } = useFonts();
   const [view, setView] = useState<ViewId>(readHash());
-  const [toast, setToast] = useState<{ level: 'ok' | 'danger'; text: string } | null>(null);
+  const [toast, setToast] = useState<{ level: 'ok' | 'danger'; text: string; undo?: { label: string; run: () => void } } | null>(null);
   // 발송기 창이 보내는 완료 신호
   const appsRef = useRef(store);
   appsRef.current = store;
@@ -3811,6 +3811,7 @@ function App() {
             sent_at: new Date().toISOString(),
             gmail_url: `https://mail.google.com/mail/?authuser=${encodeURIComponent(st.prefs.sender_email ?? '')}#sent`,
           }).catch(() => {});
+        st.patchApp(app.id, { send_assumed: null }).catch(() => {});
         setToast({ level: 'ok', text: `완료했습니다 ✓ ${app.site} 지원서를 ${app.selected_email ?? ''}(으)로 보냈습니다. 지원 이력에 기록했습니다.` });
       } else {
         st.patchApp(app.id, { send_state: null, relay_job: null }).catch(() => {});
@@ -3825,6 +3826,70 @@ function App() {
       window.removeEventListener('jobkit-toast', onToast);
     };
   }, []);
+  // 완료 신호가 이 페이지까지 못 오는 화면이 많다(새 탭이 이 페이지를 모름).
+  // 보내기를 누르고 새 탭으로 갔다가 돌아오면, 기다리지 않고 바로 "보냈음"으로 바꾼다. 아니면 [안 보내졌어요]로 되돌린다.
+  const wentAway = useRef(false);
+  useEffect(() => {
+    const away = () => {
+      if (appsRef.current.apps.some((x) => x.send_state === 'relay')) wentAway.current = true;
+    };
+    const back = (onLoad = false) => {
+      if (document.hidden) return;
+      const st = appsRef.current;
+      const now = Date.now();
+      const pend = st.apps.filter((x) => {
+        if (x.send_state !== 'relay') return false;
+        const age = now - Date.parse(x.updated_at || x.created_at);
+        return onLoad ? age > 30000 : wentAway.current && age > 1500;
+      });
+      if (!pend.length) return;
+      wentAway.current = false;
+      const at = new Date().toISOString();
+      for (const app of pend) {
+        st.patchApp(app.id, {
+          status: '지원함',
+          send_state: 'sent',
+          send_assumed: true,
+          sent_at: at,
+          gmail_url: `https://mail.google.com/mail/?authuser=${encodeURIComponent(st.prefs.sender_email ?? '')}#sent`,
+        }).catch(() => {});
+      }
+      const names = pend.map((x) => x.site).join(', ');
+      setToast({
+        level: 'ok',
+        text: `완료했습니다 ✓ ${names} 지원서를 보낸 것으로 지원 이력에 기록했습니다. 새 탭에 빨간 오류가 보였다면 오른쪽을 눌러 되돌리세요.`,
+        undo: {
+          label: '안 보내졌어요',
+          run: () => {
+            for (const app of pend)
+              appsRef.current.patchApp(app.id, { status: app.status, send_state: null, relay_job: null, send_assumed: null, sent_at: null, gmail_url: null }).catch(() => {});
+            setToast(null);
+          },
+        },
+      });
+    };
+    const onVis = () => (document.hidden ? away() : back());
+    const onFocus = () => back();
+    const onStale = () => back(true);
+    window.addEventListener('jobkit-stale-check', onStale);
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('blur', away);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('blur', away);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('jobkit-stale-check', onStale);
+    };
+  }, []);
+  // 페이지를 새로 열었는데 오래된 "보내는 중"이 남아 있으면 정리한다
+  const staleChecked = useRef(false);
+  useEffect(() => {
+    if (staleChecked.current || store.mode === 'loading') return;
+    staleChecked.current = true;
+    const t = setTimeout(() => window.dispatchEvent(new Event('jobkit-stale-check')), 300);
+    return () => clearTimeout(t);
+  }, [store.mode]);
   useEffect(() => {
     const on = () => setView(readHash());
     window.addEventListener('hashchange', on);
@@ -3862,6 +3927,11 @@ function App() {
         {toast && (
           <div className={cx('toast', `toast-${toast.level}`)} role="status">
             <span>{toast.text}</span>
+            {toast.undo && (
+              <button className="linklike" onClick={toast.undo.run}>
+                {toast.undo.label}
+              </button>
+            )}
             <button className="linklike" onClick={() => setToast(null)}>
               닫기
             </button>

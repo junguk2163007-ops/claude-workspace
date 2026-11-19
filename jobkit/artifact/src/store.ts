@@ -75,6 +75,8 @@ export interface AppRec {
   send_state?: 'sent' | 'unknown' | 'queued' | 'relay' | null;
   /** 원클릭 발송 요청 파일 (Drive id) */
   relay_job?: string | null;
+  /** 완료 신호 없이, 새 탭에서 돌아왔을 때 보낸 것으로 기록했으면 true */
+  send_assumed?: boolean | null;
   gmail_url?: string | null;
 }
 
