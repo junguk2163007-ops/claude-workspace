@@ -1469,6 +1469,38 @@ function ListEditor<T extends object>({ items, onChange, empty, render, addLabel
   );
 }
 
+/** 밝은 배경 증명사진에서 인물(머리~목)의 가로 중심. 배경이 밝지 않으면 사진 가운데. */
+function subjectCenterX(img: HTMLImageElement): number {
+  const sw = Math.min(400, img.width);
+  const sh = Math.round((img.height * sw) / img.width);
+  const c = document.createElement('canvas');
+  c.width = sw;
+  c.height = sh;
+  const ctx = c.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(img, 0, 0, sw, sh);
+  const { data } = ctx.getImageData(0, 0, sw, sh);
+  const lum = (x: number, y: number) => {
+    const i = (y * sw + x) * 4;
+    return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+  };
+  const corners = [lum(2, 2), lum(sw - 3, 2)];
+  if (corners.some((v) => v < 200)) return img.width / 2;
+  const centers: number[] = [];
+  for (let y = Math.floor(sh * 0.2); y < Math.floor(sh * 0.65); y++) {
+    let l = -1;
+    let r = -1;
+    for (let x = 0; x < sw; x++)
+      if (lum(x, y) < 200) {
+        if (l < 0) l = x;
+        r = x;
+      }
+    if (l >= 0) centers.push((l + r) / 2);
+  }
+  if (centers.length < 5) return img.width / 2;
+  centers.sort((a, b) => a - b);
+  return (centers[Math.floor(centers.length / 2)] * img.width) / sw;
+}
+
 async function toPhotoDataUrl(file: File): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
@@ -1487,9 +1519,12 @@ async function toPhotoDataUrl(file: File): Promise<string> {
     const r = Math.max(W / img.width, H / img.height);
     const w = img.width * r;
     const h = img.height * r;
+    // 가로가 남는 사진은 인물 중심에 맞춰 자른다 (사진 한가운데로 자르면 좌우가 틀어짐)
+    const cx = subjectCenterX(img) * r;
+    const x = w > W ? Math.min(0, Math.max(W - w, W / 2 - cx)) : (W - w) / 2;
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, W, H);
-    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+    ctx.drawImage(img, x, (H - h) / 2, w, h);
     return c.toDataURL('image/jpeg', 0.88);
   } finally {
     URL.revokeObjectURL(url);
