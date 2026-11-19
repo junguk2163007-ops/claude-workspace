@@ -59,12 +59,22 @@ export interface AppRec {
   /** 최종확인 화면에서 Gmail 로 보낸 기록 */
   sent_at?: string | null;
   /** sent 보냄 / unknown 보냈는지 불확실 / queued 정민욱 계정에서 보내도록 넘김 */
-  send_state?: 'sent' | 'unknown' | 'queued' | null;
+  send_state?: 'sent' | 'unknown' | 'queued' | 'relay' | null;
+  /** 원클릭 발송 요청 파일 (Drive id) */
+  relay_job?: string | null;
   gmail_url?: string | null;
 }
 
 /** 앱 설정 + 발송 계정 (최종확인 화면용) */
-export type Prefs = Settings & { sender_email?: string; home_geo?: { lat: number; lng: number } | null };
+export type Prefs = Settings & {
+  sender_email?: string;
+  home_geo?: { lat: number; lng: number } | null;
+  /** 원클릭 발송기(정민욱 계정 Apps Script 웹앱) 주소와 열쇠 */
+  relay_url?: string;
+  relay_key?: string;
+  /** 서류를 올리는 Google Drive 폴더 */
+  drive_folder_id?: string;
+};
 
 export type JobSource = 'dghma' | 'jobkorea' | 'saramin' | 'work24';
 

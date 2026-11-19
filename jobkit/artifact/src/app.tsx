@@ -26,6 +26,7 @@ import { EMPTY_PROFILE, useStore, type AppRec, type JobItem, type JobSource, typ
 import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
 import { applyChanges, criteriaPrompt, filterJob, type ChatMessage, type Criteria, type FilterResult, type JobVerdict } from './criteria';
+import { createFolder, newKey, pingUrl, relayScript, relayStatus, relayUrl, uploadJob, uploadPdf, validRelayBase } from './relay';
 import { estimateCommute, finalMinutes, kakaoRouteUrl, type CommuteResult, type Geo } from './commute';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -1606,6 +1607,115 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     }
   }
 
+  const relayReady = !!(store.prefs.relay_url && store.prefs.relay_key && store.prefs.sender_email);
+  const [relayMsg, setRelayMsg] = useState<{ text: string; level: 'info' | 'warn' | 'danger' | 'ok' } | null>(null);
+  const [relayLink, setRelayLink] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  async function checkRelay(jobId: string, quiet = false) {
+    setChecking(true);
+    try {
+      const st = await relayStatus(jobId);
+      if (st.state === 'sent') {
+        await store
+          .patchApp(a.id, {
+            status: '지원함',
+            sent_at: new Date().toISOString(),
+            send_state: 'sent',
+            gmail_url: st.threadId ? `https://mail.google.com/mail/?authuser=${encodeURIComponent(store.prefs.sender_email ?? '')}#sent/${st.threadId}` : null,
+          })
+          .catch(() => {});
+        setRelayMsg(null);
+        setRelayLink(null);
+        return 'done';
+      }
+      if (st.state === 'failed') {
+        await store.patchApp(a.id, { send_state: null, relay_job: null }).catch(() => {});
+        setRelayMsg({ text: `보내지 못했습니다: ${st.why}`, level: 'danger' });
+        return 'done';
+      }
+      if (!quiet) setRelayMsg({ text: '아직 보냈다는 표시가 없습니다. 열린 발송 창에 "보냈습니다 ✓"가 떴는지 확인하세요.', level: 'warn' });
+      return 'waiting';
+    } catch (e) {
+      if (!quiet) setRelayMsg({ text: (e as Error).message || '확인하지 못했습니다.', level: 'warn' });
+      return 'waiting';
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  // 발송 요청 뒤에는 몇 분 동안 저절로 확인한다 (어느 화면에서 열어도)
+  useEffect(() => {
+    if (a.send_state !== 'relay' || !a.relay_job) return;
+    let stop = false;
+    const t0 = Date.now();
+    const tick = async () => {
+      if (stop) return;
+      const r = await checkRelay(a.relay_job!, true);
+      if (r === 'waiting' && Date.now() - t0 < 180000 && !stop) setTimeout(tick, 4000);
+    };
+    const first = setTimeout(tick, 3000);
+    return () => {
+      stop = true;
+      clearTimeout(first);
+    };
+  }, [a.send_state, a.relay_job]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function relaySend() {
+    if (!built || !a.snapshot || !relayReady) return;
+    // 팝업 차단을 피하려고 누른 즉시 빈 창을 먼저 연다
+    let w: Window | null = null;
+    try {
+      w = window.open('', '_blank');
+      if (w) w.document.write('<p style="font-family:sans-serif;padding:40px;font-size:18px">jobkit: 서류를 올리는 중입니다… 잠시만 기다려 주세요.</p>');
+    } catch {
+      w = null;
+    }
+    setStage('sending');
+    setRelayMsg({ text: '서류를 Google Drive에 올리는 중…', level: 'info' });
+    setRelayLink(null);
+    try {
+      await persistEdits();
+      let folder = store.prefs.drive_folder_id;
+      if (!folder) {
+        folder = await createFolder(store.prefs.sender_email!);
+        await store.savePrefs({ ...store.prefs, drive_folder_id: folder });
+      }
+      const resume = await toPdf(fonts, built.resume.pages, '이력서', dataUrlToPhoto(built.photo));
+      const letter = await toPdf(fonts, built.letter.pages, '자기소개서', null);
+      const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+      const f1 = await uploadPdf(folder, files.resume, toBase64(resume));
+      const f2 = await uploadPdf(folder, files.letter, toBase64(letter));
+      const more = [];
+      for (const x of extras) more.push({ id: await uploadPdf(folder, x.name, x.b64, x.type), name: x.name });
+      const jobId = await uploadJob(folder, `발송요청 ${stamp} ${a.site}.json`, {
+        to,
+        subject,
+        body: finalBody,
+        from_name: store.profile.name || '정민욱',
+        files: [{ id: f1, name: files.resume }, { id: f2, name: files.letter }, ...more],
+      });
+      await store.patchApp(a.id, { send_state: 'relay', relay_job: jobId, mail_subject: subject, mail_body: finalBody, selected_email: to }).catch(() => {});
+      const url = relayUrl(store.prefs.relay_url!, store.prefs.relay_key!, jobId);
+      if (w && !w.closed) {
+        w.location.href = url;
+        setRelayMsg({ text: `${store.prefs.sender_email} 에서 보내는 중… 새 창에 "보냈습니다 ✓"가 뜨면 끝이고, 여기도 저절로 "지원함"으로 바뀝니다.`, level: 'info' });
+      } else {
+        setRelayLink(url);
+        setRelayMsg({ text: '서류를 올렸습니다. 아래 [지금 보내기]를 한 번 더 눌러 주세요 (브라우저가 새 창을 막았습니다).', level: 'warn' });
+      }
+    } catch (e) {
+      try {
+        w?.close();
+      } catch {
+        /* */
+      }
+      setRelayMsg({ text: `메일은 나가지 않았습니다. ${(e as Error)?.message || sendErrorText(e).text}`, level: 'danger' });
+    } finally {
+      setStage('edit');
+    }
+  }
+
   async function markSent() {
     await store
       .patchApp(a.id, { status: '지원함', mail_subject: subject, mail_body: finalBody, selected_email: to, sent_at: new Date().toISOString(), send_state: 'sent', gmail_url: null })
@@ -1824,6 +1934,32 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
             </Btn>
           </div>
         </div>
+      ) : relayReady ? (
+        <div className="stack-s">
+          <div className="row wrap">
+            <Btn kind="primary" className="big" disabled={!canSend || stage === 'sending' || a.send_state === 'relay'} onClick={relaySend}>
+              {stage === 'sending' ? '보내는 중…' : a.send_state === 'relay' ? '보내는 중… (확인 대기)' : `📨 ${store.prefs.sender_email}로 보내기`}
+            </Btn>
+            {a.send_state === 'relay' && a.relay_job && (
+              <Btn kind="quiet" disabled={checking} onClick={() => checkRelay(a.relay_job!)}>
+                {checking ? '확인 중…' : '보냈는지 확인'}
+              </Btn>
+            )}
+            {a.send_state === 'relay' && (
+              <Btn kind="quiet" onClick={() => store.patchApp(a.id, { send_state: null, relay_job: null }).catch(() => {})}>
+                다시 보내기로 되돌리기
+              </Btn>
+            )}
+            {blocks.length > 0 && <span className="small warn-text">✕ 항목을 먼저 해결해야 보낼 수 있습니다.</span>}
+          </div>
+          <span className="small muted">이력서·자기소개서 PDF를 Google Drive 폴더에 올린 뒤 {store.prefs.sender_email} Gmail에서 첨부해 보냅니다. 보내면 지원 이력에 저절로 기록됩니다.</span>
+          {relayMsg && <Notice level={relayMsg.level}>{relayMsg.text}</Notice>}
+          {relayLink && (
+            <a className="btn btn-primary" href={relayLink} target="_blank" rel="noreferrer noopener" onClick={() => setRelayLink(null)}>
+              지금 보내기
+            </a>
+          )}
+        </div>
       ) : (
         <div className="row wrap">
           <Btn
@@ -1844,9 +1980,16 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
         </div>
       )}
 
+      {!relayReady && (
+        <Notice level="info">
+          버튼 한 번으로 보내려면 <a href="#prefs">설정 → 원클릭 발송 연결</a>을 한 번만 해 두세요. 그 전까지는 아래 방법으로 보냅니다.
+        </Notice>
+      )}
       {stage !== 'confirm' && (
-        <div className="manual stack-s">
-          <strong>{store.prefs.sender_email || '정민욱'} Gmail로 직접 보내기</strong>
+        <details className="manual stack-s" open={!relayReady}>
+          <summary>
+            <strong>{store.prefs.sender_email || '정민욱'} Gmail로 직접 보내기{relayReady ? ' (예비 방법)' : ''}</strong>
+          </summary>
           <span className="small muted">
             브라우저에 {store.prefs.sender_email} 구글 계정이 로그인돼 있으면 어느 컴퓨터에서든 됩니다.
             {EXTRA_SENTENCE.test(finalBody) ? ' 본문에 적힌 추가 서류(자격증 사본 등)도 직접 첨부하세요.' : ''}
@@ -1913,7 +2056,7 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
             </p>
           </details>
           {manualBlocked && <span className="small warn-text">✕ 항목을 먼저 해결하세요.</span>}
-        </div>
+        </details>
       )}
     </section>
   );
@@ -1927,7 +2070,7 @@ function FinalView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
       <section className="card stack-s">
         <h2>보낼 지원서</h2>
         <p className="small">
-          공고 찾기에서 <b>지원</b>을 누르면 만든 서류가 여기에 모입니다. 받는 사람·제목·본문·첨부를 확인하고 <b>Gmail로 발송</b>을 누르면 바로 나갑니다. 보내면 지원 이력에 &quot;지원함&quot;으로 기록됩니다.
+          공고 찾기에서 <b>지원</b>을 누르면 만든 서류가 여기에 모입니다. 받는 사람·제목·본문·첨부를 확인하고 <b>📨 보내기</b> 버튼 한 번이면 정민욱 Gmail로 나갑니다. 보내면 지원 이력에 &quot;지원함&quot;으로 기록됩니다.
         </p>
         <p className="small muted">
           발송 계정: {store.prefs.sender_email ? <b>{store.prefs.sender_email}</b> : <a href="#prefs">설정에서 먼저 지정하세요</a>} · 이 페이지를 연 claude.ai 계정에 연결된 Gmail로 보냅니다.
@@ -2646,6 +2789,93 @@ function ProfileView({ store }: { store: Store }) {
 
 // ---------- 설정 ----------
 
+function RelaySetup({ store }: { store: Store }) {
+  const sender = store.prefs.sender_email || 'mwjung2002@gmail.com';
+  const [url, setUrl] = useState(store.prefs.relay_url ?? '');
+  const [msg, setMsg] = useState<{ text: string; level: 'ok' | 'warn' | 'danger' | 'info' } | null>(null);
+  const [showCode, setShowCode] = useState(false);
+  useEffect(() => setUrl(store.prefs.relay_url ?? ''), [store.prefs.relay_url]);
+  const key = store.prefs.relay_key ?? '';
+  const ready = !!(store.prefs.relay_url && key);
+
+  async function ensureKey() {
+    if (key) return key;
+    const k = newKey();
+    await store.savePrefs({ ...store.prefs, relay_key: k });
+    return k;
+  }
+  async function copyCode() {
+    const k = await ensureKey().catch(() => '');
+    if (!k) return setMsg({ text: '열쇠를 저장하지 못했습니다. 잠시 뒤 다시 누르세요.', level: 'danger' });
+    const ok = await copyText(relayScript(k));
+    setShowCode(!ok);
+    setMsg(ok ? { text: '발송기 코드를 복사했습니다. Apps Script 편집기에 붙여넣으세요.', level: 'ok' } : { text: '복사가 막혀 아래에 코드를 펼쳤습니다. 전부 선택해 복사하세요.', level: 'warn' });
+  }
+  async function saveUrl() {
+    if (!validRelayBase(url)) return setMsg({ text: '"https://script.google.com/macros/s/…/exec" 모양의 웹 앱 URL을 붙여넣으세요.', level: 'danger' });
+    const k = await ensureKey();
+    await store.savePrefs({ ...store.prefs, relay_url: url.trim(), relay_key: k });
+    setMsg({ text: '저장했습니다. [연결 확인]을 눌러 새 창에 "연결됨 ✓"가 뜨는지 보세요.', level: 'ok' });
+  }
+
+  return (
+    <section className="card stack relay-setup">
+      <div className="card-head">
+        <h2>원클릭 발송 연결 (처음 한 번만)</h2>
+        {ready ? <Pill tone="green">연결됨</Pill> : <Pill tone="orange">아직 안 됨</Pill>}
+      </div>
+      <p className="small">
+        연결해 두면 <b>보낼 지원서</b>에서 버튼 한 번으로 {sender} Gmail에서 이력서·자기소개서 PDF를 첨부해 보냅니다. 서류는 Google Drive의 &quot;jobkit 지원서 (정민욱)&quot; 폴더에
+        저장되고, {sender} 계정에 설치한 작은 발송기(Google Apps Script)가 그 파일로 메일을 보냅니다. 다운로드·첨부는 필요 없습니다.
+      </p>
+      <ol className="howto">
+        <li>
+          <b>{sender}</b> 계정으로 로그인된 브라우저에서{' '}
+          <a href={`https://script.google.com/create?authuser=${encodeURIComponent(sender)}`} target="_blank" rel="noreferrer noopener">
+            Apps Script 새 프로젝트 열기
+          </a>
+          .
+        </li>
+        <li>
+          <Btn onClick={copyCode}>발송기 코드 복사</Btn> → 편집기에 원래 있던 글을 모두 지우고 붙여넣기 → 💾 저장.
+        </li>
+        <li>
+          오른쪽 위 <b>배포 → 새 배포</b> → 유형 선택(⚙) <b>웹 앱</b> → 실행 사용자 <b>나({sender})</b>, 액세스 권한이 있는 사용자 <b>모든 사용자</b> → <b>배포</b>.
+        </li>
+        <li>
+          <b>액세스 승인</b> → {sender} 선택 → &quot;Google에서 확인하지 않은 앱&quot;이 뜨면 <b>고급 → (안전하지 않음)으로 이동 → 허용</b>. 직접 만든 발송기라 뜨는 안내입니다.
+        </li>
+        <li>
+          나온 <b>웹 앱 URL</b>을 복사해 아래에 붙여넣고 저장 → <b>연결 확인</b>.
+        </li>
+      </ol>
+      {showCode && key && <textarea readOnly rows={10} value={relayScript(key)} onFocus={(e) => e.currentTarget.select()} />}
+      <Field label="웹 앱 URL" hint="https://script.google.com/macros/s/…/exec">
+        <input id="relay-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://script.google.com/macros/s/…/exec" />
+      </Field>
+      <div className="row wrap">
+        <Btn kind="primary" onClick={saveUrl}>
+          저장
+        </Btn>
+        {validRelayBase(store.prefs.relay_url ?? '') && (
+          <a className="btn btn-plain" href={pingUrl(store.prefs.relay_url!)} target="_blank" rel="noreferrer noopener">
+            연결 확인
+          </a>
+        )}
+        {store.prefs.drive_folder_id && (
+          <a className="btn btn-quiet" href={`https://drive.google.com/drive/folders/${store.prefs.drive_folder_id}`} target="_blank" rel="noreferrer noopener">
+            Drive 서류 폴더
+          </a>
+        )}
+      </div>
+      {msg && <Notice level={msg.level}>{msg.text}</Notice>}
+      <p className="small muted">
+        발송기 코드를 다시 복사해 붙여넣었다면 <b>배포 → 배포 관리 → ✏ → 버전: 새 버전 → 배포</b>로 바꿔야 반영됩니다. 처음 보낼 때 이 페이지가 Google Drive 사용 허락을 한 번 묻습니다.
+      </p>
+    </section>
+  );
+}
+
 function PrefsView({ store }: { store: Store }) {
   const [sig, setSig] = useState(store.prefs.mail_signature);
   const [sender, setSender] = useState(store.prefs.sender_email ?? '');
@@ -2742,6 +2972,7 @@ function PrefsView({ store }: { store: Store }) {
           {msg && <Notice level={msg.level}>{msg.text}</Notice>}
         </section>
       </div>
+      <RelaySetup store={store} />
       <section className="card stack">
         <h2>백업</h2>
         <p className="small">프로필·사진·문구·지원 이력 전체를 JSON 파일 하나로 저장합니다. 개인정보가 들어 있으니 안전한 곳에 보관하세요.</p>
@@ -2770,7 +3001,7 @@ function PrefsView({ store }: { store: Store }) {
       </section>
       <section className="card stack small">
         <h2>저장과 보안</h2>
-        <p>이 페이지의 데이터는 claude.ai 계정별 비공개 저장소에 저장됩니다. 이 페이지를 다른 사람과 공유해도 그 사람은 내 프로필·사진·지원 이력을 볼 수 없습니다.</p>
+        <p>이 페이지의 데이터(프로필·사진·공고·지원 이력·발송 설정)는 이 링크를 여는 모든 사람이 함께 봅니다. 링크는 정민욱 님과 관리하는 분만 가지고 있고, 다른 사람에게 주지 마세요.</p>
         <p>주민등록번호·등본·통장 사본·계좌번호는 입력받지도 저장하지도 않습니다. 추가 첨부 체크박스는 메일 문구용입니다.</p>
       </section>
     </div>
