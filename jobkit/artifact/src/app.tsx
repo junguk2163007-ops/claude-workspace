@@ -885,7 +885,7 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
 
 /** 예약 작업(공고 수집)의 id. [지금 새로 찾기]가 이 작업을 바로 실행한다. 비어 있으면 버튼을 숨긴다. */
 /** 매일 자동 수집 예약 작업. 공고 새로고침도 같은 작업을 바로 한 번 돌린다 */
-const REFRESH_TRIGGER_ID = '';
+const REFRESH_TRIGGER_ID = 'trig_01DCvdbv5etrFLjjJWaaAapT';
 const DAILY_SCAN = { hour: 6, minute: 40 }; // 한국 시간
 
 function fmtKst(iso: string) {
