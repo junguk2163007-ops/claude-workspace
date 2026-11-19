@@ -10,6 +10,7 @@ import type { Blocks, ProfileData, Qualification, Settings, ApplicationStatus, S
 import type { ParsedPosting } from '../../lib/parser';
 import type { LetterData, ResumeData } from '../../lib/render/compose';
 import { DEFAULT_BLOCKS, DEFAULT_PREFS, DEFAULT_QUALS } from './defaults';
+import { DEFAULT_CRITERIA, type ChatMessage, type Criteria } from './criteria';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type AnyDb = any;
@@ -65,12 +66,14 @@ export interface AppRec {
 /** 앱 설정 + 발송 계정 (최종확인 화면용) */
 export type Prefs = Settings & { sender_email?: string; home_geo?: { lat: number; lng: number } | null };
 
-export type JobSource = 'dghma' | 'jobkorea' | 'saramin';
+export type JobSource = 'dghma' | 'jobkorea' | 'saramin' | 'work24';
 
 /** 수집기(collector/collect.ts)가 저장하는 공고 한 건 */
 export interface JobItem {
   id: string;
   source: JobSource;
+  /** 출처 사이트 이름 */
+  origin?: string;
   url: string;
   list_title: string;
   site: string;
@@ -82,6 +85,8 @@ export interface JobItem {
   deadline: string | null;
   deadline_text: string;
   emails: string[];
+  /** 채용 담당자 (고용24 등) */
+  contact?: { name?: string; phone?: string; fax?: string; method?: string } | null;
   apply_channels: string[];
   email_apply: boolean;
   commute: { verdict: 'ok' | 'edge' | 'far' | 'unknown'; min: number | null; area: string | null; route: string | null; matched: string | null };
@@ -107,6 +112,10 @@ export interface StoreData {
   prefs: Prefs;
   apps: AppRec[];
   jobs: Partial<Record<JobSource, JobList>>;
+  criteria: Criteria;
+  chat: ChatMessage[];
+  /** 공고에 없던 이메일을 직접 알아내 넣은 것 (공고 id → 주소) */
+  jobEmails: Record<string, string>;
 }
 
 export type StoreMode = 'loading' | 'db' | 'memory';
@@ -123,6 +132,9 @@ export interface Store extends StoreData {
   saveQuals(q: Qualification[]): Promise<void>;
   saveBlocks(b: Blocks): Promise<void>;
   savePrefs(s: Prefs): Promise<void>;
+  saveCriteria(c: Criteria): Promise<void>;
+  saveChat(m: ChatMessage[]): Promise<void>;
+  saveJobEmail(jobId: string, email: string | null): Promise<void>;
   saveApp(a: AppRec): Promise<void>;
   patchApp(id: string, patch: Partial<AppRec>): Promise<void>;
   deleteApp(id: string): Promise<void>;
@@ -146,6 +158,9 @@ export function useStore(): Store {
     prefs: DEFAULT_PREFS,
     apps: [],
     jobs: {},
+    criteria: DEFAULT_CRITERIA,
+    chat: [],
+    jobEmails: {},
   });
   const [mode, setMode] = useState<StoreMode>('loading');
   const [access, setAccess] = useState<Access>('unknown');
@@ -171,8 +186,8 @@ export function useStore(): Store {
       const base = SHARED;
       ref.current = { db, base };
       setMode('db');
-      const pending = new Set(['profile', 'photo', 'quals', 'blocks', 'prefs', 'apps']);
-      for (const src of ['dghma', 'jobkorea', 'saramin'] as JobSource[])
+      const pending = new Set(['profile', 'photo', 'quals', 'blocks', 'prefs', 'apps', 'criteria', 'criteria_chat', 'job_emails']);
+      for (const src of ['dghma', 'jobkorea', 'saramin', 'work24'] as JobSource[])
         unsubs.push(
           db.doc(`${base}/jobs_${src}`).onSnapshot(
             (sn: any) => setData((prev) => ({ ...prev, jobs: { ...prev.jobs, [src]: sn.exists ? (sn.data() as JobList) : undefined } })),
@@ -199,6 +214,9 @@ export function useStore(): Store {
       sub('photo', (d) => ({ photo: (d?.dataUrl as string) || null }));
       sub('quals', (d) => ({ quals: d && Array.isArray(d.list) ? (d.list as Qualification[]) : DEFAULT_QUALS }));
       sub('blocks', (d) => ({ blocks: d ? ({ ...DEFAULT_BLOCKS, ...(d as object) } as Blocks) : DEFAULT_BLOCKS }));
+      sub('criteria', (d) => ({ criteria: d ? ({ ...DEFAULT_CRITERIA, ...(d as object) } as Criteria) : DEFAULT_CRITERIA }));
+      sub('job_emails', (d) => ({ jobEmails: d && typeof d.map === 'object' && d.map ? (d.map as Record<string, string>) : {} }));
+      sub('criteria_chat', (d) => ({ chat: d && Array.isArray(d.messages) ? (d.messages as ChatMessage[]) : [] }));
       sub('prefs', (d) => ({ prefs: d ? ({ ...DEFAULT_PREFS, ...(d as object) } as Prefs) : DEFAULT_PREFS }));
       unsubs.push(
         db
@@ -258,6 +276,22 @@ export function useStore(): Store {
     async savePrefs(s) {
       local({ prefs: s });
       await write('prefs', s as unknown as Record<string, unknown>);
+    },
+    async saveCriteria(c) {
+      local({ criteria: c });
+      await write('criteria', c as unknown as Record<string, unknown>);
+    },
+    async saveChat(messages) {
+      const keep = messages.slice(-40);
+      local({ chat: keep });
+      await write('criteria_chat', { messages: keep });
+    },
+    async saveJobEmail(jobId, email) {
+      const map = { ...data.jobEmails };
+      if (email) map[jobId] = email;
+      else delete map[jobId];
+      local({ jobEmails: map });
+      await write('job_emails', { map });
     },
     async saveApp(a) {
       setData((prev) => ({ ...prev, apps: [a, ...prev.apps.filter((x) => x.id !== a.id)] }));

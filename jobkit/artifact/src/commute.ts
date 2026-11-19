@@ -137,6 +137,28 @@ export function kakaoRouteUrl(from: string, to: string, fromGeo?: Geo | null, to
 }
 
 /** 근거리 키워드(지원동기 거리 문장용): 30분 이내 지역의 키워드 */
+/** 직선거리(km) */
+export function distanceKm(a: Geo, b: Geo): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/** 집↔근무지 거리로 본 대중교통 편도 추정(분): 도보·대기 9분 + km당 약 4.2분 (대구 도심 버스·지하철 평균) */
+export function minutesByDistance(home: Geo, work: Geo): number {
+  return Math.round(9 + distanceKm(home, work) * 4.2);
+}
+
+/** 최종 추정: 동별 표와 거리 추정을 함께 본다 (둘 다 있으면 평균, 하나만 있으면 그것) */
+export function finalMinutes(tableMin: number | null, home?: Geo | null, work?: Geo | null): { min: number | null; km: number | null } {
+  const km = home && work ? distanceKm(home, work) : null;
+  const g = home && work ? minutesByDistance(home, work) : null;
+  if (tableMin !== null && g !== null) return { min: Math.round((tableMin + g) / 2), km };
+  return { min: g ?? tableMin, km };
+}
+
 export function nearKeywordsFrom(table: CommuteArea[] = DEFAULT_COMMUTE): string[] {
   return Array.from(new Set(table.filter((a) => a.min <= COMMUTE_LIMIT).flatMap((a) => a.keys)));
 }

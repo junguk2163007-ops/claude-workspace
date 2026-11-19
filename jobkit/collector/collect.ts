@@ -14,11 +14,15 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const TEXT_MAX = 3500;
 const PER_SOURCE_MAX = 40;
 
-export type SourceId = 'dghma' | 'jobkorea' | 'saramin';
+export type SourceId = 'dghma' | 'jobkorea' | 'saramin' | 'work24';
+
+export const ORIGIN: Record<SourceId, string> = { dghma: '대구주택관리사협회', jobkorea: '잡코리아', saramin: '사람인', work24: '고용24' };
 
 export interface JobItem {
   id: string;
   source: SourceId;
+  /** 출처 사이트 이름 (화면 배지용) */
+  origin: string;
   url: string;
   list_title: string;
   site: string;
@@ -30,6 +34,8 @@ export interface JobItem {
   deadline: string | null;
   deadline_text: string;
   emails: string[];
+  /** 채용 담당자 (고용24 등) */
+  contact?: { name?: string; phone?: string; fax?: string; method?: string } | null;
   apply_channels: string[];
   /** 이메일로 접수 가능한지 */
   email_apply: boolean;
@@ -52,7 +58,7 @@ export interface SourceResult {
 
 /** 시설·기전·영선 계열 직무인지 (사무·청소·영업 등은 제외) */
 const ROLE_RE = /(시설|기전|영선|관리주임|관리과장|관리기사|관리소|아파트|건물\s*관리|빌딩\s*관리|보일러|에너지\s*관리|전기\s*(기사|주임|안전|기술)|설비\s*(관리|유지|보수|기사|주임))/;
-const NOT_ROLE_RE = /(사무|총무|경리|회계|청소|미화|영업|판매|상담원|물품|배송|운전기사|요양|간호|조리|강사|디자인|개발자|마케팅|안전관리대행|월점검|설계|오퍼레이터|\bOP\b|생산|제조|포장|건설|시공|현장\s*기계|엔지니어|정보통신|태양광)/;
+const NOT_ROLE_RE = /(사무|총무|경리|회계|청소|미화|영업|판매|상담원|물품|배송|운전기사|요양|간호|조리|강사|디자인|개발자|마케팅|안전관리대행|월점검|설계|오퍼레이터|\bOP\b|생산|제조|포장|건설|시공|현장\s*기계|엔지니어|정보통신|태양광|판금|절곡|제작|공사|공무|경비원|요양)/;
 
 /** 목록의 지역 표기가 가까운 구를 포함하는지 (먼 구만 적힌 공고는 상세를 열지 않는다) */
 function nearInList(loc: string): boolean {
@@ -65,6 +71,7 @@ function nearInList(loc: string): boolean {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const clean = (s: string) =>
   s
+    .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|li|tr|h\d)>/gi, '\n')
@@ -94,6 +101,7 @@ function toItem(source: SourceId, id: string, url: string, listTitle: string, po
   return {
     id: `${source}-${id}`,
     source,
+    origin: ORIGIN[source],
     url,
     list_title: listTitle,
     site,
@@ -123,7 +131,8 @@ export function isRelevant(it: Pick<JobItem, 'list_title' | 'title' | 'text'>): 
 function keep(it: JobItem, today: string): 'keep' | 'far' | 'closed' | 'other' {
   if (!isRelevant(it)) return 'other';
   if (it.deadline && it.deadline < today) return 'closed';
-  if (it.commute.verdict === 'far') return 'far';
+  // 화면에서 기준(통근 분)에 맞춰 다시 거르므로, 여기서는 넉넉히(50분) 남긴다
+  if (it.commute.min !== null && it.commute.min > 50) return 'far';
   // 동을 모르는 공고는 가까운 구(북구·서구·중구·칠곡)만 "확인 필요"로 남긴다
   if (it.commute.verdict === 'unknown' && !(/대구|칠곡/.test(it.address) && /북구|서구|중구|칠곡/.test(it.address))) return 'far';
   return 'keep';
@@ -316,12 +325,105 @@ export async function geocode(address: string): Promise<Geo | null> {
   return found;
 }
 
+// ---------- 고용24 (그 외) ----------
+
+/** 대구 북구·서구·중구, 경북 칠곡군 */
+const W24_REGIONS = ['27230', '27170', '27110', '47850'];
+const W24_QUERIES = ['시설', '기전', '영선', '관리주임', '전기'];
+
+async function collectWork24(): Promise<{ items: JobItem[]; scanned: number; errors: string[] }> {
+  const errors: string[] = [];
+  const cards = new Map<string, { title: string; company: string; loc: string }>();
+  for (const region of W24_REGIONS)
+    for (const q of W24_QUERIES) {
+      try {
+        const html = await get(
+          `https://www.work24.go.kr/wk/a/b/1200/retriveDtlEmpSrchList.do?srcKeyword=${encodeURIComponent(q)}&region=${region}&resultCnt=50`,
+        );
+        for (const row of html.match(/<tr id="list\d+">[\s\S]*?<\/tr>/g) ?? []) {
+          const v = row.match(/value="([^"]+)"/)?.[1]?.split('|');
+          if (!v || v.length < 4 || cards.has(v[0])) continue;
+          const title = clean(v[3]);
+          const loc = clean(row.match(/<li class="site">([\s\S]*?)<\/li>/)?.[1] ?? '');
+          if (NOT_ROLE_RE.test(title) || !ROLE_RE.test(title)) continue;
+          cards.set(v[0], { title, company: clean(v[2]), loc });
+        }
+      } catch (e) {
+        errors.push(`고용24 검색 ${region} "${q}": ${(e as Error).message}`);
+      }
+      await sleep(900);
+    }
+  const items: JobItem[] = [];
+  let scanned = 0;
+  for (const [no, c] of cards) {
+    if (items.length >= PER_SOURCE_MAX) break;
+    const url = `https://www.work24.go.kr/wk/a/b/1500/empDetailAuthView.do?wantedAuthNo=${no}&infoTypeCd=VALIDATION&infoTypeGroup=tb_workinfoworknet`;
+    try {
+      const body = clean(await get(url));
+      scanned++;
+      const pick = (label: string) => body.match(new RegExp(`${label}\\s*\\n\\s*([^\\n]+)`))?.[1]?.trim() ?? '';
+      const s0 = body.indexOf('직무내용');
+      const duty = body.slice(s0 >= 0 ? s0 + 4 : 0, s0 >= 0 ? body.indexOf('더보기', s0) : 0).trim();
+      const addr = pick('근무 예정지').replace(/,\s*\.\s*/, ' ');
+      const site = addr.match(/\([^,)]*,\s*([^)]+)\)/)?.[1]?.trim() ?? '';
+      // 접수 방법: 제목 다음 줄부터 "제출 서류" 앞까지 (고용24 입사지원 / 이메일 / 우편 / 방문 / 팩스 …)
+      const m0 = body.search(/접수 방법\s*\n/);
+      const method =
+        m0 >= 0
+          ? body
+              .slice(m0, body.indexOf('제출 서류', m0) > m0 ? body.indexOf('제출 서류', m0) : m0 + 200)
+              .split('\n')
+              .slice(1)
+              .map((x) => x.trim())
+              .filter((x) => x && x !== '텍스트' && !/br태그/.test(x))
+              .join(', ')
+              .slice(0, 120)
+          : '';
+      // 채용 담당자 이름·전화·팩스 (이메일은 고용24 로그인해야 보임)
+      const k0 = body.indexOf('채용 담당자 정보 열람');
+      const cblock = k0 >= 0 ? body.slice(k0, body.indexOf('질문하기', k0) > k0 ? body.indexOf('질문하기', k0) : k0 + 1500) : '';
+      const cName = cblock.match(/상세 보기\s*\n\s*([^\n*]+?)\s*\n/)?.[1]?.trim() ?? '';
+      const cPhone = cblock.match(/전화번호\s*([0-9][0-9-]{7,})/)?.[1] ?? '';
+      const cFax = cblock.match(/팩스\s*([0-9][0-9-]{7,})/)?.[1] ?? '';
+      // 본문 어디에든 적힌 이메일 (고용24 자체 주소 제외)
+      const bodyEmails = Array.from(new Set(body.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) ?? [])).filter(
+        (e) => !/(work24|keis|moel|korea)\.(go|or)\.kr$/i.test(e),
+      );
+      const due = pick('접수 마감일').match(/\d{4}\.\d{2}\.\d{2}/)?.[0]?.replace(/\./g, '-') ?? '';
+      const text = [
+        `채용정보 : ${c.title}`,
+        site && `단지명 : ${site}`,
+        `위탁사명 : ${c.company}`,
+        addr && `주소 : ${addr}`,
+        `급여 : ${pick('임금 조건')}`,
+        `근무형태 : ${pick('근무 형태')} ${pick('상세 근무시간')}`.trim(),
+        due && `마감일자 : ${due}`,
+        `제출서류 : ${pick('제출 서류')}`,
+        `접수방법 : ${method}`,
+        bodyEmails.length ? `이메일 : ${bodyEmails.join(', ')}` : '',
+        cName || cPhone ? `채용담당 : ${[cName, cPhone && `전화 ${cPhone}`, cFax && `팩스 ${cFax}`].filter(Boolean).join(' · ')}` : '',
+        '',
+        duty,
+      ]
+        .filter((x): x is string => typeof x === 'string')
+        .join('\n');
+      const item = toItem('work24', no, url, c.title, '', text, { address: addr || c.loc, company: c.company, title: c.title, site: site || c.company });
+      item.contact = cName || cPhone || cFax || method ? { name: cName || undefined, phone: cPhone || undefined, fax: cFax || undefined, method: method || undefined } : null;
+      items.push(item);
+    } catch (e) {
+      errors.push(`고용24 ${no}: ${(e as Error).message}`);
+    }
+    await sleep(900);
+  }
+  return { items, scanned, errors };
+}
+
 // ---------- 실행 ----------
 
 async function main() {
   const out = path.resolve(process.argv[2] || 'collector/out');
   fs.mkdirSync(out, { recursive: true });
-  const only = (process.argv[3] || 'dghma,jobkorea,saramin').split(',') as SourceId[];
+  const only = (process.argv[3] || 'dghma,jobkorea,saramin,work24').split(',') as SourceId[];
   const today = todaySeoul();
   const browser = only.includes('dghma') ? await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || undefined }) : null;
   try {
@@ -329,7 +431,14 @@ async function main() {
       const t0 = Date.now();
       let r: { items: JobItem[]; scanned: number; errors: string[] };
       try {
-        r = source === 'dghma' ? await collectDghma(browser!) : source === 'jobkorea' ? await collectJobkorea() : await collectSaramin();
+        r =
+          source === 'dghma'
+            ? await collectDghma(browser!)
+            : source === 'jobkorea'
+              ? await collectJobkorea()
+              : source === 'saramin'
+                ? await collectSaramin()
+                : await collectWork24();
       } catch (e) {
         r = { items: [], scanned: 0, errors: [`${source}: ${(e as Error).message}`] };
       }

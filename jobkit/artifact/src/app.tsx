@@ -25,7 +25,8 @@ import { drawPage, FONT_FAMILY, layoutLetter, layoutResume, loadFonts, toPdf, ty
 import { EMPTY_PROFILE, useStore, type AppRec, type JobItem, type JobSource, type Prefs, type Store } from './store';
 import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
-import { COMMUTE_LIMIT, estimateCommute, kakaoRouteUrl, type CommuteResult, type Geo } from './commute';
+import { applyChanges, criteriaPrompt, filterJob, type ChatMessage, type Criteria, type FilterResult, type JobVerdict } from './criteria';
+import { estimateCommute, finalMinutes, kakaoRouteUrl, type CommuteResult, type Geo } from './commute';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -49,11 +50,33 @@ function useFonts() {
   return { fonts, error };
 }
 
-let downloadsNs: Promise<any> | null = null;
+const capUse = async (name: string): Promise<any> => {
+  const c = (window as any).claude;
+  if (!c?.use) return null;
+  try {
+    return await c.use(name);
+  } catch {
+    return null;
+  }
+};
+/** saveFile 이 이 값을 돌려주면 이 화면에서 '저장' 자체가 안 되는 것 (대신 링크로 연다) */
+const SAVE_UNAVAILABLE = '이 화면에서는 바로 저장이 안 됩니다.';
+async function downloadsNs(): Promise<any> {
+  let dl = await capUse('downloads');
+  if (dl) return dl;
+  // 권한이 꺼져 있거나 아직 묻지 않았으면 한 번 묻는다 (버튼을 누른 순간에만 호출됨)
+  const perms = await capUse('permissions');
+  if (!perms) return null;
+  const st = await perms.state('downloads').catch(() => 'unavailable');
+  if (st === 'prompt') await perms.request(['downloads']).catch(() => {});
+  else if (st === 'denied') await perms.manage().catch(() => {});
+  else return null;
+  dl = await capUse('downloads');
+  return dl;
+}
 async function saveFile(filename: string, data: Uint8Array | string): Promise<string | null> {
-  downloadsNs ??= (window as any).claude?.use?.('downloads') ?? Promise.resolve(null);
-  const dl = await downloadsNs;
-  if (!dl) return '이 화면에서는 파일을 저장할 수 없습니다. claude.ai에서 열어 주세요.';
+  const dl = await downloadsNs();
+  if (!dl) return SAVE_UNAVAILABLE;
   try {
     const blob = typeof data === 'string' ? new Blob([data]) : new Blob([data as BlobPart]);
     await dl.save({ filename, data: blob });
@@ -62,7 +85,20 @@ async function saveFile(filename: string, data: Uint8Array | string): Promise<st
     const code = (e as { code?: string })?.code;
     if (code === 'declined') return null;
     if (code === 'rate_limited') return '저장 창이 이미 열려 있습니다. 잠시 뒤 다시 누르세요.';
+    if (code === 'unavailable' || code === 'not_granted' || code === 'capability_disabled' || code === 'capability_removed') return SAVE_UNAVAILABLE;
     return '파일을 저장하지 못했습니다.';
+  }
+}
+
+/** 저장이 안 되는 화면용: PDF 를 이 페이지 보관함에 올리고 새 창에서 열 수 있는 주소를 받는다 */
+async function pdfLink(bytes: Uint8Array): Promise<string | null> {
+  const assets = await capUse('assets');
+  if (!assets) return null;
+  try {
+    const r = await assets.upload(new Blob([bytes as BlobPart], { type: 'application/pdf' }), { type: 'application/pdf' });
+    return r.url as string;
+  } catch {
+    return null;
   }
 }
 
@@ -561,16 +597,19 @@ function idNum(id: string) {
   return Math.abs(h) || 1;
 }
 
-/** 통근 표 기준 30분 이내면 근거리 (지원동기 거리 문장·통근 경고에 쓰임) */
-function analysisSettings(store: Store, parsed: ParsedPosting) {
-  const c = estimateCommute(parsed.address, parsed.site);
-  return { ...store.prefs, near_keywords: c.verdict === 'ok' && parsed.address.trim() ? [parsed.address.trim()] : [] };
+/** 통근 기준 안이면 근거리 (지원동기 거리 문장·통근 경고에 쓰임). near 를 주면 그 판정을 쓴다 */
+function analysisSettings(store: Store, parsed: ParsedPosting, near?: boolean) {
+  const ok = near ?? (() => {
+    const t = estimateCommute(parsed.address, parsed.site);
+    return t.min !== null && t.min <= store.criteria.commute_limit;
+  })();
+  return { ...store.prefs, near_keywords: ok && parsed.address.trim() ? [parsed.address.trim()] : [] };
 }
 
-function analyzeFor(store: Store, text: string, parsed: ParsedPosting, currentId: string | null) {
+function analyzeFor(store: Store, text: string, parsed: ParsedPosting, currentId: string | null, near?: boolean) {
   return analyze(text, parsed, {
     qualifications: store.quals,
-    settings: analysisSettings(store, parsed),
+    settings: analysisSettings(store, parsed, near),
     history: historyOf(store.apps),
     today: todaySeoul(),
     currentApplicationId: currentId ? idNum(currentId) : null,
@@ -578,9 +617,9 @@ function analyzeFor(store: Store, text: string, parsed: ParsedPosting, currentId
 }
 
 /** 공고 하나로 이력서·자소서·메일을 만들어 "작성중" 지원 건으로 만든다 */
-function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs: string[], reuse: AppRec | null) {
+function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs: string[], reuse: AppRec | null, near?: boolean) {
   const today = todaySeoul();
-  const analysis = analyzeFor(store, text, parsed, reuse?.id ?? null);
+  const analysis = analyzeFor(store, text, parsed, reuse?.id ?? null, near);
   const profile = { ...store.profile, photo_file: store.photo ? 'photo' : null };
   const input = { profile, blocks: store.blocks, parsed, analysis, today };
   const resumeData = composeResume(input);
@@ -681,6 +720,7 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   return (
     <div className="split">
       <div className="col stack">
+        <a className="small" href="#jobs">← 공고 찾기로 돌아가기</a>
         <section className="card stack">
           <div className="card-head">
             <h2>공고 붙여넣기</h2>
@@ -840,11 +880,13 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
 /** 예약 작업(공고 수집)의 id. [지금 새로 찾기]가 이 작업을 바로 실행한다. 비어 있으면 버튼을 숨긴다. */
 const REFRESH_TRIGGER_ID = '';
 
-const SOURCES: { id: JobSource; label: string; home: string }[] = [
-  { id: 'dghma', label: '대구주택관리사협회', home: 'https://www.dghma.org/pg/bbs/board.php?bo_table=recruit_new_3' },
-  { id: 'jobkorea', label: '잡코리아', home: 'https://www.jobkorea.co.kr/' },
-  { id: 'saramin', label: '사람인', home: 'https://www.saramin.co.kr/' },
+const SOURCES: { id: JobSource; label: string; short: string; home: string }[] = [
+  { id: 'dghma', label: '대구주택관리사협회', short: '협회', home: 'https://www.dghma.org/pg/bbs/board.php?bo_table=recruit_new_3' },
+  { id: 'jobkorea', label: '잡코리아', short: '잡코리아', home: 'https://www.jobkorea.co.kr/' },
+  { id: 'saramin', label: '사람인', short: '사람인', home: 'https://www.saramin.co.kr/' },
+  { id: 'work24', label: '그 외 (고용24)', short: '고용24', home: 'https://www.work24.go.kr/' },
 ];
+type Tab = JobSource | 'all';
 
 function CommuteBadge({ c }: { c: Pick<CommuteResult, 'verdict' | 'min'> }) {
   if (c.verdict === 'ok') return <Pill tone="green">약 {c.min}분</Pill>;
@@ -860,7 +902,7 @@ function CommuteLine({
   fromGeo,
   toGeo,
 }: {
-  c: Pick<CommuteResult, 'verdict' | 'min' | 'area' | 'route'>;
+  c: Pick<CommuteResult, 'verdict' | 'min' | 'area' | 'route'> & { km?: number | null };
   from: string;
   to: string;
   fromGeo?: Geo | null;
@@ -870,7 +912,7 @@ function CommuteLine({
     <div className="row wrap small commute-line">
       <CommuteBadge c={c} />
       <span className="muted">
-        {c.area ? `${c.area}` : '지역 미상'}
+        {c.km != null ? `직선 ${c.km.toFixed(1)}km` : c.area ? c.area : '위치 미상'}
         {c.route ? ` · ${c.route}` : ''}
       </span>
       {from && to && (
@@ -890,15 +932,22 @@ function ago(iso: string) {
   return `${Math.round(m / 1440)}일 전`;
 }
 
-function JobCard({ it, store, fonts, onDrafted }: { it: JobItem; store: Store; fonts: Fonts | null; onDrafted: (id: string) => void }) {
+function JobCard({ it, also, verdict, min, km, store, fonts, onDrafted }: { it: JobItem; also?: JobSource[]; verdict: JobVerdict; min: number | null; km: number | null; store: Store; fonts: Fonts | null; onDrafted: (id: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const today = todaySeoul();
-  const parsed = useMemo(() => parsePosting(it.text, today), [it.text, today]);
+  // 공고에 없던 이메일을 직접 알아내 넣었으면 공고 글 끝에 붙여서 읽는다
+  const extraEmail = store.jobEmails[it.id] ?? '';
+  const text = extraEmail && !it.text.includes(extraEmail) ? `${it.text}\n이메일 : ${extraEmail}` : it.text;
+  const parsed = useMemo(() => parsePosting(text, today), [text, today]);
   const p: ParsedPosting = { ...parsed, site: parsed.site || it.site, title: parsed.title || it.title, address: parsed.address || it.address, company: parsed.company || it.company };
-  const analysis = useMemo(() => analyzeFor(store, it.text, p, null), [it.text, store.quals, store.prefs, store.apps]); // eslint-disable-line react-hooks/exhaustive-deps
+  const analysis = useMemo(() => analyzeFor(store, text, p, null), [text, store.quals, store.prefs, store.apps]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailIn, setEmailIn] = useState(extraEmail);
+  const ct = it.contact;
+  const method = ct?.method?.replace(/\s*\(?개인회원 로그인 후 조회가능\)?/g, '').replace(/,\s*,/g, ',').trim();
   const applied = store.apps.find((a) => a.status !== '작성중' && normalizeSite(a.site) === normalizeSite(p.site) && normalizeSite(a.title) === normalizeSite(p.title));
-  const draft = store.apps.find((a) => a.status === '작성중' && a.posting_text === it.text);
+  const draft = store.apps.find((a) => a.status === '작성중' && (a.posting_text === text || a.posting_text === it.text));
   const lamp = { green: '🟢', yellow: '🟡', red: '🔴' }[analysis.signal.level];
   const req = analysis.rows.filter((r) => r.category !== '우대' && r.verdict !== '충족' && r.qualification_name).map((r) => r.qualification_name);
 
@@ -908,7 +957,7 @@ function JobCard({ it, store, fonts, onDrafted }: { it: JobItem; store: Store; f
     setBusy(true);
     setErr(null);
     try {
-      const { rec } = buildDraft(store, it.text, p, p.submit_docs.includes('자격증 사본') ? ['자격증 사본'] : [], draft ?? null);
+      const { rec } = buildDraft(store, text, p, p.submit_docs.includes('자격증 사본') ? ['자격증 사본'] : [], draft ?? null, verdict === 'ok');
       await store.saveApp(rec);
       onDrafted(rec.id);
     } catch {
@@ -922,12 +971,18 @@ function JobCard({ it, store, fonts, onDrafted }: { it: JobItem; store: Store; f
     <article className="card job">
       <div className="job-head">
         <div className="job-title">
+          <span className={cx('origin', `src-${it.source}`)}>{it.origin || SOURCES.find((x) => x.id === it.source)?.short}</span>
+          {also?.map((a) => (
+            <span key={a} className={cx('origin', 'origin-also', `src-${a}`)} title="같은 공고가 이 사이트에도 있습니다">
+              +{SOURCES.find((x) => x.id === a)?.short}
+            </span>
+          ))}
           <strong>{p.site || it.company || '(단지명 미상)'}</strong> <span>{p.title || it.list_title}</span>
           {applied && <Pill tone="blue">{applied.created_at.slice(5, 10).replace('-', '/')} {applied.status}</Pill>}
         </div>
         <span className="small muted">{it.posted || ''}</span>
       </div>
-      <CommuteLine c={it.commute} from={store.profile.address} to={p.address || p.site} fromGeo={store.prefs.home_geo} toGeo={it.geo} />
+      <CommuteLine c={{ ...it.commute, verdict, min, km }} from={store.profile.address} to={p.address || p.site} fromGeo={store.prefs.home_geo} toGeo={it.geo} />
       <dl className="job-facts">
         <div>
           <dt>주소</dt>
@@ -950,7 +1005,10 @@ function JobCard({ it, store, fonts, onDrafted }: { it: JobItem; store: Store; f
         </div>
         <div>
           <dt>접수</dt>
-          <dd>{p.emails.length ? `이메일 ${p.emails[0]}` : p.apply_channels.filter((c) => c !== 'email').join(', ') || '사이트 지원'}</dd>
+          <dd>
+            {p.emails.length ? `이메일 ${p.emails[0]}` : method || p.apply_channels.filter((c) => c !== 'email').join(', ') || '사이트 지원'}
+            {ct?.phone && <span className="muted"> · 담당 {ct.name ? `${ct.name.replace(/^채용대행\s*/, '')} ` : ''}☎ {ct.phone}</span>}
+          </dd>
         </div>
         <div>
           <dt>서류 통과</dt>
@@ -961,6 +1019,37 @@ function JobCard({ it, store, fonts, onDrafted }: { it: JobItem; store: Store; f
         </div>
       </dl>
       {err && <Notice level="danger">{err}</Notice>}
+      {!p.emails.length && emailOpen && (
+        <div className="stack-s email-in">
+          <span className="small">
+            {it.source === 'work24'
+              ? '고용24는 담당자 이메일을 로그인해야 보여 줍니다. 고용24에 로그인해 공고 원문의 "채용 담당자 → 이메일"을 복사하거나, 담당자에게 전화로 물어 적으세요.'
+              : '공고 원문이나 전화로 알아낸 접수 이메일을 적으세요.'}{' '}
+            넣으면 <b>지원</b> 버튼이 켜지고, 이 주소로 이력서·자기소개서를 보냅니다.
+          </span>
+          <div className="row">
+            <input type="email" value={emailIn} onChange={(e) => setEmailIn(e.target.value.trim())} placeholder="예: hr@example.com" aria-label="접수 이메일" />
+            <Btn
+              kind="primary"
+              disabled={!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn)}
+              onClick={async () => {
+                await store.saveJobEmail(it.id, emailIn).catch(() => setErr('저장하지 못했습니다.'));
+                setEmailOpen(false);
+              }}
+            >
+              저장
+            </Btn>
+          </div>
+        </div>
+      )}
+      {extraEmail && (
+        <span className="small muted">
+          직접 넣은 접수 이메일: {extraEmail}{' '}
+          <button className="linklike" onClick={() => store.saveJobEmail(it.id, null)}>
+            지우기
+          </button>
+        </span>
+      )}
       <div className="row wrap">
         {p.emails.length > 0 ? (
           draft ? (
@@ -973,9 +1062,19 @@ function JobCard({ it, store, fonts, onDrafted }: { it: JobItem; store: Store; f
             </Btn>
           )
         ) : (
-          <a className="btn btn-primary" href={it.url} target="_blank" rel="noreferrer noopener">
-            사이트에서 지원
-          </a>
+          <>
+            <a className="btn btn-primary" href={it.url} target="_blank" rel="noreferrer noopener">
+              {it.source === 'work24' ? '고용24에서 지원' : '사이트에서 지원'}
+            </a>
+            {ct?.phone && (
+              <a className="btn btn-plain" href={`tel:${ct.phone}`}>
+                ☎ {ct.phone}
+              </a>
+            )}
+            <Btn kind="plain" onClick={() => setEmailOpen((v) => !v)}>
+              이메일 주소 넣기
+            </Btn>
+          </>
         )}
         <a className="btn btn-quiet" href={it.url} target="_blank" rel="noreferrer noopener">
           공고 원문
@@ -985,12 +1084,229 @@ function JobCard({ it, store, fonts, onDrafted }: { it: JobItem; store: Store; f
   );
 }
 
+function CriteriaPanel({ c }: { c: Criteria }) {
+  return (
+    <aside className="card crit">
+      <div className="crit-head">
+        <span className="crit-kicker">지원 기준</span>
+        {c.updated_at && <span className="small muted">{ago(c.updated_at)} 수정</span>}
+      </div>
+      <p className="crit-goal">{c.goal}</p>
+      <dl className="crit-list">
+        <div>
+          <dt>통근</dt>
+          <dd>
+            대중교통 편도 <b>{c.commute_limit}분 이내</b>
+            {c.commute_max > c.commute_limit && <span className="muted"> (최대 {c.commute_max}분까지 표시)</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>찾는 직무</dt>
+          <dd className="chips">
+            {c.roles_include.length ? c.roles_include.map((r) => <span key={r} className="chip chip-in">{r}</span>) : <span className="muted">제한 없음</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>제외</dt>
+          <dd className="chips">
+            {c.roles_exclude.length ? c.roles_exclude.map((r) => <span key={r} className="chip chip-out">{r}</span>) : <span className="muted">없음</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>근무형태</dt>
+          <dd>{c.shifts.length ? c.shifts.join(', ') : '전부'}</dd>
+        </div>
+        <div>
+          <dt>급여</dt>
+          <dd>{c.salary_min_man ? `월 ${c.salary_min_man}만원 이상` : '제한 없음'}</dd>
+        </div>
+        <div>
+          <dt>접수</dt>
+          <dd>{c.email_only ? '이메일 접수만' : '이메일·사이트 지원 모두'}</dd>
+        </div>
+      </dl>
+      <div className="crit-notes">
+        <span className="crit-kicker">지원 지침</span>
+        <ul>
+          {c.notes.map((n, i) => (
+            <li key={i}>{n}</li>
+          ))}
+        </ul>
+      </div>
+      <p className="small muted">오른쪽 대화창에서 말하면 기준이 바뀌고, 공고 목록에 바로 반영됩니다.</p>
+    </aside>
+  );
+}
+
+const CHAT_EXAMPLES = [
+  '통근 40분까지 넓혀줘',
+  '격일 근무만 보여줘',
+  '월 330만원 이상만',
+  '이메일로 받는 공고만 보여줘',
+  '경비직도 포함해줘',
+  '지금 기준에서 제일 괜찮은 공고는?',
+];
+
+function ChatPanel({ store, stats }: { store: Store; stats: string }) {
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [disabled, setDisabled] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [store.chat.length, busy]);
+
+  async function send(text: string) {
+    const ask = text.trim();
+    if (!ask || busy) return;
+    setBusy(true);
+    setErr(null);
+    setInput('');
+    const now = new Date().toISOString();
+    const withUser: ChatMessage[] = [...store.chat, { role: 'user', text: ask, at: now }];
+    try {
+      const sample = await (window as any).claude?.use?.('sample');
+      if (!sample) {
+        setDisabled(true);
+        throw { code: 'not_granted' };
+      }
+      const out = (await sample.json(criteriaPrompt(store.criteria, store.chat, ask, stats), { modelTier: 'default' })) as { reply?: unknown; changes?: unknown };
+      const { next, changed } = applyChanges(store.criteria, out?.changes);
+      const reply = typeof out?.reply === 'string' && out.reply.trim() ? out.reply.trim() : changed.length ? '기준을 바꿨습니다.' : '바꿀 내용을 찾지 못했습니다.';
+      const note = changed.length ? `\n(바뀐 항목: ${changed.join(', ')})` : '';
+      if (changed.length) await store.saveCriteria(next);
+      await store.saveChat([...withUser, { role: 'assistant', text: reply + note, at: new Date().toISOString() }]);
+    } catch (e) {
+      const code = (e as { code?: string })?.code ?? 'upstream_error';
+      if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'].includes(code)) {
+        setDisabled(true);
+        setErr('이 화면에서는 AI 대화를 쓸 수 없습니다. claude.ai에서 이 페이지를 열고, AI 사용을 허락해 주세요.');
+      } else if (code === 'rate_limited') setErr('요청이 많아 잠시 쉬어야 합니다. 조금 뒤에 다시 보내 주세요.');
+      else if (code === 'session_expired') setErr('claude.ai 로그인이 끊겼습니다. 다시 로그인한 뒤 보내 주세요.');
+      else if (code === 'invalid_json') setErr('AI 답을 읽지 못했습니다. 조금 다르게 말해서 다시 보내 주세요.');
+      else setErr('AI가 지금 답하지 못했습니다. 잠시 뒤 다시 보내 주세요.');
+      setInput(ask);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <aside className="card chat">
+      <div className="crit-head">
+        <span className="crit-kicker">AI와 기준 바꾸기</span>
+        {store.chat.length > 0 && (
+          <button className="link-btn" onClick={() => void store.saveChat([]).catch(() => {})}>
+            대화 지우기
+          </button>
+        )}
+      </div>
+      <div className="chat-log">
+        {store.chat.length === 0 && (
+          <div className="bubble bubble-ai">
+            어떤 공고를 찾을지 말로 알려 주세요. 통근 시간, 직무, 근무형태, 급여, 지원 지침을 바꿀 수 있고, 공고에 대해 물어봐도 됩니다.
+          </div>
+        )}
+        {store.chat.map((m, i) => (
+          <div key={i} className={cx('bubble', m.role === 'user' ? 'bubble-me' : 'bubble-ai')}>
+            {m.text}
+          </div>
+        ))}
+        {busy && <div className="bubble bubble-ai typing">생각하는 중…</div>}
+        <div ref={endRef} />
+      </div>
+      <div className="chat-examples">
+        {CHAT_EXAMPLES.map((q) => (
+          <button key={q} className="example" disabled={busy || disabled} onClick={() => void send(q)}>
+            {q}
+          </button>
+        ))}
+      </div>
+      {err && <Notice level="warn">{err}</Notice>}
+      <form
+        className="chat-input"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send(input);
+        }}
+      >
+        <textarea
+          id="chat-input"
+          rows={2}
+          placeholder="예: 수성구는 빼고, 상근 자리도 보고 싶어"
+          value={input}
+          disabled={busy || disabled}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              void send(input);
+            }
+          }}
+        />
+        <Btn kind="primary" type="submit" disabled={busy || disabled || !input.trim()}>
+          보내기
+        </Btn>
+      </form>
+    </aside>
+  );
+}
+
 function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
-  const [src, setSrc] = useState<JobSource>('dghma');
+  const [src, setSrc] = useState<Tab>('all');
   const [showEdge, setShowEdge] = useState(true);
+  const [showHidden, setShowHidden] = useState(false);
   const [refresh, setRefresh] = useState<{ level: 'ok' | 'warn' | 'danger'; text: string } | null>(null);
-  const list = store.jobs[src];
-  const items = (list?.items ?? []).filter((it) => showEdge || it.commute.verdict === 'ok');
+  const c = store.criteria;
+  const today = todaySeoul();
+  const list = src === 'all' ? null : store.jobs[src];
+  const lastUpdate = SOURCES.map((s) => store.jobs[s.id]?.updated_at).filter(Boolean).sort().pop();
+
+  type Row = { it: JobItem; f: FilterResult; min: number | null; km: number | null; also?: JobSource[] };
+  /** 종합 탭: 여러 사이트에 같이 올라온 공고는 하나로 묶고 다른 출처를 배지로 보인다 */
+  const mergeDupes = (all: Row[]): Row[] => {
+    // 사이트마다 주소 쓰는 방식이 달라 제목(공백·기호 뺀 것)으로 묶는다. 너무 짧은 제목은 단지명까지 본다
+    const key = (it: JobItem) => {
+      const t = (it.title || it.list_title).replace(/[\s()[\]·,/（）]/g, '');
+      return t.length >= 8 ? t : `${t}|${(it.site || it.company).replace(/\s/g, '')}`;
+    };
+    const seen = new Map<string, Row>();
+    const out: Row[] = [];
+    for (const r of all) {
+      const k = key(r.it);
+      const first = seen.get(k);
+      if (first) {
+        if (first.it.source !== r.it.source) first.also = [...(first.also ?? []), r.it.source];
+        continue;
+      }
+      const copy = { ...r };
+      seen.set(k, copy);
+      out.push(copy);
+    }
+    return out;
+  };
+  const judged = useMemo(() => {
+    const out: Record<JobSource, Row[]> = { dghma: [], jobkorea: [], saramin: [], work24: [] };
+    for (const s of SOURCES) {
+      for (const it of store.jobs[s.id]?.items ?? []) {
+        const p = parsePosting(it.text, today);
+        // 집↔근무지 좌표 거리와 동별 표를 함께 본 통근 추정
+        const fm = finalMinutes(it.commute.min, store.prefs.home_geo, it.geo);
+        const f = filterJob({ ...it, commute: { min: fm.min } }, { title: p.title || it.title, shift: p.shift, salary_text: p.salary_text, emails: p.emails }, c);
+        out[s.id].push({ it, f, min: fm.min, km: fm.km });
+      }
+    }
+    for (const k of Object.keys(out) as JobSource[]) out[k].sort((a, b) => (a.min ?? 99) - (b.min ?? 99));
+    return out;
+  }, [store.jobs, store.prefs.home_geo, c, today]);
+
+  const rows = src === 'all' ? mergeDupes(SOURCES.flatMap((s) => judged[s.id])).sort((a, b) => (a.min ?? 99) - (b.min ?? 99)) : judged[src];
+  const shown = rows.filter((r) => r.f.show && (showEdge || r.f.verdict === 'ok'));
+  const hidden = rows.filter((r) => !r.f.show);
+  const stats = SOURCES.map((s) => `${s.label} ${judged[s.id].filter((r) => r.f.show).length}건`).join(', ');
+  const hiddenCount = (r: Row[]) => r.filter((x) => !x.f.show).length;
+  void hiddenCount;
 
   async function runNow() {
     setRefresh(null);
@@ -999,64 +1315,97 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
       if (!mcp) throw { code: 'not_granted' };
       await mcp.callTool('Claude Code Remote', 'fire_trigger', { trigger_id: REFRESH_TRIGGER_ID });
       setRefresh({ level: 'ok', text: '새로 찾기를 시작했습니다. 5~10분 뒤 이 목록이 저절로 바뀝니다.' });
-    } catch (e) {
-      const code = (e as { code?: string })?.code;
-      setRefresh({
-        level: 'warn',
-        text:
-          code === 'not_in_manifest' || code === 'approval_required'
-            ? '이 페이지가 Claude Code를 쓰도록 허락해야 합니다. 다시 누르면 허락 창이 뜹니다.'
-            : '지금은 새로 찾기를 시작하지 못했습니다. 정해진 시간(하루 3번)에 자동으로 갱신됩니다.',
-      });
+    } catch {
+      setRefresh({ level: 'warn', text: '지금은 새로 찾기를 시작하지 못했습니다.' });
     }
   }
 
   return (
-    <div className="stack jobs">
-      <section className="card stack-s">
-        <div className="card-head">
-          <h2>공고 찾기</h2>
-          {REFRESH_TRIGGER_ID && <Btn onClick={runNow}>지금 새로 찾기</Btn>}
-        </div>
-        <p className="small">
-          {store.profile.address || '집 주소 미입력'} 출발, 대중교통 편도 <b>{COMMUTE_LIMIT}분 이내</b>(최대 35분) 공고만 모았습니다. 시간은 지하철 3호선·버스 기준 추정(±5분)이고, 정확한 시간은 각 공고의
-          &quot;카카오맵 길찾기&quot;로 확인하세요.
-        </p>
-        <div className="source-tabs">
-          {SOURCES.map((s) => {
-            const l = store.jobs[s.id];
-            return (
-              <button key={s.id} className={cx('source-tab', src === s.id && 'on')} onClick={() => setSrc(s.id)}>
-                <span className="source-name">{s.label}</span>
-                <span className="source-count">{l ? `${l.items.length}건` : '아직 없음'}</span>
-              </button>
-            );
-          })}
-        </div>
-        {refresh && <Notice level={refresh.level}>{refresh.text}</Notice>}
-      </section>
+    <div className="jobs-layout">
+      <CriteriaPanel c={c} />
 
-      <div className="row wrap small">
-        <span className="muted">
-          {list ? `${ago(list.updated_at)} 갱신 · 공고 ${list.scanned}건 확인 → 조건 맞는 ${list.items.length}건` : '아직 이 사이트에서 모은 공고가 없습니다.'}
-        </span>
-        <label className="check">
-          <input type="checkbox" id="jobs-edge" checked={showEdge} onChange={(e) => setShowEdge(e.target.checked)} />
-          31~35분·확인 필요도 보기
-        </label>
-        <a href={SOURCES.find((s) => s.id === src)!.home} target="_blank" rel="noreferrer noopener">
-          사이트 열기
-        </a>
-      </div>
-      {list && list.errors.length > 0 && <Notice level="warn">일부 공고를 읽지 못했습니다 ({list.errors.length}건).</Notice>}
-
-      {items.length === 0 ? (
-        <section className="card empty">
-          <p>{list ? '지금은 통근 조건에 맞는 공고가 없습니다.' : '첫 수집이 끝나면 여기에 공고가 나옵니다.'}</p>
+      <div className="jobs-main stack">
+        <section className="card stack-s hero">
+          <div className="card-head">
+            <h2>공고 찾기</h2>
+            <div className="row">
+              <a className="btn btn-plain" href="#apply">
+                공고 직접 붙여넣기
+              </a>
+              {REFRESH_TRIGGER_ID && <Btn onClick={runNow}>지금 새로 찾기</Btn>}
+            </div>
+          </div>
+          <p className="small">
+            {store.profile.address || '집 주소 미입력'} 출발 · 통근 시간은 집과 근무지 사이 거리와 지하철 3호선·버스 노선으로 추정합니다(±5분). 정확한 시간은 각 공고의 카카오맵 대중교통 길찾기로 확인하세요.
+          </p>
+          <div className="source-tabs">
+            <button className={cx('source-tab', 'src-all', src === 'all' && 'on')} onClick={() => setSrc('all')}>
+              <span className="source-name">종합</span>
+              <span className="source-count">{mergeDupes(SOURCES.flatMap((s) => judged[s.id])).filter((r) => r.f.show).length}건 · 가까운 순</span>
+            </button>
+            {SOURCES.map((s) => {
+              const n = judged[s.id].filter((r) => r.f.show).length;
+              return (
+                <button key={s.id} className={cx('source-tab', `src-${s.id}`, src === s.id && 'on')} onClick={() => setSrc(s.id)}>
+                  <span className="source-name">{s.label}</span>
+                  <span className="source-count">{store.jobs[s.id] ? `${n}건` : '아직 없음'}</span>
+                </button>
+              );
+            })}
+          </div>
+          {refresh && <Notice level={refresh.level}>{refresh.text}</Notice>}
         </section>
-      ) : (
-        items.map((it) => <JobCard key={it.id} it={it} store={store} fonts={fonts} onDrafted={() => (location.hash = '#final')} />)
-      )}
+
+        <div className="row wrap small list-bar">
+          <span className="muted">
+            {src === 'all'
+              ? `${lastUpdate ? `${ago(lastUpdate)} 갱신 · ` : ''}네 곳 합쳐 기준에 맞는 ${shown.length}건 (가까운 순)`
+              : list
+                ? `${ago(list.updated_at)} 갱신 · ${list.scanned}건 확인 → 기준에 맞는 ${shown.length}건`
+                : '아직 이 사이트에서 모은 공고가 없습니다.'}
+          </span>
+          <label className="check">
+            <input type="checkbox" id="jobs-edge" checked={showEdge} onChange={(e) => setShowEdge(e.target.checked)} />
+            {c.commute_limit + 1}~{c.commute_max}분·확인 필요도 보기
+          </label>
+          {src !== 'all' && (
+            <a href={SOURCES.find((s) => s.id === src)!.home} target="_blank" rel="noreferrer noopener">
+              사이트 열기
+            </a>
+          )}
+        </div>
+
+        {shown.length === 0 ? (
+          <section className="card empty">
+            <p>{rows.length ? '지금 기준에 맞는 공고가 없습니다. 오른쪽에서 기준을 넓혀 보세요.' : '아직 모은 공고가 없습니다.'}</p>
+          </section>
+        ) : (
+          shown.map(({ it, f, min, km, also }) => <JobCard key={it.id} it={it} also={also} verdict={f.verdict} min={min} km={km} store={store} fonts={fonts} onDrafted={() => (location.hash = '#final')} />)
+        )}
+
+        {hidden.length > 0 && (
+          <section className="card stack-s hidden-list">
+            <button className="link-btn" onClick={() => setShowHidden(!showHidden)}>
+              기준에 안 맞아 숨긴 공고 {hidden.length}건 {showHidden ? '접기' : '보기'}
+            </button>
+            {showHidden && (
+              <ul>
+                {hidden.map(({ it, f }) => (
+                  <li key={it.id}>
+                    <span className={cx('origin', `src-${it.source}`)}>{it.origin || SOURCES.find((x) => x.id === it.source)?.short}</span>{' '}
+                    <a href={it.url} target="_blank" rel="noreferrer noopener">
+                      {it.site || it.company} · {it.title || it.list_title}
+                    </a>{' '}
+                    <span className="muted">— {f.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+      </div>
+
+      <ChatPanel store={store} stats={stats} />
     </div>
   );
 }
@@ -1231,6 +1580,7 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
   const unknownLock = a.send_state === 'unknown' && !ackUnknown;
   const canSend = !blocks.length && (!warns.length || ackWarn) && !unknownLock && store.mode === 'db';
 
+  const [pdfLinks, setPdfLinks] = useState<{ resume: string; letter: string } | null>(null);
   async function saveBoth() {
     if (!built) return;
     setSaving(true);
@@ -1239,8 +1589,15 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
       const r = await toPdf(fonts, built.resume.pages, '이력서', dataUrlToPhoto(built.photo));
       const e1 = await saveFile(files.resume, r);
       const l = await toPdf(fonts, built.letter.pages, '자기소개서', null);
-      const e2 = await saveFile(files.letter, l);
-      if (e1 || e2) setSaveMsg(e1 || e2);
+      const e2 = e1 === SAVE_UNAVAILABLE ? e1 : await saveFile(files.letter, l);
+      if (e1 === SAVE_UNAVAILABLE || e2 === SAVE_UNAVAILABLE) {
+        // 바로 저장이 안 되는 화면 → PDF 를 링크로 만들어 새 창에서 열게 한다
+        const [u1, u2] = [await pdfLink(r), await pdfLink(l)];
+        if (u1 && u2) {
+          setPdfLinks({ resume: u1, letter: u2 });
+          setSaveMsg(null);
+        } else setSaveMsg('이 화면에서는 PDF를 저장할 수 없습니다. 컴퓨터의 크롬에서 claude.ai 에 로그인한 뒤 이 페이지 주소를 직접 열어 주세요.');
+      } else if (e1 || e2) setSaveMsg(e1 || e2);
       else setSavedPdfs(true);
     } catch {
       setSaveMsg('PDF를 만들지 못했습니다.');
@@ -1508,7 +1865,7 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
             {confirmSent ? (
               <>
                 <Btn kind="primary" onClick={markSent}>
-                  보냈습니다 — 지원함으로 기록
+                  보냄 확인 — 지원함으로 기록
                 </Btn>
                 <Btn kind="quiet" onClick={() => setConfirmSent(false)}>
                   취소
@@ -1516,11 +1873,45 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
               </>
             ) : (
               <Btn kind="primary" disabled={manualBlocked} onClick={() => setConfirmSent(true)}>
-                ③ 보냈어요
+                ③ 보냄
               </Btn>
             )}
           </div>
+          {pdfLinks && (
+            <Notice level="info">
+              이 화면에서는 바로 저장이 안 돼서 PDF를 링크로 만들었습니다. 아래를 눌러 새 창에서 열고 <b>다운로드(⬇)</b> 하세요.
+              <span className="row wrap" style={{ marginTop: 6 }}>
+                <a className="btn btn-plain" href={pdfLinks.resume} download={files.resume} target="_blank" rel="noreferrer noopener">
+                  이력서 PDF 열기
+                </a>
+                <a className="btn btn-plain" href={pdfLinks.letter} download={files.letter} target="_blank" rel="noreferrer noopener">
+                  자기소개서 PDF 열기
+                </a>
+              </span>
+            </Notice>
+          )}
           {saveMsg && <Notice level="warn">{saveMsg}</Notice>}
+          <details className="small">
+            <summary>보내는 방법 자세히</summary>
+            <ol className="howto">
+              <li>
+                <b>① PDF 2개 저장</b>: 누르면 &quot;저장할까요?&quot; 확인 창이 뜹니다 → <b>저장</b>. 이력서·자기소개서가 &apos;다운로드&apos; 폴더에 들어갑니다.
+              </li>
+              <li>
+                <b>② 작성창 열기</b>: 새 탭에 {store.prefs.sender_email || '정민욱'} Gmail 새 메일이 받는 사람·제목·본문이 채워진 채로 열립니다. 다른 계정으로 열리면 Gmail 오른쪽
+                위 동그라미에서 {store.prefs.sender_email || '정민욱 계정'}으로 바꾸세요.
+              </li>
+              <li>
+                Gmail 작성창 아래 <b>📎(파일 첨부)</b>를 눌러 다운로드 폴더의 PDF 2개를 고르고(또는 끌어다 놓고) <b>보내기</b>.
+              </li>
+              <li>
+                이 페이지로 돌아와 <b>③ 보냄</b> → <b>지원함으로 기록</b>.
+              </li>
+            </ol>
+            <p className="muted">
+              휴대폰이나 Claude 앱 옆 창에서는 저장이 막힐 수 있습니다. 컴퓨터 크롬에서 claude.ai 에 로그인해 이 페이지 주소를 열면 가장 확실합니다.
+            </p>
+          </details>
           {manualBlocked && <span className="small warn-text">✕ 항목을 먼저 해결하세요.</span>}
         </div>
       )}
@@ -1534,9 +1925,9 @@ function FinalView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   return (
     <div className="final stack">
       <section className="card stack-s">
-        <h2>최종확인</h2>
+        <h2>보낼 지원서</h2>
         <p className="small">
-          지원서 작성에서 만든 서류가 여기에 모입니다. 받는 사람·제목·본문·첨부를 확인하고 <b>Gmail로 발송</b>을 누르면 바로 나갑니다. 보내면 지원 이력에 &quot;지원함&quot;으로 기록됩니다.
+          공고 찾기에서 <b>지원</b>을 누르면 만든 서류가 여기에 모입니다. 받는 사람·제목·본문·첨부를 확인하고 <b>Gmail로 발송</b>을 누르면 바로 나갑니다. 보내면 지원 이력에 &quot;지원함&quot;으로 기록됩니다.
         </p>
         <p className="small muted">
           발송 계정: {store.prefs.sender_email ? <b>{store.prefs.sender_email}</b> : <a href="#prefs">설정에서 먼저 지정하세요</a>} · 이 페이지를 연 claude.ai 계정에 연결된 Gmail로 보냅니다.
@@ -2256,7 +2647,6 @@ function ProfileView({ store }: { store: Store }) {
 // ---------- 설정 ----------
 
 function PrefsView({ store }: { store: Store }) {
-  const [kw, setKw] = useState(store.prefs.near_keywords.join('\n'));
   const [sig, setSig] = useState(store.prefs.mail_signature);
   const [sender, setSender] = useState(store.prefs.sender_email ?? '');
   const [msg, setMsg] = useState<{ text: string; level: 'ok' | 'warn' | 'danger' } | null>(null);
@@ -2264,13 +2654,12 @@ function PrefsView({ store }: { store: Store }) {
   const [confirmImport, setConfirmImport] = useState(false);
 
   useEffect(() => {
-    setKw(store.prefs.near_keywords.join('\n'));
     setSig(store.prefs.mail_signature);
     setSender(store.prefs.sender_email ?? '');
   }, [store.prefs]);
 
   async function save() {
-    const s: Prefs = { ...store.prefs, near_keywords: splitList(kw), mail_signature: sig, sender_email: sender.trim().toLowerCase() };
+    const s: Prefs = { ...store.prefs, mail_signature: sig, sender_email: sender.trim().toLowerCase() };
     try {
       await store.savePrefs(s);
       setMsg({ text: '저장했습니다.', level: 'ok' });
@@ -2312,10 +2701,27 @@ function PrefsView({ store }: { store: Store }) {
     <div className="prefs stack">
       <div className="split">
         <section className="card stack">
-          <h2>근거리 지역</h2>
-          <Field label="한 줄에 하나씩 (공고 주소에 이 말이 있으면 근거리)" hint="근거리일 때만 지원동기에 거리 문장이 들어가고, 아니면 '통근 거리 직접 확인' 경고가 뜹니다.">
-            <textarea id="pref-kw" rows={9} value={kw} onChange={(e) => setKw(e.target.value)} />
-          </Field>
+          <h2>통근 계산</h2>
+          <p className="small">
+            지역 이름 목록 대신 <b>집 주소와 공고 주소 사이 거리</b>, 지하철 3호선·버스 노선으로 대중교통 편도 시간을 추정합니다. 정확한 시간은 공고마다 있는
+            <b> 카카오맵 길찾기</b>로 확인하세요(집·근무지가 자동으로 채워집니다).
+          </p>
+          <div>
+            <dl className="kv">
+              <dt>출발지</dt>
+              <dd>{store.profile.address || '내 정보에서 주소를 넣어 주세요'}</dd>
+            </dl>
+            <dl className="kv">
+              <dt>좌표</dt>
+              <dd>{store.prefs.home_geo ? `${store.prefs.home_geo.lat.toFixed(4)}, ${store.prefs.home_geo.lng.toFixed(4)}` : '없음 (동별 표로만 추정)'}</dd>
+            </dl>
+            <dl className="kv">
+              <dt>기준</dt>
+              <dd>
+                목표 {store.criteria.commute_limit}분 · 최대 {store.criteria.commute_max}분 — <a href="#jobs">공고 찾기</a> 왼쪽 "지원 기준"에서 바꿉니다.
+              </dd>
+            </dl>
+          </div>
         </section>
         <section className="card stack">
           <h2>메일 서명</h2>
@@ -2375,16 +2781,16 @@ function PrefsView({ store }: { store: Store }) {
 
 const VIEWS = [
   { id: 'jobs', label: '공고 찾기' },
-  { id: 'apply', label: '지원서 작성' },
-  { id: 'final', label: '최종확인' },
+  { id: 'final', label: '보낼 지원서' },
   { id: 'history', label: '지원 이력' },
-  { id: 'profile', label: '프로필·문구' },
+  { id: 'profile', label: '내 정보·문구' },
   { id: 'prefs', label: '설정' },
 ] as const;
-type ViewId = (typeof VIEWS)[number]['id'];
+type ViewId = (typeof VIEWS)[number]['id'] | 'apply';
 
 function readHash(): ViewId {
   const h = location.hash.replace('#', '');
+  if (h === 'apply') return 'apply';
   return (VIEWS.find((v) => v.id === h)?.id ?? 'jobs') as ViewId;
 }
 
