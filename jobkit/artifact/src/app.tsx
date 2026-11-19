@@ -1667,7 +1667,10 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   }
   async function clearTestJobs() {
     await store.saveManualJobs((store.jobs.manual?.items ?? []).filter((x) => !x.id.startsWith('manual-test'))).catch(() => {});
-    setRefresh({ level: 'ok', text: '테스트 공고를 모두 지웠습니다.' });
+    // 보낼 지원서·보낸 지원에 남은 테스트 서류도 같이 지운다 (실제 지원 기록은 건드리지 않음)
+    const testApps = store.apps.filter(isTestApp);
+    for (const a of testApps) await store.deleteApp(a.id).catch(() => {});
+    setRefresh({ level: 'ok', text: `테스트 공고를 모두 지웠습니다${testApps.length ? ` (보낼 지원서·보낸 지원의 테스트 서류 ${testApps.length}건 포함)` : ''}.` });
   }
   const ss = store.scanStatus;
   const lastScan = ss?.last_full_scan_at ?? ss?.last_scan_at ?? lastUpdate;
@@ -1683,7 +1686,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
             <h2>공고 찾기</h2>
             <div className="row">
               <Btn onClick={addTestJob}>🧪 테스트 공고 만들기</Btn>
-              {testJobs.length > 0 && (
+              {(testJobs.length > 0 || store.apps.some(isTestApp)) && (
                 <Btn kind="quiet" onClick={clearTestJobs}>
                   테스트 공고 지우기
                 </Btn>
@@ -2653,6 +2656,11 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
       )}
     </section>
   );
+}
+
+/** 테스트 공고로 만든 서류인지 (공고 번호 또는 공고 본문의 시험용 표시로 판단) */
+function isTestApp(a: AppRec): boolean {
+  return !!a.job_id?.startsWith('manual-test') || /발송 시험용.{0,8}가짜 공고/.test(a.posting_text ?? '');
 }
 
 /** 보낼 지원서에서 펼쳐 둘 서류 (방금 [지원]한 것) */
