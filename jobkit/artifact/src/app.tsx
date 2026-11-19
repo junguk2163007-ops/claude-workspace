@@ -1086,15 +1086,16 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
   const reqAt = store.scanRequests[it.id];
   const refreshing = !!reqAt && (!store.scanStatus || store.scanStatus.last_scan_at < reqAt) && Date.now() - Date.parse(reqAt) < 26 * 3600000;
   const [fetching, setFetching] = useState(false);
+  const [fetchRid, setFetchRid] = useState(() => newRid());
   const relayOk = !!(store.prefs.relay_url && store.prefs.relay_key && (store.prefs.relay_version ?? 0) >= 4);
   const nativeId = it.id.slice(it.source.length + 1);
   const directUrl = it.source === 'jobkorea' || it.source === 'saramin' || it.source === 'work24' ? detailFetchUrl(it.source, nativeId) : null;
   const canDirect = relayOk && !!directUrl && FETCH_HOSTS.includes(new URL(directUrl).host);
   /** 발송기가 공고 원문을 가져와 주면 이 화면에서 바로 고쳐 저장한다 (누가 눌러도 됨). 새 창은 링크 클릭으로 연다 */
-  function onRefreshClick(e: React.MouseEvent<HTMLAnchorElement>) {
+  function onRefreshClick() {
     setRefMsg(null);
-    const rid = newRid();
-    e.currentTarget.href = fetchHref(store.prefs.relay_url!, store.prefs.relay_key!, directUrl!, rid);
+    const rid = fetchRid;
+    setTimeout(() => setFetchRid(newRid()), 0);
     setFetching(true);
     const timer = setTimeout(async () => {
       fetchWaiters.delete(rid);
@@ -1295,7 +1296,7 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
           canDirect ? (
             <a
               className={cx('btn', 'btn-quiet', fetching && 'is-busy')}
-              href={store.prefs.relay_url}
+              href={fetchHref(store.prefs.relay_url!, store.prefs.relay_key!, directUrl!, fetchRid)}
               target="_blank"
               rel="opener"
               onClick={onRefreshClick}
@@ -3281,12 +3282,14 @@ function RelaySetup({ store }: { store: Store }) {
   /** 답이 안 돌아오는 화면이면, 새 창에 뜬 글을 보고 직접 고르게 한다 */
   const [askVersion, setAskVersion] = useState(false);
   const pingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 링크 주소는 그릴 때 정해 둔다 (이 화면은 누를 때 바꾼 주소를 무시하고 처음 주소로 연다)
+  const [pingRid, setPingRid] = useState(() => newRid());
   /** [연결 확인] 링크를 누른 순간: 새 창(링크)이 열리고, 발송기가 버전을 이 화면에 알려 준다 */
-  function onPingClick(e: React.MouseEvent<HTMLAnchorElement>) {
+  function onPingClick() {
     setMsg(null);
     setAskVersion(false);
-    const rid = newRid();
-    e.currentTarget.href = pingHref(store.prefs.relay_url!, rid);
+    const rid = pingRid;
+    setTimeout(() => setPingRid(newRid()), 0);
     setChecking(true);
     if (pingTimer.current) clearTimeout(pingTimer.current);
     pingTimer.current = setTimeout(() => {
@@ -3381,7 +3384,7 @@ function RelaySetup({ store }: { store: Store }) {
           저장
         </Btn>
         {validRelayBase(store.prefs.relay_url ?? '') && (
-          <a className="btn btn-plain" href={store.prefs.relay_url} target="_blank" rel="opener" onClick={onPingClick}>
+          <a className="btn btn-plain" href={pingHref(store.prefs.relay_url!, pingRid)} target="_blank" rel="opener" onClick={onPingClick}>
             {checking ? '확인 중…' : '연결 확인'}
           </a>
         )}
