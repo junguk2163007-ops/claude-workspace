@@ -2,7 +2,7 @@
 // 직접 넘기고(새 창으로 폼 전송), 발송기가 정민욱 Gmail 로 보내며 정민욱 Drive 에 사본을 남긴다.
 // claude.ai 연결(Gmail/Drive) 기능을 쓰지 않으므로 어느 계정·화면에서 열어도 동작한다.
 
-export const RELAY_VERSION = 6;
+export const RELAY_VERSION = 7;
 /** 팝업 없이 페이지 안 상자(iframe)로 여는 것은 v6 부터 */
 export const RELAY_FRAME_VERSION = 6;
 /** 링크로 서류를 넘겨 보내기는 v5 부터 */
@@ -143,6 +143,9 @@ function signal(r, rid, kind) {
   var m = { jobkit: 'relay', kind: kind || 'send', v: {{V}}, rid: String(rid || ''), ok: !!r.ok, msg: r.title + ' ' + r.msg };
   targets().forEach(function (w) { try { if (w) w.postMessage(m, '*'); } catch (e) {} });
 }
+function closeSoon() {
+  setTimeout(function () { try { window.top.close(); } catch (e) {} }, 1500);
+}
 function decode(s) {
   s = String(s || '').replace(/^#/, '').replace(/-/g, '+').replace(/_/g, '/');
   while (s.length % 4) s += '=';
@@ -155,7 +158,7 @@ google.script.url.getLocation(function (loc) {
   try { d = decode(loc.hash); } catch (e) { show('보낼 서류를 읽지 못했습니다', 'jobkit 의 보내기 버튼으로 다시 열어 주세요. 메일은 나가지 않았습니다.', false); return; }
   signal({ ok: true, title: 'ready', msg: '' }, d.rid, 'ready');
   google.script.run
-    .withSuccessHandler(function (r) { show(r.title, r.msg, r.ok); signal(r, d.rid); })
+    .withSuccessHandler(function (r) { show(r.title, r.msg + (r.ok ? ' (이 창은 곧 저절로 닫힙니다)' : ''), r.ok); signal(r, d.rid); if (r.ok) closeSoon(); })
     .withFailureHandler(function (err) { var r = { ok: false, title: '보내지 못했습니다', msg: String((err && err.message) || err) + ' — 메일은 나가지 않았습니다.' }; show(r.title, r.msg, false); signal(r, d.rid); })
     .sendFromPage(d);
 });
@@ -258,7 +261,7 @@ export function relayScript(key: string): string {
     "    'var t=[],op=null;try{op=window.top.opener;t.push(op)}catch(e){}try{t.push(window.opener)}catch(e){}' +",
     "    'try{var w=window;for(var i=0;i<6&&w.parent&&w.parent!==w;i++){w=w.parent;t.push(w)}}catch(e){}' +",
     "    't.forEach(function(w){try{if(w)w.postMessage(m,\"*\")}catch(e){}});' +",
-    "    'if(op&&m.ok){setTimeout(function(){try{window.top.close()}catch(e){}},2500)}})();<\\/script>' : '';",
+    "    'if(m.ok){setTimeout(function(){try{window.top.close()}catch(e){}},1500)}})();<\\/script>' : '';",
     "  var h = '<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">' +",
     "    '<div style=\"font-family:sans-serif;max-width:560px;margin:6px auto;padding:12px 16px;border-radius:12px;background:' + (ok ? '#e3f7ec' : '#ffe7e4') + '\">' +",
     "    '<h3 style=\"margin:0 0 4px;font-size:17px\">' + esc(title) + '</h3><p style=\"margin:0;font-size:14.5px;line-height:1.6\">' + esc(msg) + '</p></div>' + sig;",

@@ -87,6 +87,8 @@ export type Prefs = Settings & {
   /** 원클릭 발송기(정민욱 계정 Apps Script 웹앱) 주소와 열쇠 */
   relay_url?: string;
   relay_key?: string;
+  /** 이 화면(claude.ai)이 페이지 안 상자(iframe)를 막는지 — 막으면 바로 새 탭으로 보낸다 */
+  frames_blocked?: boolean;
   /** 마지막 [연결 확인]에서 확인한 발송기 코드 버전 */
   relay_version?: number;
   /** 서류를 올리는 Google Drive 폴더 */

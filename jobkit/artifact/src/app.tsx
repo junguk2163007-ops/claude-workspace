@@ -1120,7 +1120,7 @@ function JobCard({ it, an, also, why, verdict, min, km, store, fonts, onDrafted 
   const [fetching, setFetching] = useState(false);
   const [fetchRid, setFetchRid] = useState(() => newRid());
   const [fetchFrame, setFetchFrame] = useState<string | null>(null);
-  const frameOk = (store.prefs.relay_version ?? 0) >= RELAY_FRAME_VERSION;
+  const frameOk = (store.prefs.relay_version ?? 0) >= RELAY_FRAME_VERSION && !store.prefs.frames_blocked;
   /** v6: 보이지 않는 상자로 공고 원문을 가져온다 (팝업 없음). 15초 안에 결과가 없으면 새 창 링크 방식으로 */
   function refreshInPage() {
     const rid = fetchRid;
@@ -2164,7 +2164,7 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     });
   }, [ready, relayReady, canSend, sendRid, linkText, extras, store.prefs.relay_url, store.prefs.relay_key]); // eslint-disable-line react-hooks/exhaustive-deps
   // v6 발송기는 팝업 없이 이 카드 안 상자(iframe)에서 보낸다. 상자가 막힌 화면이면 9초 뒤 새 창 버튼으로 바꾼다 (같은 rid 라 두 번 안 나감)
-  const frameOk = (store.prefs.relay_version ?? 0) >= RELAY_FRAME_VERSION;
+  const frameOk = (store.prefs.relay_version ?? 0) >= RELAY_FRAME_VERSION && !store.prefs.frames_blocked;
   const [frame, setFrame] = useState<string | null>(null);
   const [frameFallback, setFrameFallback] = useState<string | null>(null);
   function sendInPage() {
@@ -2178,7 +2178,9 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
       readyWaiters.delete(rid);
       setFrame(null);
       setFrameFallback(src);
-      setRelayMsg({ text: '이 화면에서는 페이지 안에서 보낼 수 없어, 아래 [새 창에서 보내기]를 눌러 주세요. 같은 지원서는 두 번 나가지 않습니다.', level: 'warn' });
+      // 이 화면은 페이지 안 상자를 막는다 — 다음부터는 바로 새 탭으로 보낸다
+      store.savePrefs({ ...store.prefs, frames_blocked: true }).catch(() => {});
+      setRelayMsg({ text: '이 화면은 페이지 안에서 보내기를 막아서, 아래 [새 탭에서 보내기]를 한 번 눌러 주세요. 다음부터는 바로 새 탭으로 보냅니다. 같은 지원서는 두 번 나가지 않습니다.', level: 'warn' });
     }, 9000);
     readyWaiters.set(rid, () => {
       clearTimeout(timer);
@@ -2532,11 +2534,13 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
           {frame && <iframe className="relay-frame" src={frame} title="발송기" />}
           {frameFallback && a.send_state === 'relay' && (
             <a className="btn btn-primary" href={frameFallback} target="_blank" rel="opener">
-              새 창에서 보내기
+              새 탭에서 보내기
             </a>
           )}
           {relayMsg && <Notice level={relayMsg.level}>{relayMsg.text}</Notice>}
-          {a.send_state === 'relay' && pendingFor < (frame ? 25000 : 10000) && !frame && <Notice level="info">보내는 중입니다… 새로 열린 창에서 발송기가 메일을 보내고 있습니다. 끝나면 여기에 &quot;완료했습니다&quot;가 뜹니다.</Notice>}
+          {a.send_state === 'relay' && pendingFor < (frame ? 25000 : 10000) && !frame && (
+            <Notice level="info">새 탭에서 보내는 중입니다… 다 보내면 탭이 저절로 닫히고 여기에 &quot;완료했습니다 ✓&quot;가 뜹니다.</Notice>
+          )}
           {a.send_state === 'relay' && pendingFor >= (frame ? 25000 : 10000) && (
             <Notice level="warn">
               완료 신호가 오지 않았습니다. 새로 열린 창을 확인해 주세요.
@@ -3461,7 +3465,7 @@ function RelaySetup({ store }: { store: Store }) {
   // 설정을 열면 보이지 않는 상자로 발송기 버전을 조용히 확인한다 (v6 부터 답함)
   const [silentPing, setSilentPing] = useState<string | null>(null);
   useEffect(() => {
-    if (!validRelayBase(store.prefs.relay_url ?? '')) return;
+    if (!validRelayBase(store.prefs.relay_url ?? '') || store.prefs.frames_blocked) return;
     const rid = newRid();
     pingWaiters.set(rid, (s) => {
       pingWaiters.delete(rid);
