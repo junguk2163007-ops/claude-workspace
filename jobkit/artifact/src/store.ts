@@ -61,6 +61,8 @@ export interface AppRec {
   tailored_at?: string | null;
   /** 어느 공고로 만든 서류인지 (공고 id) */
   job_id?: string | null;
+  /** 맞춤 글 종류: rule = 공고 내용으로 바로 쓴 글, ai = 미리(또는 AI 로) 써 둔 글 */
+  tailored_kind?: 'rule' | 'ai' | null;
   /** 맞춤 글을 일부러 되돌렸으면 다시 저절로 입히지 않는다 */
   tailor_off?: boolean;
   /** 서류 양식 버전 (오르면 작성중 서류를 최신 정보로 다시 만든다) */

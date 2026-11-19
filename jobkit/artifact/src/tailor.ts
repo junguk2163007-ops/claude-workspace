@@ -198,7 +198,7 @@ export interface BaseInput {
 }
 
 /** 공고 하나로 기본 서류(메일·자기소개서·이력서 자기소개)를 만든다 — 페이지의 [지원]과 같은 방식 */
-export function baseDocs(b: BaseInput): { parsed: ParsedPosting; letter: LetterData; resume: ResumeData; mailNoSig: string; sig: string; blockers: string[] } {
+export function baseDocs(b: BaseInput): { parsed: ParsedPosting; letter: LetterData; resume: ResumeData; mailNoSig: string; sig: string; blockers: string[]; gapPhrases: string[] } {
   const today = b.today ?? todaySeoul();
   const p0 = parsePosting(b.item.text, today);
   const parsed: ParsedPosting = { ...p0, site: p0.site || b.item.site, title: p0.title || b.item.title, address: p0.address || b.item.address, company: p0.company || b.item.company };
@@ -212,7 +212,7 @@ export function baseDocs(b: BaseInput): { parsed: ParsedPosting; letter: LetterD
   const sig = signature(b.prefs, b.profile);
   const mail = mailBody({ template: b.blocks.mail_body, parsed, profile: b.profile, settings: b.prefs, extraDocs: [] });
   const mailNoSig = sig && mail.trimEnd().endsWith(sig) ? mail.trimEnd().slice(0, -sig.length).trimEnd() : mail.trimEnd();
-  return { parsed, letter: composeLetter(input), resume: composeResume(input), mailNoSig, sig, blockers: hardBlockers(analysis.rows, b.quals) };
+  return { parsed, letter: composeLetter(input), resume: composeResume(input), mailNoSig, sig, blockers: hardBlockers(analysis.rows, b.quals), gapPhrases: analysis.gap_qualifications.map((g) => g.promise_phrase) };
 }
 
 /** 미리 써 둔 맞춤 글을 서류에 입힌다 */
@@ -222,4 +222,143 @@ export function applyTailorDoc(t: TailorDoc, letter: LetterData, resume: ResumeD
     resume: { ...resume, intro: t.intro.length ? t.intro : resume.intro },
     mail: sig ? `${t.mail_body.trimEnd()}\n\n${sig}` : t.mail_body,
   };
+}
+
+// ---------- 규칙으로 바로 쓰는 맞춤 글 (AI·네트워크 없이, 어느 화면에서든) ----------
+
+/** 받침 여부로 조사 고르기: 은/는, 을/를, 이/가, (으)로 */
+function josa(word: string, withBatchim: string, without: string): string {
+  const ch = [...word.replace(/[\s)\]」』'"·.,]+$/, '')].reverse().find((c) => /[가-힣A-Za-z0-9]/.test(c));
+  if (!ch) return word + without;
+  if (/[가-힣]/.test(ch)) {
+    const code = ch.charCodeAt(0) - 0xac00;
+    const jong = code % 28;
+    if (withBatchim === '으로') return word + (jong === 0 || jong === 8 ? '로' : '으로'); // ㄹ 받침은 '로'
+    return word + (jong ? withBatchim : without);
+  }
+  return word + (/[013678LMNR]$/i.test(ch) ? withBatchim : without);
+}
+const eun = (w: string) => josa(w, '은', '는');
+const eul = (w: string) => josa(w, '을', '를');
+const euro = (w: string) => josa(w, '으로', '로');
+
+/** 공고 글에서 업무 내용 한두 개 (짧고 숫자 없는 것만) */
+export function dutiesFrom(text: string): string[] {
+  const lines = text.split('\n').map((l) => l.trim());
+  const out: string[] = [];
+  let inDuty = false;
+  for (const l of lines) {
+    if (/(업무\s*내용|주요\s*업무|직무\s*내용|담당\s*업무)/.test(l)) {
+      inDuty = true;
+      const after = l.split(/[:：]/)[1]?.trim();
+      if (after && after.length >= 4) out.push(after);
+      continue;
+    }
+    if (inDuty) {
+      if (!l) continue;
+      if (/^[\[【■◆▶※]|자격|우대|급여|근무|제출|접수|마감|채용|복리/.test(l) && out.length) break;
+      const t = l.replace(/^[-•·*▪○◦\d.)\s]+/, '').trim();
+      if (t.length >= 4) out.push(t);
+      if (out.length >= 2) break;
+    }
+  }
+  return out
+    .map((d) => d.replace(/[.。]$/, '').replace(/\s+/g, ' '))
+    .filter((d) => d.length <= 40 && !/\d/.test(d) && /[가-힣]/.test(d))
+    .slice(0, 2);
+}
+
+function dutyPhraseFor(title: string, duties: string[]): string {
+  if (duties.length) return duties.join(', ');
+  if (/기전/.test(title)) return '전기·기계 설비 점검과 관리';
+  if (/영선/.test(title)) return '영선·보수 업무';
+  if (/설비/.test(title)) return '설비 점검과 관리';
+  if (/전기/.test(title)) return '전기설비 점검과 안전관리';
+  return '시설 점검과 관리';
+}
+
+/** 주소에서 동네 이름 (OO동, 없으면 구·군) */
+function placeOf(address: string): string {
+  const dong = address.match(/\(([가-힣0-9]+동)[,)\s]/)?.[1] ?? address.match(/([가-힣]+동)(?:\s|$|\d)/)?.[1];
+  if (dong) return dong;
+  return address.match(/([가-힣]+[구군])\s/)?.[1] ?? '';
+}
+
+/** 글에 쓸 직책 이름: 테스트 표시·괄호 설명·앞에 붙은 단지명을 뺀다 (괄호뿐이면 괄호 안 글) */
+export function proseTitle(raw: string, site: string): string {
+  let t = raw.replace(/\[[^\]]*\]|\s*테스트\d*/g, ' ');
+  const head = site.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+  if (head && t.trim().startsWith(head)) t = t.trim().slice(head.length);
+  const noParen = t.replace(/\([^)]*\)|（[^）]*）/g, ' ').replace(/\s+/g, ' ').trim();
+  if (noParen.length >= 2) return noParen.replace(/^[-–·,\s]+|[-–·,\s]+$/g, '');
+  const inside = t.match(/[(（]([^)）]+)[)）]/)?.[1]?.trim();
+  return inside || raw.trim() || '시설관리';
+}
+
+export interface RuleInput extends TailorInput {
+  address: string;
+  startDate: string | null;
+  /** 이 공고에 맞춰 쓸 수 있는 "취득 준비" 문구들 (분석 결과) */
+  gapPhrases: string[];
+}
+
+const EXP_HEAD_RE = /^(.*?또한 부동산 분양 업무를 \d+년간 담당하며 다양한 사람을 상대로 신뢰를 쌓고 정확하게 소통하는 능력을 키웠)/;
+
+export function ruleTailor(r: RuleInput): TailorResult {
+  const site = r.site.replace(/\s*[(（][^)）]*[)）]/g, '').replace(/\s+/g, ' ').trim() || r.site.trim() || '귀사';
+  const title = proseTitle(r.title, r.site);
+  const duties = dutiesFrom(r.posting);
+  const duty = dutyPhraseFor(title, duties);
+  const place = placeOf(r.address);
+  const gyeogil = r.shift === '격일';
+  const gyodae = /교대/.test(r.shift);
+  const urgent = /긴급|급구|급히/.test(`${r.title} ${r.posting.slice(0, 300)}`);
+  const apt = /아파트|단지|세대|입주/.test(`${site} ${r.posting.slice(0, 600)}`);
+  const people = apt ? '입주민 민원에도' : '건물 이용자와도';
+  const gap = r.gapPhrases.filter(Boolean);
+  const shiftLine = gyeogil ? '격일 근무에 무리 없이 적응할 수 있는 체력과 생활 리듬을 갖추고 있으며, ' : gyodae ? '교대 근무에도 잘 적응할 수 있는 체력과 생활 리듬을 갖추고 있으며, ' : '';
+  const sameGu = place === '북구';
+  const nearLine = !r.near || !place ? '' : sameGu ? '근무지가 제가 사는 북구 안에 있어 오래 다닐 수 있습니다. ' : `근무지인 ${eun(place)} 제가 사는 북구 칠곡 지역과 가까워 오래 다닐 수 있습니다. `;
+
+  const mail = [
+    '안녕하세요.',
+    ...(r.requiredPhrase ? [r.requiredPhrase] : []),
+    '',
+    `${site} ${title} 채용 공고를 보고 지원하고자 메일 드립니다.`,
+    `${nearLine}${shiftLine}건설현장에서 자재 검수와 품질·안전 점검을 맡으며 익힌 꼼꼼함으로 ${eul(duty)} 성실히 해내겠습니다.${gap.length ? ` ${gap[0]}하겠습니다.` : ''} 현재 재직 중인 곳이 없어 바로 근무를 시작할 수 있습니다.`,
+    '',
+    '이력서와 자기소개서를 첨부하였습니다. 검토 부탁드립니다.',
+    '',
+    '감사합니다.',
+  ].join('\n');
+
+  const cur = Object.fromEntries(r.sections.map((s) => [s.key, s.text])) as Record<SectionKey, string>;
+  const expHead = cur.experience.match(EXP_HEAD_RE)?.[1];
+  const experience = expHead
+    ? `${expHead}습니다. 이러한 경험을 바탕으로 ${euro(title)}서 ${eul(duty)} 꼼꼼히 해내고, ${people} 차분하고 정확하게 응대하겠습니다.`
+    : cur.experience;
+  const motive = [
+    !r.near || !place
+      ? ''
+      : sameGu
+        ? `${eun(site)} 제가 사는 북구 안에 있어, ${gyeogil ? '격일 근무에도 ' : ''}무리 없이 오래 다닐 수 있는 곳입니다.`
+        : `${site}의 근무지인 ${eun(place)} 제가 사는 북구 칠곡 지역과 가까워, ${gyeogil ? '격일 근무에도 ' : ''}무리 없이 오래 다닐 수 있는 곳입니다.`,
+    urgent ? '급히 사람을 구하고 계신 만큼, 바로 투입되어 공백 없이 업무를 이어갈 수 있다는 점도 지원하게 된 이유입니다.' : '',
+    `${eun(title)} ${duty}처럼 꾸준함과 책임감을 갖춘 사람이 오래 자리를 지키며 신뢰를 쌓아가는 일이라고 생각하며, 장기적으로 한 자리에서 성장하고 싶은 저의 방향과도 잘 맞아 지원하게 되었습니다.`,
+    '현재 별도의 재직 중인 곳이 없어 **즉시 출근이 가능**하며, 채용이 확정되는 대로 바로 근무를 시작할 수 있습니다.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const goal = `입사 후에는 ${gyeogil ? '격일 근무에 빠르게 적응하며 ' : ''}${site}의 설비 특성과 업무 순서를 성실히 익히겠습니다. ${
+    gap.length ? `${gap.map((g, i) => (i < gap.length - 1 ? `${g}하고, ` : `${g}하여 `)).join('')}업무 전문성을 넓혀가고,` : '업무에 필요한 관련 자격을 하나씩 취득해 업무 범위를 넓혀가고,'
+  } 단기간 근무가 아닌 장기적으로 함께할 수 있는 사람이 되는 것이 목표이며, **즉시 출근이 가능한 만큼** 빠르게 업무에 적응해 조속히 제 몫을 해내겠습니다.`;
+  const intro = [...r.intro.slice(0, 2), `${site} ${euro(title)}서 즉시 출근이 가능하며, 단기간이 아닌 장기 근속을 목표로 ${eul(duty)} 성실하게 해내겠습니다.`];
+
+  const answer = {
+    mail_body: mail,
+    sections: { growth: cur.growth, strength: cur.strength, experience, motive, goal },
+    intro,
+    summary: `${site} ${title}의 ${[gyeogil ? '격일 근무' : gyodae ? '교대 근무' : '', duties.length ? '업무 내용' : '', r.near ? '가까운 근무지' : '', urgent ? '긴급 채용' : '', gap.length ? '우대 자격' : ''].filter(Boolean).join('·') || '직무'}에 맞춰 썼습니다.`,
+  };
+  return checkTailored(answer, r);
 }

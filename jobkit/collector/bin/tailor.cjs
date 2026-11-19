@@ -5121,7 +5121,7 @@ function baseDocs(b) {
   const sig = signature(b.prefs, b.profile);
   const mail = mailBody({ template: b.blocks.mail_body, parsed, profile: b.profile, settings: b.prefs, extraDocs: [] });
   const mailNoSig = sig && mail.trimEnd().endsWith(sig) ? mail.trimEnd().slice(0, -sig.length).trimEnd() : mail.trimEnd();
-  return { parsed, letter: composeLetter(input), resume: composeResume(input), mailNoSig, sig, blockers: hardBlockers(analysis.rows, b.quals) };
+  return { parsed, letter: composeLetter(input), resume: composeResume(input), mailNoSig, sig, blockers: hardBlockers(analysis.rows, b.quals), gapPhrases: analysis.gap_qualifications.map((g) => g.promise_phrase) };
 }
 
 // collector/tailor-cli.ts

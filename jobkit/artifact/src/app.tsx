@@ -5,7 +5,7 @@ import { parsePosting, parseSalaryAmount, type ParsedPosting, type Category } fr
 import { analyze, type Analysis, type HistoryEntry, type ReqRow, type Verdict } from '../../lib/analyze';
 import { checkProfile, composeLetter, composeResume, type LetterData, type ResumeData } from '../../lib/render/compose';
 import { gmailComposeUrl, isPortalOnly, mailBody, mailSubject, mailtoUrl, signature } from '../../lib/mail';
-import { applyTailorDoc, checkTailored, hardBlockers, tailorPrompt, textHash, type SectionKey, type TailorDoc, type TailorResult } from './tailor';
+import { applyTailorDoc, checkTailored, hardBlockers, ruleTailor, tailorPrompt, textHash, type SectionKey, type TailorDoc, type TailorResult } from './tailor';
 import { koreanDate, todaySeoul } from '../../lib/util/date';
 import { docFileName } from '../../lib/util/filename';
 import { digitsOnly, normalizeSite } from '../../lib/util/text';
@@ -643,13 +643,42 @@ function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs
   let letterData = composeLetter(input);
   const subj = mailSubject(parsed, store.profile.name);
   let mb = mailBody({ template: store.blocks.mail_body, parsed, profile: store.profile, settings: store.prefs, extraDocs });
-  // 미리 써 둔 이 공고 맞춤 글이 있으면 입힌다
+  // 이 공고 맞춤 글: 미리 써 둔 글이 있으면 그것, 없으면 공고 내용으로 바로 쓴다 (어느 화면에서든)
+  const sig = signature(store.prefs, store.profile);
   const tdoc = opts.plain ? null : tailorFor(store, jobId ?? reuse?.job_id, text);
+  let kind: 'rule' | 'ai' | null = null;
+  let tailoredAt: string | null = null;
   if (tdoc) {
-    const t = applyTailorDoc(tdoc, letterData, resumeData, signature(store.prefs, store.profile));
+    const t = applyTailorDoc(tdoc, letterData, resumeData, sig);
     letterData = t.letter;
     resumeData = t.resume;
     mb = t.mail;
+    kind = 'ai';
+    tailoredAt = tdoc.at;
+  } else if (!opts.plain) {
+    const mailNoSig = sig && mb.trimEnd().endsWith(sig) ? mb.trimEnd().slice(0, -sig.length).trimEnd() : mb.trimEnd();
+    const r = ruleTailor({
+      profile: store.profile,
+      quals: store.quals,
+      posting: text,
+      site: parsed.site,
+      title: parsed.title,
+      shift: parsed.shift,
+      requiredPhrase: parsed.required_phrase,
+      near: analysis.near,
+      mailBody: mailNoSig,
+      sections: letterData.sections,
+      intro: resumeData.intro,
+      address: parsed.address,
+      startDate: parsed.start_date,
+      gapPhrases: analysis.gap_qualifications.map((g) => g.promise_phrase),
+    });
+    const t = applyTailorDoc({ job_id: jobId ?? '', text_hash: '', at: '', ...r }, letterData, resumeData, sig);
+    letterData = t.letter;
+    resumeData = t.resume;
+    mb = t.mail;
+    kind = 'rule';
+    tailoredAt = new Date().toISOString();
   }
   const recipient = parsed.emails[0] ?? '';
   const now = new Date().toISOString();
@@ -679,7 +708,8 @@ function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs
     snapshot: { resume: resumeData, letter: letterData, photo: store.photo },
     snapshot_v: SNAPSHOT_V,
     job_id: jobId ?? reuse?.job_id ?? null,
-    tailored_at: tdoc ? tdoc.at : null,
+    tailored_at: tailoredAt,
+    tailored_kind: kind,
   };
   return { rec, resumeData, letterData, subj, mb, recipient };
 }
@@ -1982,14 +2012,15 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     if (stored && a.tailored_at !== stored.at) {
       return setProposal({ mail_body: stored.mail_body, sections: stored.sections, intro: stored.intro, summary: stored.summary, kept: stored.kept ?? [] });
     }
-    // 2) 없으면 이 화면의 AI 로 새로 쓴다
+    // 2) 없으면 이 화면의 AI 로 새로 쓰고, AI 를 못 쓰는 화면이면 공고 내용으로 바로 쓴다
     const sample = await capUse('sample');
-    if (!sample)
-      return setTailorErr(
-        stored
-          ? '이미 이 공고에 맞춘 글이 적용돼 있습니다.'
-          : '이 공고의 맞춤 글은 아직 준비되지 않았습니다. 매일 아침 자동 작업이 새 공고마다 써 둡니다. (지금 바로 쓰려면 claude.ai 에서 페이지 주인 계정으로 열어 다시 눌러 주세요.)',
+    if (!sample) {
+      const t = tailorInput();
+      const an = analyzeFor(store, a.posting_text, a.parsed, a.id, t.near);
+      return setProposal(
+        ruleTailor({ ...t, address: a.parsed.address, startDate: a.parsed.start_date, gapPhrases: an.gap_qualifications.map((g) => g.promise_phrase) }),
       );
+    }
     setTailoring(true);
     try {
       const t = tailorInput();
@@ -2011,7 +2042,14 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     setBody(nb);
     const fromStored = !!stored && proposal.mail_body === stored.mail_body;
     await store
-      .patchApp(a.id, { snapshot: { ...a.snapshot, letter, resume }, mail_body: nb, tailored_at: fromStored ? stored!.at : new Date().toISOString(), job_id: a.job_id ?? stored?.job_id ?? null, tailor_off: false })
+      .patchApp(a.id, {
+        snapshot: { ...a.snapshot, letter, resume },
+        mail_body: nb,
+        tailored_at: fromStored ? stored!.at : new Date().toISOString(),
+        tailored_kind: fromStored ? 'ai' : 'rule',
+        job_id: a.job_id ?? stored?.job_id ?? null,
+        tailor_off: false,
+      })
       .catch(() => setTailorErr('저장하지 못했습니다.'));
     setProposal(null);
   }
@@ -2029,7 +2067,9 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
   }
   // 미리 써 둔 맞춤 글이 있는데 아직 안 입힌 작성중 서류는 한 번 저절로 입힌다
   useEffect(() => {
-    if (a.status === '작성중' && !a.tailored_at && !a.tailor_off && stored && store.access !== 'none' && store.mode === 'db' && (a.snapshot_v ?? 1) >= SNAPSHOT_V) void rebuild();
+    if (a.status !== '작성중' || a.tailor_off || store.access === 'none' || store.mode !== 'db' || (a.snapshot_v ?? 1) < SNAPSHOT_V) return;
+    // 아직 맞춤 글이 없거나, 바로 쓴 글인데 더 다듬은(미리 써 둔) 글이 생겼으면 바꾼다
+    if (!a.tailored_at || (stored && a.tailored_kind !== 'ai')) void rebuild();
   }, [a.id, stored?.at]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 예전 양식으로 만든 작성중 서류는 한 번 저절로 새로 만든다
@@ -2186,7 +2226,7 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
         <div className="row wrap">
           {!(stored && a.tailored_at === stored.at) && (
             <Btn kind="primary" onClick={tailor} disabled={tailoring || !a.snapshot}>
-              {tailoring ? '✍️ 이 공고에 맞춰 쓰는 중… (20~40초)' : stored ? '✍️ 이 공고 맞춤 글 보기·적용' : '✍️ 이 공고에 맞춰 다시 쓰기'}
+              {tailoring ? '✍️ 이 공고에 맞춰 쓰는 중…' : stored ? '✍️ 이 공고 맞춤 글 보기·적용' : a.tailored_at ? '✍️ 다시 써 보기' : '✍️ 이 공고에 맞춰 다시 쓰기'}
             </Btn>
           )}
           {a.tailored_at && (
