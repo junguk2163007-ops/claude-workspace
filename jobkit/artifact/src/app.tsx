@@ -1073,6 +1073,8 @@ interface ExtraFile {
 interface Check {
   level: 'ok' | 'warn' | 'block';
   text: string;
+  /** 'extra' = 본문의 "함께 첨부" 문장 관련 (직접 보낼 때는 파일을 직접 붙이면 되므로 막지 않음) */
+  id?: 'extra';
 }
 
 /** 보내기 전에 볼 항목. block 이 하나라도 있으면 보낼 수 없다. */
@@ -1108,7 +1110,7 @@ function checksFor(a: AppRec, store: Store, built: Built | null, to: string, sub
   }
   const extraSize = extras.reduce((n, f) => n + f.size, 0);
   if (EXTRA_SENTENCE.test(body) && extras.length === 0)
-    out.push({ level: 'block', text: '본문에 추가 서류를 "함께 첨부"했다고 적혀 있는데 추가 첨부 파일이 없습니다. 파일을 넣거나 그 문장을 빼세요.' });
+    out.push({ level: 'block', id: 'extra', text: '본문에 추가 서류를 "함께 첨부"했다고 적혀 있는데 추가 첨부 파일이 없습니다. 파일을 넣거나 그 문장을 빼세요. (Gmail 작성창으로 직접 보낼 때는 그 파일을 직접 첨부하면 됩니다)' });
   else if (extras.length)
     out.push(
       extraSize > EXTRA_LIMIT_BYTES
@@ -1201,15 +1203,46 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
   const [ackUnknown, setAckUnknown] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
   const [extras, setExtras] = useState<ExtraFile[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [savedPdfs, setSavedPdfs] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [confirmSent, setConfirmSent] = useState(false);
   const built = useMemo(() => (a.snapshot ? buildFromData(fonts, a.snapshot.resume, a.snapshot.letter, a.snapshot.photo) : null), [a.snapshot, fonts]);
   const checks = checksFor(a, store, built, to, subject, body, extras);
   const blocks = checks.filter((c) => c.level === 'block');
+  /** 직접 보내기에서 막을 항목 ("함께 첨부" 문장은 직접 첨부하면 되므로 제외) */
+  const manualBlocked = blocks.some((c) => c.id !== 'extra');
   const warns = checks.filter((c) => c.level === 'warn');
   const finalBody = finalBodyFor(body, store);
   const name = store.profile.name || '지원자';
   const files = { resume: docFileName('이력서', name, a.site, 'pdf'), letter: docFileName('자기소개서', name, a.site, 'pdf') };
   const unknownLock = a.send_state === 'unknown' && !ackUnknown;
   const canSend = !blocks.length && (!warns.length || ackWarn) && !unknownLock && store.mode === 'db';
+
+  async function saveBoth() {
+    if (!built) return;
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const r = await toPdf(fonts, built.resume.pages, '이력서', dataUrlToPhoto(built.photo));
+      const e1 = await saveFile(files.resume, r);
+      const l = await toPdf(fonts, built.letter.pages, '자기소개서', null);
+      const e2 = await saveFile(files.letter, l);
+      if (e1 || e2) setSaveMsg(e1 || e2);
+      else setSavedPdfs(true);
+    } catch {
+      setSaveMsg('PDF를 만들지 못했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function markSent() {
+    await store
+      .patchApp(a.id, { status: '지원함', mail_subject: subject, mail_body: finalBody, selected_email: to, sent_at: new Date().toISOString(), send_state: 'sent', gmail_url: null })
+      .catch(() => {});
+    setConfirmSent(false);
+  }
 
   async function persistEdits() {
     if (subject !== a.mail_subject || body !== a.mail_body || to !== (a.selected_email ?? ''))
@@ -1438,10 +1471,45 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
           >
             {stage === 'sending' ? '보내는 중…' : 'Gmail로 발송'}
           </Btn>
-          <a className="btn btn-quiet" href={fixedComposeUrl(store.prefs.sender_email ?? '', to, subject, finalBody)} target="_blank" rel="noreferrer noopener">
-            {store.prefs.sender_email || 'Gmail'} 작성창으로 직접 보내기
-          </a>
           {blocks.length > 0 && <span className="small warn-text">✕ 항목을 먼저 해결해야 보낼 수 있습니다.</span>}
+        </div>
+      )}
+
+      {stage !== 'confirm' && (
+        <div className="manual stack-s">
+          <strong>{store.prefs.sender_email || '정민욱'} Gmail로 직접 보내기</strong>
+          <span className="small muted">
+            브라우저에 {store.prefs.sender_email} 구글 계정이 로그인돼 있으면 어느 컴퓨터에서든 됩니다.
+            {EXTRA_SENTENCE.test(finalBody) ? ' 본문에 적힌 추가 서류(자격증 사본 등)도 직접 첨부하세요.' : ''}
+          </span>
+          <div className="row wrap">
+            <Btn onClick={saveBoth} disabled={manualBlocked || saving}>
+              {saving ? 'PDF 만드는 중…' : savedPdfs ? '① PDF 2개 저장됨 ✓' : '① PDF 2개 저장'}
+            </Btn>
+            {manualBlocked ? (
+              <span className="btn btn-plain disabled-link">② 작성창 열기</span>
+            ) : (
+              <a className="btn btn-plain" href={fixedComposeUrl(store.prefs.sender_email ?? '', to, subject, finalBody)} target="_blank" rel="noreferrer noopener" onClick={persistEdits}>
+                ② {store.prefs.sender_email || 'Gmail'} 작성창 열기
+              </a>
+            )}
+            {confirmSent ? (
+              <>
+                <Btn kind="primary" onClick={markSent}>
+                  보냈습니다 — 지원함으로 기록
+                </Btn>
+                <Btn kind="quiet" onClick={() => setConfirmSent(false)}>
+                  취소
+                </Btn>
+              </>
+            ) : (
+              <Btn kind="primary" disabled={manualBlocked} onClick={() => setConfirmSent(true)}>
+                ③ 보냈어요
+              </Btn>
+            )}
+          </div>
+          {saveMsg && <Notice level="warn">{saveMsg}</Notice>}
+          {manualBlocked && <span className="small warn-text">✕ 항목을 먼저 해결하세요.</span>}
         </div>
       )}
     </section>
