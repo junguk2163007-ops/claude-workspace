@@ -27,7 +27,7 @@ import { EMPTY_PROFILE, useStore, type AppRec, type JobItem, type JobSource, typ
 import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
 import { applyChanges, criteriaPrompt, filterJob, type ChatMessage, type Criteria, type FilterResult, type JobVerdict } from './criteria';
-import { FETCH_HOSTS, fetchHref, isRelaySignal, newKey, newRid, pingHref, relayScript, sendHref, validRelayBase, RELAY_VERSION, type RelaySignal } from './relay';
+import { FETCH_HOSTS, fetchHref, isRelaySignal, newKey, newRid, pingHref, relayScript, sendHref, validRelayBase, RELAY_FRAME_VERSION, RELAY_SEND_VERSION, RELAY_VERSION, type RelaySignal } from './relay';
 import { detailFetchUrl, refreshItem, type JobItem as CJobItem } from '../../collector/extract';
 import { recommend } from './criteria';
 import { estimateCommute, finalMinutes, kakaoRouteUrl, type CommuteResult, type Geo } from './commute';
@@ -945,6 +945,8 @@ function alertTop(text: string, level: 'ok' | 'danger' = 'ok') {
 const fetchWaiters = new Map<string, (s: RelaySignal) => void>();
 /** 발송기 [연결 확인] 결과를 받을 곳 */
 const pingWaiters = new Map<string, (s: RelaySignal) => void>();
+/** 페이지 안 상자로 연 발송기가 떴다는 신호를 받을 곳 */
+const readyWaiters = new Map<string, () => void>();
 
 /**
  * 수집 작업을 지금 바로 한 번 돌려 본다. 페이지 주인 계정의 claude.ai 화면에서만 된다.
@@ -1087,6 +1089,16 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
   const refreshing = !!reqAt && (!store.scanStatus || store.scanStatus.last_scan_at < reqAt) && Date.now() - Date.parse(reqAt) < 26 * 3600000;
   const [fetching, setFetching] = useState(false);
   const [fetchRid, setFetchRid] = useState(() => newRid());
+  const [fetchFrame, setFetchFrame] = useState<string | null>(null);
+  const frameOk = (store.prefs.relay_version ?? 0) >= RELAY_FRAME_VERSION;
+  /** v6: 보이지 않는 상자로 공고 원문을 가져온다 (팝업 없음). 15초 안에 결과가 없으면 새 창 링크 방식으로 */
+  function refreshInPage() {
+    const rid = fetchRid;
+    const src = fetchHref(store.prefs.relay_url!, store.prefs.relay_key!, directUrl!, rid);
+    onRefreshClick();
+    setFetchFrame(src);
+    setTimeout(() => setFetchFrame(null), 16000);
+  }
   const relayOk = !!(store.prefs.relay_url && store.prefs.relay_key && (store.prefs.relay_version ?? 0) >= 4);
   const nativeId = it.id.slice(it.source.length + 1);
   const directUrl = it.source === 'jobkorea' || it.source === 'saramin' || it.source === 'work24' ? detailFetchUrl(it.source, nativeId) : null;
@@ -1293,7 +1305,11 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
           공고 원문
         </a>
         {it.source !== 'manual' && (
-          canDirect ? (
+          canDirect && frameOk ? (
+            <Btn kind="quiet" onClick={refreshInPage} disabled={fetching} title="이 공고가 아직 있는지, 내용이 바뀌었는지 사이트에서 바로 다시 읽습니다">
+              {fetching ? '↻ 가져오는 중…' : '↻ 새로고침'}
+            </Btn>
+          ) : canDirect ? (
             <a
               className={cx('btn', 'btn-quiet', fetching && 'is-busy')}
               href={fetchHref(store.prefs.relay_url!, store.prefs.relay_key!, directUrl!, fetchRid)}
@@ -1311,6 +1327,7 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
           )
         )}
       </div>
+      {fetchFrame && <iframe className="relay-frame-hidden" src={fetchFrame} title="공고 새로고침" aria-hidden="true" tabIndex={-1} />}
       {refMsg && <Notice level="info">{refMsg}</Notice>}
     </article>
   );
@@ -2060,6 +2077,28 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
       ],
     });
   }, [ready, relayReady, canSend, sendRid, to, subject, finalBody, extras, store.prefs.relay_url, store.prefs.relay_key]); // eslint-disable-line react-hooks/exhaustive-deps
+  // v6 발송기는 팝업 없이 이 카드 안 상자(iframe)에서 보낸다. 상자가 막힌 화면이면 9초 뒤 새 창 버튼으로 바꾼다 (같은 rid 라 두 번 안 나감)
+  const frameOk = (store.prefs.relay_version ?? 0) >= RELAY_FRAME_VERSION;
+  const [frame, setFrame] = useState<string | null>(null);
+  const [frameFallback, setFrameFallback] = useState<string | null>(null);
+  function sendInPage() {
+    if (!sendLink) return;
+    const rid = sendRid;
+    const src = sendLink;
+    onSendClick();
+    setFrameFallback(null);
+    setFrame(src);
+    const timer = setTimeout(() => {
+      readyWaiters.delete(rid);
+      setFrame(null);
+      setFrameFallback(src);
+      setRelayMsg({ text: '이 화면에서는 페이지 안에서 보낼 수 없어, 아래 [새 창에서 보내기]를 눌러 주세요. 같은 지원서는 두 번 나가지 않습니다.', level: 'warn' });
+    }, 9000);
+    readyWaiters.set(rid, () => {
+      clearTimeout(timer);
+      readyWaiters.delete(rid);
+    });
+  }
   function onSendClick() {
     const rid = sendRid;
     setRelayMsg(null);
@@ -2374,11 +2413,11 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
             </Btn>
           </div>
         </div>
-      ) : relayReady && (store.prefs.relay_version ?? 0) < RELAY_VERSION ? (
+      ) : relayReady && (store.prefs.relay_version ?? 0) < RELAY_SEND_VERSION ? (
         <div className="stack-s">
           <Notice level="danger">
             {store.prefs.relay_version
-              ? `발송기 코드가 옛 버전(v${store.prefs.relay_version})이라 보내지 않았습니다.`
+              ? `발송기 코드가 옛 버전(v${store.prefs.relay_version})이라 보낼 수 없습니다.`
               : '발송기 버전을 아직 확인하지 않았습니다.'}{' '}
             <a href="#prefs">설정 → 원클릭 발송 연결</a>에서 [발송기 코드 복사] → Apps Script 에 붙여넣기 → 💾 저장 → <b>배포 → 배포 관리 → ✏ → 버전: 새 버전 → 배포</b> 후{' '}
             <b>[연결 확인]</b>을 눌러 &quot;발송기 v{RELAY_VERSION}&quot;이 보이면 여기서 보낼 수 있습니다.
@@ -2387,7 +2426,11 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
       ) : relayReady ? (
         <div className="stack-s">
           <div className="row wrap">
-            {sendLink && a.send_state !== 'relay' ? (
+            {sendLink && a.send_state !== 'relay' && frameOk ? (
+              <Btn kind="primary" className="big" onClick={sendInPage}>
+                📨 {store.prefs.sender_email}로 보내기
+              </Btn>
+            ) : sendLink && a.send_state !== 'relay' ? (
               <a className="btn btn-primary big" href={sendLink} target="_blank" rel="opener" onClick={onSendClick}>
                 📨 {store.prefs.sender_email}로 보내기
               </a>
@@ -2401,9 +2444,15 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
           <span className="small muted">
             누르면 새 창이 열리며 {store.prefs.sender_email} Gmail에서 이력서·자기소개서를 첨부해 보내고, 정민욱 Drive의 &quot;jobkit 지원서&quot; 폴더에 사본을 남깁니다. 지원 이력에도 바로 기록됩니다.
           </span>
+          {frame && <iframe className="relay-frame" src={frame} title="발송기" />}
+          {frameFallback && a.send_state === 'relay' && (
+            <a className="btn btn-primary" href={frameFallback} target="_blank" rel="opener">
+              새 창에서 보내기
+            </a>
+          )}
           {relayMsg && <Notice level={relayMsg.level}>{relayMsg.text}</Notice>}
-          {a.send_state === 'relay' && pendingFor < 10000 && <Notice level="info">보내는 중입니다… 새로 열린 창에서 발송기가 메일을 보내고 있습니다. 끝나면 여기에 &quot;완료했습니다&quot;가 뜹니다.</Notice>}
-          {a.send_state === 'relay' && pendingFor >= 10000 && (
+          {a.send_state === 'relay' && pendingFor < (frame ? 25000 : 10000) && !frame && <Notice level="info">보내는 중입니다… 새로 열린 창에서 발송기가 메일을 보내고 있습니다. 끝나면 여기에 &quot;완료했습니다&quot;가 뜹니다.</Notice>}
+          {a.send_state === 'relay' && pendingFor >= (frame ? 25000 : 10000) && (
             <Notice level="warn">
               완료 신호가 오지 않았습니다. 새로 열린 창을 확인해 주세요.
               <span className="row wrap" style={{ marginTop: 8 }}>
@@ -3284,6 +3333,23 @@ function RelaySetup({ store }: { store: Store }) {
   const ready = !!(store.prefs.relay_url && key);
 
   const [checking, setChecking] = useState(false);
+  // 설정을 열면 보이지 않는 상자로 발송기 버전을 조용히 확인한다 (v6 부터 답함)
+  const [silentPing, setSilentPing] = useState<string | null>(null);
+  useEffect(() => {
+    if (!validRelayBase(store.prefs.relay_url ?? '')) return;
+    const rid = newRid();
+    pingWaiters.set(rid, (s) => {
+      pingWaiters.delete(rid);
+      setSilentPing(null);
+      if ((s.v ?? 0) !== store.prefs.relay_version) store.savePrefs({ ...store.prefs, relay_version: s.v ?? 0 }).catch(() => {});
+    });
+    setSilentPing(pingHref(store.prefs.relay_url!, rid));
+    const t = setTimeout(() => {
+      pingWaiters.delete(rid);
+      setSilentPing(null);
+    }, 12000);
+    return () => clearTimeout(t);
+  }, [store.prefs.relay_url]); // eslint-disable-line react-hooks/exhaustive-deps
   /** 답이 안 돌아오는 화면이면, 새 창에 뜬 글을 보고 직접 고르게 한다 */
   const [askVersion, setAskVersion] = useState(false);
   const pingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3398,6 +3464,7 @@ function RelaySetup({ store }: { store: Store }) {
         ) : null}
 
       </div>
+      {silentPing && <iframe className="relay-frame-hidden" src={silentPing} title="발송기 확인" aria-hidden="true" tabIndex={-1} />}
       {askVersion && (
         <Notice level="info">
           새로 열린 창에 무엇이 보이나요?
@@ -3590,6 +3657,10 @@ function App() {
       }
       if (e.data.kind === 'ping') {
         pingWaiters.get(e.data.rid)?.(e.data);
+        return;
+      }
+      if (e.data.kind === 'ready') {
+        readyWaiters.get(e.data.rid)?.();
         return;
       }
       const st = appsRef.current;

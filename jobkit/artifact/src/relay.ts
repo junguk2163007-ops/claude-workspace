@@ -2,7 +2,9 @@
 // 직접 넘기고(새 창으로 폼 전송), 발송기가 정민욱 Gmail 로 보내며 정민욱 Drive 에 사본을 남긴다.
 // claude.ai 연결(Gmail/Drive) 기능을 쓰지 않으므로 어느 계정·화면에서 열어도 동작한다.
 
-export const RELAY_VERSION = 5;
+export const RELAY_VERSION = 6;
+/** 팝업 없이 페이지 안 상자(iframe)로 여는 것은 v6 부터 */
+export const RELAY_FRAME_VERSION = 6;
 /** 링크로 서류를 넘겨 보내기는 v5 부터 */
 export const RELAY_SEND_VERSION = 5;
 
@@ -42,8 +44,8 @@ export function newKey() {
 /** 발송기 창이 보내는 완료 신호 */
 export interface RelaySignal {
   jobkit: 'relay';
-  /** send: 메일 보냄 / ping: 연결 확인 / fetch: 공고 원문 가져옴 */
-  kind?: 'send' | 'ping' | 'fetch';
+  /** send: 메일 보냄 / ping: 연결 확인 / fetch: 공고 원문 가져옴 / ready: 보내기 창이 떴음 */
+  kind?: 'send' | 'ping' | 'fetch' | 'ready';
   /** 발송기 코드 버전 (v4 부터) */
   v?: number;
   rid: string;
@@ -122,20 +124,24 @@ export function submitRelay(base: string, key: string, p: RelayPayload): void {
 /** 정민욱 계정 Apps Script 에 붙여넣을 발송기 코드 */
 /** 보내기 창 HTML (Apps Script HtmlService 안에서 돈다) */
 const SEND_PAGE = `<meta name="viewport" content="width=device-width,initial-scale=1">
-<div id="box" style="font-family:sans-serif;max-width:520px;margin:48px auto;padding:24px 28px;border-radius:14px;background:#eef4ff">
-<h2 id="t" style="margin:0 0 8px">보내는 중…</h2><p id="m" style="font-size:16px;line-height:1.6">잠시만 기다려 주세요.</p></div>
+<div id="box" style="font-family:sans-serif;max-width:560px;margin:6px auto;padding:12px 16px;border-radius:12px;background:#eef4ff">
+<h3 id="t" style="margin:0 0 4px;font-size:17px">보내는 중…</h3><p id="m" style="margin:0;font-size:14.5px;line-height:1.6">잠시만 기다려 주세요.</p></div>
 <script>
 function show(t, m, ok) {
   document.getElementById('t').textContent = t;
   document.getElementById('m').textContent = m;
   document.getElementById('box').style.background = ok ? '#e3f7ec' : '#ffe7e4';
 }
-function signal(r, rid) {
-  var m = { jobkit: 'relay', kind: 'send', v: {{V}}, rid: String(rid || ''), ok: !!r.ok, msg: r.title + ' ' + r.msg };
+function targets() {
   var t = [];
   try { t.push(window.top.opener); } catch (e) {}
   try { t.push(window.opener); } catch (e) {}
-  t.forEach(function (w) { try { if (w) w.postMessage(m, '*'); } catch (e) {} });
+  try { var w = window; for (var i = 0; i < 6 && w.parent && w.parent !== w; i++) { w = w.parent; t.push(w); } } catch (e) {}
+  return t;
+}
+function signal(r, rid, kind) {
+  var m = { jobkit: 'relay', kind: kind || 'send', v: {{V}}, rid: String(rid || ''), ok: !!r.ok, msg: r.title + ' ' + r.msg };
+  targets().forEach(function (w) { try { if (w) w.postMessage(m, '*'); } catch (e) {} });
 }
 function decode(s) {
   s = String(s || '').replace(/^#/, '').replace(/-/g, '+').replace(/_/g, '/');
@@ -147,6 +153,7 @@ function decode(s) {
 google.script.url.getLocation(function (loc) {
   var d;
   try { d = decode(loc.hash); } catch (e) { show('보낼 서류를 읽지 못했습니다', 'jobkit 의 보내기 버튼으로 다시 열어 주세요. 메일은 나가지 않았습니다.', false); return; }
+  signal({ ok: true, title: 'ready', msg: '' }, d.rid, 'ready');
   google.script.run
     .withSuccessHandler(function (r) { show(r.title, r.msg, r.ok); signal(r, d.rid); })
     .withFailureHandler(function (err) { var r = { ok: false, title: '보내지 못했습니다', msg: String((err && err.message) || err) + ' — 메일은 나가지 않았습니다.' }; show(r.title, r.msg, false); signal(r, d.rid); })
@@ -240,22 +247,22 @@ export function relayScript(key: string): string {
     '// 보내기 창: 주소의 # 뒤(서버로 가지 않는 부분)에 담긴 서류를 이 브라우저에서 읽어 sendFromPage 로 넘긴다',
     'function sendPage() {',
     '  var h = ' + JSON.stringify(SEND_PAGE.replace('{{V}}', String(RELAY_VERSION))) + ';',
-    "  return HtmlService.createHtmlOutput(h).setTitle('jobkit 발송');",
+    "  return HtmlService.createHtmlOutput(h).setTitle('jobkit 발송').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);",
     '}',
     '',
-    '// rid 가 있으면 결과를 jobkit 페이지(이 창을 연 창)로 알려 준다',
+    '// rid 가 있으면 결과를 jobkit 페이지(이 창을 연 창, 또는 이 창을 품은 페이지)로 알려 준다',
     'function page(title, msg, ok, rid, extra) {',
     "  var data = { jobkit: 'relay', v: " + RELAY_VERSION + ", rid: String(rid || ''), ok: !!ok, msg: title + ' ' + msg };",
     '  if (extra) for (var k in extra) data[k] = extra[k];',
     "  var sig = rid ? '<script>(function(){var m=' + JSON.stringify(data).replace(/</g, '\\\\u003c').replace(/\\u2028/g, '\\\\u2028').replace(/\\u2029/g, '\\\\u2029') + ';' +",
-    "    'var t=[];try{t.push(window.top.opener)}catch(e){}try{t.push(window.opener)}catch(e){}' +",
+    "    'var t=[],op=null;try{op=window.top.opener;t.push(op)}catch(e){}try{t.push(window.opener)}catch(e){}' +",
+    "    'try{var w=window;for(var i=0;i<6&&w.parent&&w.parent!==w;i++){w=w.parent;t.push(w)}}catch(e){}' +",
     "    't.forEach(function(w){try{if(w)w.postMessage(m,\"*\")}catch(e){}});' +",
-    "    'if(t.some(function(w){return !!w})&&m.ok){setTimeout(function(){try{window.top.close()}catch(e){}},2500)}})();<\\/script>' : '';",
+    "    'if(op&&m.ok){setTimeout(function(){try{window.top.close()}catch(e){}},2500)}})();<\\/script>' : '';",
     "  var h = '<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">' +",
-    "    '<div style=\"font-family:sans-serif;max-width:520px;margin:48px auto;padding:24px 28px;border-radius:14px;background:' + (ok ? '#e3f7ec' : '#ffe7e4') + '\">' +",
-    "    '<h2 style=\"margin:0 0 8px\">' + esc(title) + '</h2><p style=\"font-size:16px;line-height:1.6\">' + esc(msg) + '</p>' +",
-    "    (rid ? '<p style=\"color:#555\">jobkit 페이지로 돌아가면 결과가 표시됩니다.</p>' : '') + '</div>' + sig;",
-    "  return HtmlService.createHtmlOutput(h).setTitle('jobkit 발송');",
+    "    '<div style=\"font-family:sans-serif;max-width:560px;margin:6px auto;padding:12px 16px;border-radius:12px;background:' + (ok ? '#e3f7ec' : '#ffe7e4') + '\">' +",
+    "    '<h3 style=\"margin:0 0 4px;font-size:17px\">' + esc(title) + '</h3><p style=\"margin:0;font-size:14.5px;line-height:1.6\">' + esc(msg) + '</p></div>' + sig;",
+    "  return HtmlService.createHtmlOutput(h).setTitle('jobkit 발송').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);",
     '}',
     '',
     'function esc(s) {',
