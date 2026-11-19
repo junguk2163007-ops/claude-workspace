@@ -14,5 +14,7 @@ export function freshDataDir(): string {
   closeDb();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jobkit-test-'));
   process.env.DATA_DIR = dir;
+  // 테스트는 실제 개인 시드(seed/)가 아니라 저장소의 예시 시드로만 돈다 (결과가 개인 데이터에 따라 바뀌지 않도록)
+  process.env.SEED_DIR = path.join(__dirname, '..', 'seed.example');
   return dir;
 }
