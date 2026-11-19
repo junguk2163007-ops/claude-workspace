@@ -1,5 +1,9 @@
-// 저장소: claude.ai Artifact 의 db 기능. 모든 데이터는 본인만 읽을 수 있는 data/users/<id>/ 아래에 둔다.
+// 저장소: claude.ai Artifact 의 db 기능. 정민욱 님과 관리자가 함께 보고 고치도록 shared/ 아래에 둔다.
+// 링크로 들어온 계정은 모두 읽을 수 있고(read: view), 고치기는 참여자(interact) 이상만 된다 — 게시할 때 규칙으로 정한다.
 // db 를 쓸 수 없는 화면(로그아웃 상태, 미리보기)에서는 이 화면 안에서만 유지한다.
+
+/** 공유 데이터 위치 (컬렉션) */
+export const SHARED = 'shared';
 
 import { useEffect, useRef, useState } from 'react';
 import type { Blocks, ProfileData, Qualification, Settings, ApplicationStatus, Shift } from '../../lib/types';
@@ -53,7 +57,8 @@ export interface AppRec {
   snapshot: Snapshot | null;
   /** 최종확인 화면에서 Gmail 로 보낸 기록 */
   sent_at?: string | null;
-  send_state?: 'sent' | 'unknown' | null;
+  /** sent 보냄 / unknown 보냈는지 불확실 / queued 정민욱 계정에서 보내도록 넘김 */
+  send_state?: 'sent' | 'unknown' | 'queued' | null;
   gmail_url?: string | null;
 }
 
@@ -104,9 +109,12 @@ export interface StoreData {
 }
 
 export type StoreMode = 'loading' | 'db' | 'memory';
+/** 'full' 읽기·쓰기 / 'none' 이 계정은 보기만 가능(고칠 수 없음) / 'unknown' 아직 모름 */
+export type Access = 'unknown' | 'full' | 'none';
 
 export interface Store extends StoreData {
   mode: StoreMode;
+  access: Access;
   slow: boolean;
   error: string | null;
   saveProfile(p: ProfileData): Promise<void>;
@@ -124,7 +132,7 @@ const strip = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 function errText(e: unknown): string {
   const code = (e as { code?: string })?.code;
   if (code === 'quota_exceeded') return '저장 공간이 가득 찼습니다. 오래된 지원 이력을 지워 주세요.';
-  if (code === 'invalid_argument') return '저장할 수 없는 값이 있습니다(사진이 너무 크거나 권한 없음).';
+  if (code === 'invalid_argument') return '저장하지 못했습니다. 이 계정은 이 페이지의 데이터를 고칠 권한이 없거나(공유 수준 확인), 사진이 너무 큽니다.';
   return '저장하지 못했습니다. 잠시 뒤 다시 시도하세요.';
 }
 
@@ -139,6 +147,7 @@ export function useStore(): Store {
     jobs: {},
   });
   const [mode, setMode] = useState<StoreMode>('loading');
+  const [access, setAccess] = useState<Access>('unknown');
   const [slow, setSlow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<{ db: AnyDb; base: string } | null>(null);
@@ -150,14 +159,15 @@ export function useStore(): Store {
     (async () => {
       const claude = (window as any).claude;
       const [db, user] = await Promise.all([claude?.use?.('db') ?? null, claude?.use?.('user') ?? null]);
-      const uid = user ? await user.id() : null;
       if (cancelled) return;
-      if (!db || !uid) {
+      if (!db) {
         clearTimeout(timer);
         setMode('memory');
         return;
       }
-      const base = `data/users/${uid}`;
+      const canWrite: boolean | null = user ? await user.can('data.write') : null;
+      if (canWrite === false) setAccess('none');
+      const base = SHARED;
       ref.current = { db, base };
       setMode('db');
       const pending = new Set(['profile', 'photo', 'quals', 'blocks', 'prefs', 'apps']);
@@ -225,6 +235,7 @@ export function useStore(): Store {
   return {
     ...data,
     mode,
+    access,
     slow,
     error,
     async saveProfile(p) {

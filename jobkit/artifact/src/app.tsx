@@ -1132,6 +1132,12 @@ function checksFor(a: AppRec, store: Store, built: Built | null, to: string, sub
   return out;
 }
 
+/** 보내는 계정을 지정한 Gmail 작성창 (브라우저에 그 계정이 로그인돼 있어야 함) */
+function fixedComposeUrl(sender: string, to: string, subject: string, body: string): string {
+  const u = gmailComposeUrl(to, subject, body);
+  return sender ? u.replace('https://mail.google.com/mail/?', `https://mail.google.com/mail/?authuser=${encodeURIComponent(sender)}&`) : u;
+}
+
 function finalBodyFor(body: string, store: Store): string {
   const sender = (store.prefs.sender_email ?? '').trim().toLowerCase();
   const email = store.profile.email.trim();
@@ -1259,7 +1265,9 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
         <h2>
           {a.site} <span className="muted">{a.title}</span>
         </h2>
-        <span className="small muted">{a.created_at.slice(0, 10)} 작성</span>
+        <span className="small muted">
+          {a.send_state === 'queued' && <Pill tone="orange">정민욱 계정에서 발송 대기</Pill>} {a.created_at.slice(0, 10)} 작성
+        </span>
       </div>
 
       <ul className="checks-list">
@@ -1366,9 +1374,26 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
             <div className="small ok-text">✓ 연결된 Gmail: {account.email}</div>
           )}
           {account.state === 'found' && account.email !== (store.prefs.sender_email ?? '').toLowerCase() && (
-            <Notice level="danger">
-              지금 연결된 Gmail은 <b>{account.email}</b>입니다. 이대로 보내면 이 주소에서 나갑니다. claude.ai 설정 → 커넥터에서 Gmail을 <b>{store.prefs.sender_email}</b> 계정으로 다시 연결한 뒤 보내세요.
-            </Notice>
+            <>
+              <Notice level="warn">
+                이 claude.ai 계정에 연결된 Gmail은 <b>{account.email}</b>이라 여기서는 보내지 않습니다. 지원 메일은 항상 <b>{store.prefs.sender_email}</b>에서만 나갑니다.
+              </Notice>
+              <div className="row wrap">
+                <Btn
+                  kind="primary"
+                  onClick={async () => {
+                    await store.patchApp(a.id, { send_state: 'queued', mail_subject: subject, mail_body: finalBody, selected_email: to }).catch(() => {});
+                    setStage('edit');
+                  }}
+                >
+                  정민욱 계정에서 보내도록 넘기기
+                </Btn>
+                <a className="btn btn-plain" href={fixedComposeUrl(store.prefs.sender_email ?? '', to, subject, finalBody)} target="_blank" rel="noreferrer noopener">
+                  {store.prefs.sender_email} Gmail로 작성창 열기
+                </a>
+              </div>
+              <div className="small muted">작성창은 이 브라우저에 {store.prefs.sender_email} 계정이 로그인돼 있을 때 열립니다. PDF는 위 [서류 보기]에서 저장해 직접 첨부하세요.</div>
+            </>
           )}
           {account.state === 'unknown' && (
             <>
@@ -1413,8 +1438,8 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
           >
             {stage === 'sending' ? '보내는 중…' : 'Gmail로 발송'}
           </Btn>
-          <a className="btn btn-quiet" href={gmailComposeUrl(to, subject, finalBody)} target="_blank" rel="noreferrer noopener">
-            Gmail 작성창으로 직접 보내기
+          <a className="btn btn-quiet" href={fixedComposeUrl(store.prefs.sender_email ?? '', to, subject, finalBody)} target="_blank" rel="noreferrer noopener">
+            {store.prefs.sender_email || 'Gmail'} 작성창으로 직접 보내기
           </a>
           {blocks.length > 0 && <span className="small warn-text">✕ 항목을 먼저 해결해야 보낼 수 있습니다.</span>}
         </div>
@@ -2314,6 +2339,11 @@ function App() {
         </div>
       </header>
       <main className="page-main">
+        {store.mode === 'db' && store.access === 'none' && (
+          <Notice level="warn">
+            이 계정은 이 페이지를 <b>보기만</b> 할 수 있습니다. 공고와 서류는 볼 수 있지만, 고치거나 지원 기록을 남기려면 페이지 주인이 공유 메뉴에서 이 계정을 <b>편집자(또는 참여자)</b>로 추가해야 합니다.
+          </Notice>
+        )}
         {store.mode === 'memory' && <Notice level="warn">이 화면에서는 저장소를 쓸 수 없어 입력 내용이 저장되지 않습니다. claude.ai에 로그인한 상태로 열어 주세요.</Notice>}
         {store.error && <Notice level="danger">{store.error}</Notice>}
         {fontError && <Notice level="danger">{fontError}</Notice>}
