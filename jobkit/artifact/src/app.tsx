@@ -27,7 +27,7 @@ import { EMPTY_PROFILE, useStore, type AppRec, type JobItem, type JobSource, typ
 import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
 import { applyChanges, criteriaPrompt, filterJob, type ChatMessage, type Criteria, type FilterResult, type JobVerdict } from './criteria';
-import { FETCH_HOSTS, fetchHref, isRelaySignal, newKey, newRid, pingHref, relayScript, submitRelay, validRelayBase, RELAY_VERSION, type RelaySignal } from './relay';
+import { FETCH_HOSTS, fetchHref, isRelaySignal, newKey, newRid, pingHref, relayScript, sendHref, validRelayBase, RELAY_VERSION, type RelaySignal } from './relay';
 import { detailFetchUrl, refreshItem, type JobItem as CJobItem } from '../../collector/extract';
 import { recommend } from './criteria';
 import { estimateCommute, finalMinutes, kakaoRouteUrl, type CommuteResult, type Geo } from './commute';
@@ -2042,31 +2042,30 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     };
   }, [built, relayReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function relaySend() {
-    if (!ready || !relayReady) return;
-    const rid = `${a.id}-${Date.now().toString(36)}`;
-    try {
-      // await 없이 바로 보낸다
-      submitRelay(store.prefs.relay_url!, store.prefs.relay_key!, {
-        rid,
-        to,
-        subject,
-        body: finalBody,
-        from_name: store.profile.name || '정민욱',
-        site: a.site,
-        files: [
-          { name: files.resume, type: 'application/pdf', b64: ready.resume },
-          { name: files.letter, type: 'application/pdf', b64: ready.letter },
-          ...extras.map((x) => ({ name: x.name, type: x.type, b64: x.b64 })),
-        ],
-      });
-    } catch {
-      setRelayMsg({ text: '발송 창을 열지 못했습니다. 메일은 나가지 않았습니다.', level: 'danger' });
-      return;
-    }
+  // 보내기는 링크 클릭으로 연다 (이 화면은 폼·스크립트 새 창을 막는다). 서류는 링크의 # 뒤에 담겨 발송기 창이 읽는다
+  const [sendRid, setSendRid] = useState(() => `${a.id}-${Date.now().toString(36)}`);
+  const sendLink = useMemo(() => {
+    if (!ready || !relayReady || !canSend) return null;
+    return sendHref(store.prefs.relay_url!, store.prefs.relay_key!, {
+      rid: sendRid,
+      to,
+      subject,
+      body: finalBody,
+      from_name: store.profile.name || '정민욱',
+      site: a.site,
+      files: [
+        { name: files.resume, type: 'application/pdf', b64: ready.resume },
+        { name: files.letter, type: 'application/pdf', b64: ready.letter },
+        ...extras.map((x) => ({ name: x.name, type: x.type, b64: x.b64 })),
+      ],
+    });
+  }, [ready, relayReady, canSend, sendRid, to, subject, finalBody, extras, store.prefs.relay_url, store.prefs.relay_key]); // eslint-disable-line react-hooks/exhaustive-deps
+  function onSendClick() {
+    const rid = sendRid;
     setRelayMsg(null);
-    // 발송기 창이 "보냈습니다" 신호를 보내면 그때 지원함으로 바꾼다 (App 의 신호 처리)
+    // 발송기 창이 "보냈습니다" 신호를 보내면 그때 지원함으로 바꾼다 (App 의 신호 처리). 신호가 없으면 직접 확인
     store.patchApp(a.id, { mail_subject: subject, mail_body: finalBody, selected_email: to, send_state: 'relay', relay_job: rid }).catch(() => {});
+    setTimeout(() => setSendRid(`${a.id}-${Date.now().toString(36)}`), 0);
   }
 
   // 보내는 중 상태가 오래가면 직접 확인하게 한다
@@ -2388,9 +2387,15 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
       ) : relayReady ? (
         <div className="stack-s">
           <div className="row wrap">
-            <Btn kind="primary" className="big" disabled={!canSend || !ready || a.send_state === 'relay'} onClick={relaySend}>
-              {a.send_state === 'relay' ? '보내는 중…' : ready ? `📨 ${store.prefs.sender_email}로 보내기` : 'PDF 준비 중…'}
-            </Btn>
+            {sendLink && a.send_state !== 'relay' ? (
+              <a className="btn btn-primary big" href={sendLink} target="_blank" rel="opener" onClick={onSendClick}>
+                📨 {store.prefs.sender_email}로 보내기
+              </a>
+            ) : (
+              <Btn kind="primary" className="big" disabled>
+                {a.send_state === 'relay' ? '보내는 중…' : ready ? `📨 ${store.prefs.sender_email}로 보내기` : 'PDF 준비 중…'}
+              </Btn>
+            )}
             {blocks.length > 0 && <span className="small warn-text">✕ 항목을 먼저 해결해야 보낼 수 있습니다.</span>}
           </div>
           <span className="small muted">

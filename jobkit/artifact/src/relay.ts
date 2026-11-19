@@ -2,7 +2,9 @@
 // 직접 넘기고(새 창으로 폼 전송), 발송기가 정민욱 Gmail 로 보내며 정민욱 Drive 에 사본을 남긴다.
 // claude.ai 연결(Gmail/Drive) 기능을 쓰지 않으므로 어느 계정·화면에서 열어도 동작한다.
 
-export const RELAY_VERSION = 4;
+export const RELAY_VERSION = 5;
+/** 링크로 서류를 넘겨 보내기는 v5 부터 */
+export const RELAY_SEND_VERSION = 5;
 
 export interface RelayFile {
   name: string;
@@ -118,6 +120,53 @@ export function submitRelay(base: string, key: string, p: RelayPayload): void {
 }
 
 /** 정민욱 계정 Apps Script 에 붙여넣을 발송기 코드 */
+/** 보내기 창 HTML (Apps Script HtmlService 안에서 돈다) */
+const SEND_PAGE = `<meta name="viewport" content="width=device-width,initial-scale=1">
+<div id="box" style="font-family:sans-serif;max-width:520px;margin:48px auto;padding:24px 28px;border-radius:14px;background:#eef4ff">
+<h2 id="t" style="margin:0 0 8px">보내는 중…</h2><p id="m" style="font-size:16px;line-height:1.6">잠시만 기다려 주세요.</p></div>
+<script>
+function show(t, m, ok) {
+  document.getElementById('t').textContent = t;
+  document.getElementById('m').textContent = m;
+  document.getElementById('box').style.background = ok ? '#e3f7ec' : '#ffe7e4';
+}
+function signal(r, rid) {
+  var m = { jobkit: 'relay', kind: 'send', v: {{V}}, rid: String(rid || ''), ok: !!r.ok, msg: r.title + ' ' + r.msg };
+  var t = [];
+  try { t.push(window.top.opener); } catch (e) {}
+  try { t.push(window.opener); } catch (e) {}
+  t.forEach(function (w) { try { if (w) w.postMessage(m, '*'); } catch (e) {} });
+}
+function decode(s) {
+  s = String(s || '').replace(/^#/, '').replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  var bin = atob(s), bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+google.script.url.getLocation(function (loc) {
+  var d;
+  try { d = decode(loc.hash); } catch (e) { show('보낼 서류를 읽지 못했습니다', 'jobkit 의 보내기 버튼으로 다시 열어 주세요. 메일은 나가지 않았습니다.', false); return; }
+  google.script.run
+    .withSuccessHandler(function (r) { show(r.title, r.msg, r.ok); signal(r, d.rid); })
+    .withFailureHandler(function (err) { var r = { ok: false, title: '보내지 못했습니다', msg: String((err && err.message) || err) + ' — 메일은 나가지 않았습니다.' }; show(r.title, r.msg, false); signal(r, d.rid); })
+    .sendFromPage(d);
+});
+</script>`;
+
+/** 보내기 링크 주소: 서류는 # 뒤에 base64url 로 담는다 (서버 요청에는 실리지 않는다) */
+export function sendHref(base: string, key: string, p: RelayPayload): string {
+  const u = new URL(base.trim());
+  u.searchParams.set('action', 'send');
+  u.searchParams.set('rid', p.rid);
+  const json = JSON.stringify({ k: key, ...p });
+  const bytes = new TextEncoder().encode(json);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  const b64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${u.toString()}#${b64}`;
+}
+
 export function relayScript(key: string): string {
   return [
     '// jobkit 발송기 v' + RELAY_VERSION + ' — 이 프로젝트를 만든 Google 계정(정민욱) Gmail 로 지원 메일을 보냅니다.',
@@ -130,6 +179,7 @@ export function relayScript(key: string): string {
     '  var p = (e && e.parameter) || {};',
     "  if (p.ping) return page('연결됨 ✓ (v" + RELAY_VERSION + ")', Session.getEffectiveUser().getEmail() + ' 계정으로 보냅니다. 이 창은 닫아도 됩니다.', true, p.rid, { kind: 'ping' });",
     "  if (p.action === 'fetch') return fetchPosting(p);",
+    "  if (p.action === 'send') return sendPage();",
     "  return page('jobkit 발송기', 'jobkit 페이지에서 보내기 버튼을 눌러 사용합니다.', true, '');",
     '}',
     '',
@@ -151,14 +201,24 @@ export function relayScript(key: string): string {
     '',
     'function doPost(e) {',
     '  var p = (e && e.parameter) || {};',
-    "  if (p.k !== KEY) return page('열쇠가 다릅니다', 'jobkit 설정에서 발송기 코드를 다시 복사해 붙여넣고 새 버전으로 배포해 주세요. 메일은 나가지 않았습니다.', false, p.rid, { kind: 'send' });",
+    '  var r = sendCore(p);',
+    "  return page(r.title, r.msg, r.ok, p.rid, { kind: 'send' });",
+    '}',
+    '',
+    '// 링크로 열린 보내기 창이 # 뒤에 담아 온 서류를 넘겨 부른다 (google.script.run)',
+    'function sendFromPage(p) {',
+    '  return sendCore(p || {});',
+    '}',
+    '',
+    'function sendCore(p) {',
+    "  if (p.k !== KEY) return { ok: false, title: '열쇠가 다릅니다', msg: 'jobkit 설정에서 발송기 코드를 다시 복사해 붙여넣고 새 버전으로 배포해 주세요. 메일은 나가지 않았습니다.' };",
     '  var lock = LockService.getScriptLock();',
     '  lock.waitLock(30000);',
     '  try {',
     '    var props = PropertiesService.getScriptProperties();',
-    "    if (p.rid && props.getProperty('sent_' + p.rid)) return page('이미 보낸 지원서입니다', '같은 메일을 두 번 보내지 않았습니다. 이 창은 닫아도 됩니다.', true, p.rid, { kind: 'send' });",
+    "    if (p.rid && props.getProperty('sent_' + p.rid)) return { ok: true, title: '이미 보낸 지원서입니다', msg: '같은 메일을 두 번 보내지 않았습니다. 이 창은 닫아도 됩니다.' };",
     "    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(p.to || '')) throw new Error('받는 사람 주소가 이상합니다: ' + p.to);",
-    "    var files = JSON.parse(p.files || '[]');",
+    "    var files = typeof p.files === 'string' ? JSON.parse(p.files || '[]') : (p.files || []);",
     '    var atts = files.map(function (f) { return Utilities.newBlob(Utilities.base64Decode(f.b64), f.type, f.name); });',
     '    GmailApp.sendEmail(p.to, p.subject, p.body, { attachments: atts, name: p.from_name });',
     "    if (p.rid) props.setProperty('sent_' + p.rid, new Date().toISOString());",
@@ -169,12 +229,18 @@ export function relayScript(key: string): string {
     '      atts.forEach(function (b) { sub.createFile(b); });',
     "      sub.createFile('메일.txt', '받는 사람: ' + p.to + '\\n제목: ' + p.subject + '\\n\\n' + p.body);",
     '    } catch (x) {}',
-    "    return page('보냈습니다 ✓', p.to + ' 에게 \"' + p.subject + '\" 메일을 첨부 ' + atts.length + '개와 함께 보냈습니다. 이 창은 닫아도 됩니다.', true, p.rid, { kind: 'send' });",
+    "    return { ok: true, title: '보냈습니다 ✓', msg: p.to + ' 에게 \"' + p.subject + '\" 메일을 첨부 ' + atts.length + '개와 함께 보냈습니다. jobkit 으로 돌아가 [보냈습니다가 떴어요]를 누르면 지원 이력에 기록됩니다.' };",
     '  } catch (err) {',
-    "    return page('보내지 못했습니다', String(err && err.message || err) + ' — 메일은 나가지 않았습니다.', false, p.rid, { kind: 'send' });",
+    "    return { ok: false, title: '보내지 못했습니다', msg: String(err && err.message || err) + ' — 메일은 나가지 않았습니다.' };",
     '  } finally {',
     '    lock.releaseLock();',
     '  }',
+    '}',
+    '',
+    '// 보내기 창: 주소의 # 뒤(서버로 가지 않는 부분)에 담긴 서류를 이 브라우저에서 읽어 sendFromPage 로 넘긴다',
+    'function sendPage() {',
+    '  var h = ' + JSON.stringify(SEND_PAGE.replace('{{V}}', String(RELAY_VERSION))) + ';',
+    "  return HtmlService.createHtmlOutput(h).setTitle('jobkit 발송');",
     '}',
     '',
     '// rid 가 있으면 결과를 jobkit 페이지(이 창을 연 창)로 알려 준다',
