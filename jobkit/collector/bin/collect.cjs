@@ -853,7 +853,14 @@ async function main() {
   const only = (process.argv[3] || "dghma,jobkorea,saramin,work24").split(",");
   const today = todaySeoul();
   const runAt = (/* @__PURE__ */ new Date()).toISOString();
-  const status = { last_scan_at: runAt, finished_at: "", kind: process.env.JOBKIT_KIND || "daily", sources: {}, new_total: 0, single: null };
+  const status = { last_scan_at: runAt, last_full_scan_at: runAt, finished_at: "", kind: process.env.JOBKIT_KIND || "daily", sources: {}, new_total: 0, single: null };
+  const prevStatusFile = process.env.JOBKIT_PREV ? import_node_path.default.join(process.env.JOBKIT_PREV, "scan_status.json") : "";
+  if (status.kind === "single" && prevStatusFile && import_node_fs.default.existsSync(prevStatusFile)) {
+    const ps = JSON.parse(import_node_fs.default.readFileSync(prevStatusFile, "utf8"));
+    status.last_full_scan_at = ps.last_full_scan_at || ps.last_scan_at || runAt;
+    status.sources = { ...ps.sources ?? {} };
+    status.new_total = ps.new_total ?? 0;
+  }
   const browser = only.includes("dghma") ? await import_playwright.chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || void 0 }) : null;
   try {
     for (const source of only) {
@@ -892,7 +899,7 @@ async function main() {
         items: failed ? prev.items : kept
       };
       status.sources[source] = { scanned: r.scanned, kept: result.kept, new: failed ? 0 : newCount, errors: r.errors.length, ...failed ? { kept_previous: true } : {} };
-      status.new_total += failed ? 0 : newCount;
+      if (status.kind !== "single") status.new_total += failed ? 0 : newCount;
       if (process.env.JOBKIT_JOB && process.env.JOBKIT_JOB.startsWith(`${source}-`)) status.single = { job: process.env.JOBKIT_JOB, source, found: !failed && kept.some((x) => x.id === process.env.JOBKIT_JOB) };
       import_node_fs.default.writeFileSync(import_node_path.default.join(out, `jobs_${source}.json`), JSON.stringify(result));
       console.log(`${source}: \uBCF8 \uACF5\uACE0 ${r.scanned}\uAC74 \u2192 \uD1B5\uADFC \uC870\uAC74 \uB9DE\uB294 \uACF5\uACE0 ${kept.length}\uAC74 (${((Date.now() - t0) / 1e3).toFixed(0)}\uCD08)${r.errors.length ? `, \uC624\uB958 ${r.errors.length}\uAC74` : ""}`);

@@ -432,12 +432,22 @@ async function main() {
   const runAt = new Date().toISOString();
   const status: {
     last_scan_at: string;
+    /** 전체 스캔(매일·수동) 시각. 공고 하나 새로고침은 이 값을 바꾸지 않는다 */
+    last_full_scan_at: string;
     finished_at: string;
     kind: string;
     sources: Record<string, { scanned: number; kept: number; new: number; errors: number; kept_previous?: boolean }>;
     new_total: number;
     single: { job: string; source: string; found: boolean } | null;
-  } = { last_scan_at: runAt, finished_at: '', kind: process.env.JOBKIT_KIND || 'daily', sources: {}, new_total: 0, single: null };
+  } = { last_scan_at: runAt, last_full_scan_at: runAt, finished_at: '', kind: process.env.JOBKIT_KIND || 'daily', sources: {}, new_total: 0, single: null };
+  // 공고 하나 새로고침이면 지난 전체 스캔 기록(시각·새 공고 수·다른 사이트 결과)을 이어 쓴다
+  const prevStatusFile = process.env.JOBKIT_PREV ? path.join(process.env.JOBKIT_PREV, 'scan_status.json') : '';
+  if (status.kind === 'single' && prevStatusFile && fs.existsSync(prevStatusFile)) {
+    const ps = JSON.parse(fs.readFileSync(prevStatusFile, 'utf8')) as Partial<typeof status>;
+    status.last_full_scan_at = ps.last_full_scan_at || ps.last_scan_at || runAt;
+    status.sources = { ...(ps.sources ?? {}) };
+    status.new_total = ps.new_total ?? 0;
+  }
   const browser = only.includes('dghma') ? await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || undefined }) : null;
   try {
     for (const source of only) {
@@ -485,7 +495,7 @@ async function main() {
         items: failed ? (prev!.items as JobItem[]) : kept,
       };
       status.sources[source] = { scanned: r.scanned, kept: result.kept, new: failed ? 0 : newCount, errors: r.errors.length, ...(failed ? { kept_previous: true } : {}) };
-      status.new_total += failed ? 0 : newCount;
+      if (status.kind !== 'single') status.new_total += failed ? 0 : newCount;
       if (process.env.JOBKIT_JOB && process.env.JOBKIT_JOB.startsWith(`${source}-`)) status.single = { job: process.env.JOBKIT_JOB, source, found: !failed && kept.some((x) => x.id === process.env.JOBKIT_JOB) };
       fs.writeFileSync(path.join(out, `jobs_${source}.json`), JSON.stringify(result));
       console.log(`${source}: 본 공고 ${r.scanned}건 → 통근 조건 맞는 공고 ${kept.length}건 (${((Date.now() - t0) / 1000).toFixed(0)}초)${r.errors.length ? `, 오류 ${r.errors.length}건` : ''}`);

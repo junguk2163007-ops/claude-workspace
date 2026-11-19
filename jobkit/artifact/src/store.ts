@@ -142,6 +142,7 @@ export interface StoreData {
 
 export interface ScanStatus {
   last_scan_at: string;
+  last_full_scan_at?: string;
   finished_at: string;
   kind: string;
   sources: Record<string, { scanned: number; kept: number; new: number; errors: number; kept_previous?: boolean }>;

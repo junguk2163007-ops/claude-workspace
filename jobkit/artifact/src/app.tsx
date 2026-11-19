@@ -1040,9 +1040,12 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
   async function refreshOne() {
     setRefMsg(null);
     const at = new Date().toISOString();
-    const e = await fireScan(`공고 새로고침 요청: source=${it.source} job=${it.id}`);
-    if (e) return setRefMsg(e);
     await store.saveScanRequest(it.id, at).catch(() => {});
+    const e = await fireScan(`공고 새로고침 요청: source=${it.source} job=${it.id}`);
+    if (e) {
+      await store.saveScanRequest(it.id, null).catch(() => {});
+      return setRefMsg(e);
+    }
   }
   // 공고에 없던 이메일을 직접 알아내 넣었으면 공고 글 끝에 붙여서 읽는다
   const extraEmail = store.jobEmails[it.id] ?? '';
@@ -1492,9 +1495,12 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   async function runNow() {
     setRefresh(null);
     const at = new Date().toISOString();
-    const err = await fireScan('전체 새로 찾기 (수동 요청)');
-    if (err) return setRefresh({ level: 'warn', text: err });
     await store.saveScanRequest('__all__', at).catch(() => {});
+    const err = await fireScan('전체 새로 찾기 (수동 요청)');
+    if (err) {
+      await store.saveScanRequest('__all__', null).catch(() => {});
+      return setRefresh({ level: 'warn', text: err });
+    }
     setRefresh({ level: 'ok', text: '전체 새로 찾기를 시작했습니다. 5~10분 뒤 이 목록이 저절로 바뀝니다.' });
   }
 
@@ -1517,7 +1523,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
     setRefresh({ level: 'ok', text: '테스트 공고를 모두 지웠습니다.' });
   }
   const ss = store.scanStatus;
-  const lastScan = ss?.last_scan_at ?? lastUpdate;
+  const lastScan = ss?.last_full_scan_at ?? ss?.last_scan_at ?? lastUpdate;
   const allPending = store.scanRequests.__all__ && (!ss || ss.last_scan_at < store.scanRequests.__all__) && Date.now() - Date.parse(store.scanRequests.__all__) < 30 * 60000;
 
   return (
@@ -1544,7 +1550,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
             <span>
               🕒 마지막 스캔 <b>{lastScan ? fmtKst(lastScan) : '아직 없음'}</b>
               {lastScan && <span className="muted"> ({ago(lastScan)})</span>}
-              {ss && ss.new_total > 0 && Date.now() - Date.parse(ss.last_scan_at) < 36 * 3600000 && <span className="new-badge" style={{ marginLeft: 8 }}>새 공고 {ss.new_total}건</span>}
+              {ss && ss.new_total > 0 && lastScan && Date.now() - Date.parse(lastScan) < 36 * 3600000 && <span className="new-badge" style={{ marginLeft: 8 }}>새 공고 {ss.new_total}건</span>}
             </span>
             <span className="muted">
               {REFRESH_TRIGGER_ID ? `다음 자동 스캔 ${fmtKst(nextDailyScan())} (매일 오전 ${DAILY_SCAN.hour}:${String(DAILY_SCAN.minute).padStart(2, '0')})` : '자동 스캔 준비 중'}
