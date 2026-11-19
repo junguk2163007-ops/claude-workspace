@@ -45,6 +45,8 @@ export interface JobItem {
   posted: string;
   /** 처음 발견한 때 (ISO). 이전 수집 결과(JOBKIT_PREV 폴더)가 있을 때만 채운다 */
   first_seen?: string;
+  /** 이번에 스캔한 때 (ISO) */
+  scanned_at?: string;
   text: string;
 }
 
@@ -427,6 +429,15 @@ async function main() {
   fs.mkdirSync(out, { recursive: true });
   const only = (process.argv[3] || 'dghma,jobkorea,saramin,work24').split(',') as SourceId[];
   const today = todaySeoul();
+  const runAt = new Date().toISOString();
+  const status: {
+    last_scan_at: string;
+    finished_at: string;
+    kind: string;
+    sources: Record<string, { scanned: number; kept: number; new: number; errors: number; kept_previous?: boolean }>;
+    new_total: number;
+    single: { job: string; source: string; found: boolean } | null;
+  } = { last_scan_at: runAt, finished_at: '', kind: process.env.JOBKIT_KIND || 'daily', sources: {}, new_total: 0, single: null };
   const browser = only.includes('dghma') ? await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH || undefined }) : null;
   try {
     for (const source of only) {
@@ -449,27 +460,42 @@ async function main() {
       kept.sort((a, b) => (a.commute.min ?? 99) - (b.commute.min ?? 99));
       // 이전 결과와 비교해 처음 본 공고에 first_seen 을 붙인다 (이미 본 공고는 원래 날짜 유지)
       const prevFile = process.env.JOBKIT_PREV ? path.join(process.env.JOBKIT_PREV, `jobs_${source}.json`) : '';
-      if (prevFile && fs.existsSync(prevFile)) {
-        const prev = JSON.parse(fs.readFileSync(prevFile, 'utf8')) as Partial<SourceResult>;
+      const prev = prevFile && fs.existsSync(prevFile) ? (JSON.parse(fs.readFileSync(prevFile, 'utf8')) as Partial<SourceResult>) : null;
+      let newCount = 0;
+      for (const it of kept) it.scanned_at = runAt;
+      if (prev) {
         const seen = new Map((prev.items ?? []).map((x) => [x.id, x.first_seen ?? '']));
-        const now = new Date().toISOString();
-        for (const it of kept) it.first_seen = seen.has(it.id) ? seen.get(it.id) || undefined : now;
+        for (const it of kept) {
+          if (seen.has(it.id)) it.first_seen = seen.get(it.id) || undefined;
+          else {
+            it.first_seen = runAt;
+            newCount++;
+          }
+        }
       }
+      // 사이트가 통째로 막혀 하나도 못 봤으면 이전 목록을 지우지 않고 그대로 둔다
+      const failed = r.scanned === 0 && r.errors.length > 0 && !!prev?.items?.length;
       const result: SourceResult = {
         source,
-        updated_at: new Date().toISOString(),
-        scanned: r.scanned,
-        kept: kept.length,
+        updated_at: failed ? (prev!.updated_at as string) : runAt,
+        scanned: failed ? (prev!.scanned ?? 0) : r.scanned,
+        kept: failed ? prev!.items!.length : kept.length,
         dropped_far: r.items.filter((it) => keep(it, today) === 'far').length,
-        errors: r.errors.slice(0, 10),
-        items: kept,
+        errors: [...(failed ? ['이번 스캔 실패 — 이전 목록 유지'] : []), ...r.errors].slice(0, 10),
+        items: failed ? (prev!.items as JobItem[]) : kept,
       };
+      status.sources[source] = { scanned: r.scanned, kept: result.kept, new: failed ? 0 : newCount, errors: r.errors.length, ...(failed ? { kept_previous: true } : {}) };
+      status.new_total += failed ? 0 : newCount;
+      if (process.env.JOBKIT_JOB && process.env.JOBKIT_JOB.startsWith(`${source}-`)) status.single = { job: process.env.JOBKIT_JOB, source, found: !failed && kept.some((x) => x.id === process.env.JOBKIT_JOB) };
       fs.writeFileSync(path.join(out, `jobs_${source}.json`), JSON.stringify(result));
       console.log(`${source}: 본 공고 ${r.scanned}건 → 통근 조건 맞는 공고 ${kept.length}건 (${((Date.now() - t0) / 1000).toFixed(0)}초)${r.errors.length ? `, 오류 ${r.errors.length}건` : ''}`);
     }
   } finally {
     await browser?.close();
   }
+  status.finished_at = new Date().toISOString();
+  fs.writeFileSync(path.join(out, 'scan_status.json'), JSON.stringify(status));
+  console.log(`스캔 요약: 새 공고 ${status.new_total}건${status.single ? ` · ${status.single.job} ${status.single.found ? '아직 있음' : '목록에 없음(마감·삭제)'}` : ''}`);
 }
 
 main().catch((e) => {

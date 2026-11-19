@@ -70,6 +70,8 @@ export interface AppRec {
 /** 앱 설정 + 발송 계정 (최종확인 화면용) */
 export type Prefs = Settings & {
   sender_email?: string;
+  /** 테스트 공고의 접수 이메일 (보내지는지 확인용, 내 주소) */
+  test_email?: string;
   home_geo?: { lat: number; lng: number } | null;
   /** 원클릭 발송기(정민욱 계정 Apps Script 웹앱) 주소와 열쇠 */
   relay_url?: string;
@@ -105,6 +107,8 @@ export interface JobItem {
   geo?: { lat: number; lng: number } | null;
   /** 처음 발견한 때 (ISO). NEW 표시에 쓴다 */
   first_seen?: string;
+  /** 이번에 스캔한 때 (ISO) */
+  scanned_at?: string;
   posted: string;
   text: string;
 }
@@ -130,6 +134,19 @@ export interface StoreData {
   chat: ChatMessage[];
   /** 공고에 없던 이메일을 직접 알아내 넣은 것 (공고 id → 주소) */
   jobEmails: Record<string, string>;
+  /** 마지막 자동/수동 스캔 요약 */
+  scanStatus: ScanStatus | null;
+  /** 공고별 새로고침 요청 (공고 id → 요청 시각) */
+  scanRequests: Record<string, string>;
+}
+
+export interface ScanStatus {
+  last_scan_at: string;
+  finished_at: string;
+  kind: string;
+  sources: Record<string, { scanned: number; kept: number; new: number; errors: number; kept_previous?: boolean }>;
+  new_total: number;
+  single: { job: string; source: string; found: boolean } | null;
 }
 
 export type StoreMode = 'loading' | 'db' | 'memory';
@@ -149,6 +166,8 @@ export interface Store extends StoreData {
   saveCriteria(c: Criteria): Promise<void>;
   saveChat(m: ChatMessage[]): Promise<void>;
   saveJobEmail(jobId: string, email: string | null): Promise<void>;
+  saveScanRequest(jobId: string, at: string | null): Promise<void>;
+  saveManualJobs(items: JobItem[]): Promise<void>;
   saveApp(a: AppRec): Promise<void>;
   patchApp(id: string, patch: Partial<AppRec>): Promise<void>;
   deleteApp(id: string): Promise<void>;
@@ -175,6 +194,8 @@ export function useStore(): Store {
     criteria: DEFAULT_CRITERIA,
     chat: [],
     jobEmails: {},
+    scanStatus: null,
+    scanRequests: {},
   });
   const [mode, setMode] = useState<StoreMode>('loading');
   const [access, setAccess] = useState<Access>('unknown');
@@ -200,7 +221,7 @@ export function useStore(): Store {
       const base = SHARED;
       ref.current = { db, base };
       setMode('db');
-      const pending = new Set(['profile', 'photo', 'quals', 'blocks', 'prefs', 'apps', 'criteria', 'criteria_chat', 'job_emails']);
+      const pending = new Set(['profile', 'photo', 'quals', 'blocks', 'prefs', 'apps', 'criteria', 'criteria_chat', 'job_emails', 'scan_status', 'scan_requests']);
       for (const src of ['dghma', 'jobkorea', 'saramin', 'work24', 'manual'] as JobSource[])
         unsubs.push(
           db.doc(`${base}/jobs_${src}`).onSnapshot(
@@ -229,6 +250,8 @@ export function useStore(): Store {
       sub('quals', (d) => ({ quals: d && Array.isArray(d.list) ? (d.list as Qualification[]) : DEFAULT_QUALS }));
       sub('blocks', (d) => ({ blocks: d ? ({ ...DEFAULT_BLOCKS, ...(d as object) } as Blocks) : DEFAULT_BLOCKS }));
       sub('criteria', (d) => ({ criteria: d ? ({ ...DEFAULT_CRITERIA, ...(d as object) } as Criteria) : DEFAULT_CRITERIA }));
+      sub('scan_status', (d) => ({ scanStatus: d && typeof d.last_scan_at === 'string' ? (d as unknown as ScanStatus) : null }));
+      sub('scan_requests', (d) => ({ scanRequests: d && typeof d.map === 'object' && d.map ? (d.map as Record<string, string>) : {} }));
       sub('job_emails', (d) => ({ jobEmails: d && typeof d.map === 'object' && d.map ? (d.map as Record<string, string>) : {} }));
       sub('criteria_chat', (d) => ({ chat: d && Array.isArray(d.messages) ? (d.messages as ChatMessage[]) : [] }));
       sub('prefs', (d) => ({ prefs: d ? ({ ...DEFAULT_PREFS, ...(d as object) } as Prefs) : DEFAULT_PREFS }));
@@ -306,6 +329,19 @@ export function useStore(): Store {
       else delete map[jobId];
       local({ jobEmails: map });
       await write('job_emails', { map });
+    },
+    async saveScanRequest(jobId, at) {
+      const map = { ...data.scanRequests };
+      if (at) map[jobId] = at;
+      else delete map[jobId];
+      local({ scanRequests: map });
+      await write('scan_requests', { map });
+    },
+    async saveManualJobs(items) {
+      const now = new Date().toISOString();
+      const doc: JobList = { ...(data.jobs.manual ?? ({} as JobList)), source: 'manual', updated_at: now, scanned: items.length, kept: items.length, errors: [], items } as JobList;
+      setData((prev) => ({ ...prev, jobs: { ...prev.jobs, manual: doc } }));
+      await write('jobs_manual', doc as unknown as Record<string, unknown>);
     },
     async saveApp(a) {
       setData((prev) => ({ ...prev, apps: [a, ...prev.apps.filter((x) => x.id !== a.id)] }));

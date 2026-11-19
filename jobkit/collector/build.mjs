@@ -14,4 +14,8 @@ await build({
   outfile: path.join(here, 'dist/collect.cjs'),
   logLevel: 'warning',
 });
+// 매일 자동 수집(클라우드)이 패키지 설치 없이 바로 돌릴 수 있게 커밋용 사본도 만든다 (개인정보 없음)
+import fs from 'node:fs';
+fs.mkdirSync(path.join(here, 'bin'), { recursive: true });
+fs.copyFileSync(path.join(here, 'dist/collect.cjs'), path.join(here, 'bin/collect.cjs'));
 console.log('built collector');

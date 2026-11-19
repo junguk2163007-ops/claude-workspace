@@ -884,7 +884,97 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
 // ---------- 공고 찾기 ----------
 
 /** 예약 작업(공고 수집)의 id. [지금 새로 찾기]가 이 작업을 바로 실행한다. 비어 있으면 버튼을 숨긴다. */
+/** 매일 자동 수집 예약 작업. 공고 새로고침도 같은 작업을 바로 한 번 돌린다 */
 const REFRESH_TRIGGER_ID = '';
+const DAILY_SCAN = { hour: 6, minute: 40 }; // 한국 시간
+
+function fmtKst(iso: string) {
+  const d = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+}
+function nextDailyScan(now = new Date()) {
+  const k = new Date(now.getTime() + 9 * 3600 * 1000);
+  const t = Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), DAILY_SCAN.hour, DAILY_SCAN.minute) - 9 * 3600 * 1000;
+  return new Date(t > now.getTime() ? t : t + 86400000).toISOString();
+}
+
+/** 예약 작업을 지금 한 번 돌린다 (공고 하나 또는 전체) */
+async function fireScan(text: string): Promise<string | null> {
+  if (!REFRESH_TRIGGER_ID) return '아직 자동 수집이 연결되지 않았습니다.';
+  try {
+    const mcp = await (window as any).claude?.use?.('mcp');
+    if (!mcp) return '이 화면에서는 바로 새로고침을 시작할 수 없습니다(claude.ai 에서 페이지 주인 계정으로 열면 됩니다). 매일 아침 자동 스캔 때 갱신됩니다.';
+    await mcp.callTool('Claude Code Remote', 'fire_trigger', { trigger_id: REFRESH_TRIGGER_ID, text });
+    return null;
+  } catch (e) {
+    const code = (e as { code?: string })?.code;
+    return code === 'not_granted' || code === 'server_not_connected'
+      ? '새로고침을 시작할 권한이 없습니다. 매일 아침 자동 스캔 때 갱신됩니다.'
+      : '지금은 새로고침을 시작하지 못했습니다. 잠시 뒤 다시 누르거나, 아침 자동 스캔을 기다려 주세요.';
+  }
+}
+
+/** 보내기 시험용 가짜 공고 (회사: 정욱) */
+const TEST_ROLES = [
+  { title: '시설주임(기전)', shift: '격일 근무 (09:00 ~ 익일 09:00)', pay: '월 320만원', pref: '전기기능사 소지자 우대' },
+  { title: '기전기사(격일)', shift: '격일 근무 (07:00 ~ 익일 07:00)', pay: '월 300만원', pref: '소방안전관리자 2급 소지자 우대' },
+  { title: '영선기사', shift: '주 5일 상근 (09:00 ~ 18:00)', pay: '월 280만원', pref: '건물 보수 경험자 우대' },
+  { title: '설비주임', shift: '격일 근무 (08:00 ~ 익일 08:00)', pay: '월 310만원', pref: '에너지관리기능사 소지자 우대' },
+];
+function makeTestJob(email: string, n: number, home: { lat: number; lng: number } | null | undefined): JobItem {
+  const r = TEST_ROLES[n % TEST_ROLES.length];
+  const now = new Date();
+  const stamp = fmtKst(now.toISOString());
+  const due = new Date(now.getTime() + 7 * 86400000 + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const title = `${r.title} 테스트${n + 1}`;
+  const text = [
+    `채용정보 : ${title}`,
+    '단지명 : 정욱',
+    '위탁사명 : (주)정욱',
+    '주소 : 대구광역시 북구 태전동 정욱빌딩 관리사무소',
+    `급여 : ${r.pay} (4대보험)`,
+    `근무형태 : ${r.shift}`,
+    `마감일자 : ${due}`,
+    '제출서류 : 이력서, 자기소개서',
+    '접수방법 : 이메일 접수',
+    `이메일 : ${email}`,
+    '',
+    '[자격요건]',
+    '- 학력 무관',
+    '[우대사항]',
+    `- ${r.pref}`,
+    '',
+    '[업무내용]',
+    '- 건물 설비 순회 점검 및 경미한 보수',
+    '',
+    `※ jobkit 발송 시험용 가짜 공고입니다 (${stamp} 생성).`,
+  ].join('\n');
+  return {
+    id: `manual-test-${now.getTime().toString(36)}`,
+    source: 'manual',
+    origin: '테스트',
+    url: location.href.split('#')[0],
+    list_title: `[테스트] 정욱 ${title}`,
+    site: '정욱',
+    title,
+    company: '(주)정욱',
+    address: '대구광역시 북구 태전동 정욱빌딩 관리사무소',
+    salary: r.pay,
+    shift: r.shift.startsWith('격일') ? '격일' : '상근',
+    deadline: due,
+    deadline_text: due,
+    emails: [email],
+    apply_channels: ['email'],
+    email_apply: true,
+    commute: { verdict: 'ok', min: 12, area: '북구 태전동', route: '도보·버스', matched: '태전동' },
+    geo: home ? { lat: home.lat + 0.006, lng: home.lng + 0.004 } : null,
+    posted: now.toISOString().slice(0, 10),
+    first_seen: now.toISOString(),
+    scanned_at: now.toISOString(),
+    text,
+  } as JobItem;
+}
 
 const SOURCES: { id: JobSource; label: string; short: string; home: string }[] = [
   { id: 'dghma', label: '대구주택관리사협회', short: '협회', home: 'https://www.dghma.org/pg/bbs/board.php?bo_table=recruit_new_3' },
@@ -942,7 +1032,18 @@ function ago(iso: string) {
 function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: { it: JobItem; also?: JobSource[]; why?: string[]; verdict: JobVerdict; min: number | null; km: number | null; store: Store; fonts: Fonts | null; onDrafted: (id: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [refMsg, setRefMsg] = useState<string | null>(null);
   const today = todaySeoul();
+  const scannedAt = it.scanned_at || store.jobs[it.source]?.updated_at || '';
+  const reqAt = store.scanRequests[it.id];
+  const refreshing = !!reqAt && (!store.scanStatus || store.scanStatus.last_scan_at < reqAt) && Date.now() - Date.parse(reqAt) < 30 * 60000;
+  async function refreshOne() {
+    setRefMsg(null);
+    const at = new Date().toISOString();
+    const e = await fireScan(`공고 새로고침 요청: source=${it.source} job=${it.id}`);
+    if (e) return setRefMsg(e);
+    await store.saveScanRequest(it.id, at).catch(() => {});
+  }
   // 공고에 없던 이메일을 직접 알아내 넣었으면 공고 글 끝에 붙여서 읽는다
   const extraEmail = store.jobEmails[it.id] ?? '';
   const text = jobText(it, store);
@@ -989,7 +1090,10 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
           <strong>{p.site || it.company || '(단지명 미상)'}</strong> <span>{p.title || it.list_title}</span>
           {applied && <Pill tone="blue">{applied.created_at.slice(5, 10).replace('-', '/')} {applied.status}</Pill>}
         </div>
-        <span className="small muted">{it.posted || ''}</span>
+        <span className="small muted scan-time" title={it.first_seen ? `처음 발견 ${fmtKst(it.first_seen)}` : ''}>
+          {scannedAt ? `스캔 ${fmtKst(scannedAt)}` : it.posted || ''}
+          {it.first_seen && <span> · 발견 {fmtKst(it.first_seen).split(' ')[0]}</span>}
+        </span>
       </div>
       {why && why.some((w) => !w.startsWith('⚠')) && <div className="why small">👍 {why.filter((w) => !w.startsWith('⚠')).join(' · ')}</div>}
       {why?.filter((w) => w.startsWith('⚠')).map((w) => (
@@ -1094,7 +1198,13 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
         <a className="btn btn-quiet" href={it.url} target="_blank" rel="noreferrer noopener">
           공고 원문
         </a>
+        {it.source !== 'manual' && (
+          <Btn kind="quiet" onClick={refreshOne} disabled={refreshing} title="이 공고가 아직 있는지, 내용이 바뀌었는지 사이트에서 다시 확인합니다">
+            {refreshing ? '↻ 새로고침 중… (3~10분)' : '↻ 새로고침'}
+          </Btn>
+        )}
       </div>
+      {refMsg && <Notice level="warn">{refMsg}</Notice>}
     </article>
   );
 }
@@ -1379,15 +1489,34 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
 
   async function runNow() {
     setRefresh(null);
+    const at = new Date().toISOString();
+    const err = await fireScan('전체 새로 찾기 (수동 요청)');
+    if (err) return setRefresh({ level: 'warn', text: err });
+    await store.saveScanRequest('__all__', at).catch(() => {});
+    setRefresh({ level: 'ok', text: '전체 새로 찾기를 시작했습니다. 5~10분 뒤 이 목록이 저절로 바뀝니다.' });
+  }
+
+  const testJobs = (store.jobs.manual?.items ?? []).filter((x) => x.id.startsWith('manual-test'));
+  async function addTestJob() {
+    const email = (store.prefs.test_email ?? '').trim();
+    if (!email) return setRefresh({ level: 'warn', text: '설정 → "테스트 받는 주소"에 내 이메일을 먼저 넣어 주세요. 테스트 지원서가 그 주소로 갑니다.' });
+    const job = makeTestJob(email, testJobs.length, store.prefs.home_geo);
+    const keepOthers = (store.jobs.manual?.items ?? []).filter((x) => !x.id.startsWith('manual-test'));
     try {
-      const mcp = await (window as any).claude?.use?.('mcp');
-      if (!mcp) throw { code: 'not_granted' };
-      await mcp.callTool('Claude Code Remote', 'fire_trigger', { trigger_id: REFRESH_TRIGGER_ID });
-      setRefresh({ level: 'ok', text: '새로 찾기를 시작했습니다. 5~10분 뒤 이 목록이 저절로 바뀝니다.' });
+      await store.saveManualJobs([job, ...testJobs.slice(0, 4), ...keepOthers]);
+      setSrc('all');
+      setRefresh({ level: 'ok', text: `테스트 공고 "정욱 ${job.title}"을(를) 만들었습니다. 맨 위 공고에서 [지원] → 보낼 지원서에서 📨 보내기를 눌러 ${email} 로 오는지 확인하세요.` });
     } catch {
-      setRefresh({ level: 'warn', text: '지금은 새로 찾기를 시작하지 못했습니다.' });
+      setRefresh({ level: 'danger', text: '테스트 공고를 만들지 못했습니다.' });
     }
   }
+  async function clearTestJobs() {
+    await store.saveManualJobs((store.jobs.manual?.items ?? []).filter((x) => !x.id.startsWith('manual-test'))).catch(() => {});
+    setRefresh({ level: 'ok', text: '테스트 공고를 모두 지웠습니다.' });
+  }
+  const ss = store.scanStatus;
+  const lastScan = ss?.last_scan_at ?? lastUpdate;
+  const allPending = store.scanRequests.__all__ && (!ss || ss.last_scan_at < store.scanRequests.__all__) && Date.now() - Date.parse(store.scanRequests.__all__) < 30 * 60000;
 
   return (
     <div className="jobs-layout">
@@ -1398,11 +1527,31 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
           <div className="card-head">
             <h2>공고 찾기</h2>
             <div className="row">
+              <Btn onClick={addTestJob}>🧪 테스트 공고 만들기</Btn>
+              {testJobs.length > 0 && (
+                <Btn kind="quiet" onClick={clearTestJobs}>
+                  테스트 공고 지우기
+                </Btn>
+              )}
               <a className="btn btn-plain" href="#apply">
                 공고 직접 붙여넣기
               </a>
-              {REFRESH_TRIGGER_ID && <Btn onClick={runNow}>지금 새로 찾기</Btn>}
             </div>
+          </div>
+          <div className="scan-bar">
+            <span>
+              🕒 마지막 스캔 <b>{lastScan ? fmtKst(lastScan) : '아직 없음'}</b>
+              {lastScan && <span className="muted"> ({ago(lastScan)})</span>}
+              {ss && ss.new_total > 0 && Date.now() - Date.parse(ss.last_scan_at) < 36 * 3600000 && <span className="new-badge" style={{ marginLeft: 8 }}>새 공고 {ss.new_total}건</span>}
+            </span>
+            <span className="muted">
+              {REFRESH_TRIGGER_ID ? `다음 자동 스캔 ${fmtKst(nextDailyScan())} (매일 오전 ${DAILY_SCAN.hour}:${String(DAILY_SCAN.minute).padStart(2, '0')})` : '자동 스캔 준비 중'}
+            </span>
+            {REFRESH_TRIGGER_ID && (
+              <Btn kind="quiet" onClick={runNow} disabled={!!allPending}>
+                {allPending ? '전체 새로 찾는 중…' : '↻ 지금 전체 새로 찾기'}
+              </Btn>
+            )}
           </div>
           <p className="small">
             {store.profile.address || '집 주소 미입력'} 출발 · 통근 시간은 집과 근무지 사이 거리와 지하철 3호선·버스 노선으로 추정합니다(±5분). 정확한 시간은 각 공고의 카카오맵 대중교통 길찾기로 확인하세요.
@@ -1423,6 +1572,9 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
             })}
           </div>
           {refresh && <Notice level={refresh.level}>{refresh.text}</Notice>}
+          {ss?.single && !ss.single.found && store.scanRequests[ss.single.job] && Date.now() - Date.parse(ss.last_scan_at) < 3600000 && (
+            <Notice level="warn">새로고침한 공고가 사이트에서 내려갔거나 마감되어 목록에서 뺐습니다.</Notice>
+          )}
         </section>
 
         <div className="row wrap small list-bar">
@@ -2973,6 +3125,7 @@ function RelaySetup({ store }: { store: Store }) {
 function PrefsView({ store }: { store: Store }) {
   const [sig, setSig] = useState(store.prefs.mail_signature);
   const [sender, setSender] = useState(store.prefs.sender_email ?? '');
+  const [testEmail, setTestEmail] = useState(store.prefs.test_email ?? '');
   const [msg, setMsg] = useState<{ text: string; level: 'ok' | 'warn' | 'danger' } | null>(null);
   const [importText, setImportText] = useState('');
   const [confirmImport, setConfirmImport] = useState(false);
@@ -2980,10 +3133,11 @@ function PrefsView({ store }: { store: Store }) {
   useEffect(() => {
     setSig(store.prefs.mail_signature);
     setSender(store.prefs.sender_email ?? '');
+    setTestEmail(store.prefs.test_email ?? '');
   }, [store.prefs]);
 
   async function save() {
-    const s: Prefs = { ...store.prefs, mail_signature: sig, sender_email: sender.trim().toLowerCase() };
+    const s: Prefs = { ...store.prefs, mail_signature: sig, sender_email: sender.trim().toLowerCase(), test_email: testEmail.trim().toLowerCase() };
     try {
       await store.savePrefs(s);
       setMsg({ text: '저장했습니다.', level: 'ok' });
@@ -3057,6 +3211,9 @@ function PrefsView({ store }: { store: Store }) {
             hint="이 페이지를 연 claude.ai 계정에 연결된 Gmail 주소를 적으세요. 받는 쪽에는 이 주소가 보낸 사람으로 보입니다. 비워 두면 바로 보내기가 꺼집니다."
           >
             <input id="pref-sender" type="email" value={sender} onChange={(e) => setSender(e.target.value)} placeholder="예: someone@gmail.com" />
+          </Field>
+          <Field label="테스트 받는 주소" hint="공고 찾기의 [🧪 테스트 공고 만들기]로 만든 가짜 공고에 지원하면 이 주소로 갑니다. 보내지는지 확인할 때 쓰는 내 이메일을 넣으세요.">
+            <input id="pref-test-email" type="email" value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="예: me@gmail.com" />
           </Field>
           <div className="row">
             <Btn kind="primary" onClick={save}>
