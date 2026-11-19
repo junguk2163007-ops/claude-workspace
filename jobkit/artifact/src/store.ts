@@ -63,7 +63,7 @@ export interface AppRec {
 }
 
 /** 앱 설정 + 발송 계정 (최종확인 화면용) */
-export type Prefs = Settings & { sender_email?: string };
+export type Prefs = Settings & { sender_email?: string; home_geo?: { lat: number; lng: number } | null };
 
 export type JobSource = 'dghma' | 'jobkorea' | 'saramin';
 
@@ -85,6 +85,7 @@ export interface JobItem {
   apply_channels: string[];
   email_apply: boolean;
   commute: { verdict: 'ok' | 'edge' | 'far' | 'unknown'; min: number | null; area: string | null; route: string | null; matched: string | null };
+  geo?: { lat: number; lng: number } | null;
   posted: string;
   text: string;
 }

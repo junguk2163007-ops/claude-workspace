@@ -25,7 +25,7 @@ import { drawPage, FONT_FAMILY, layoutLetter, layoutResume, loadFonts, toPdf, ty
 import { EMPTY_PROFILE, useStore, type AppRec, type JobItem, type JobSource, type Prefs, type Store } from './store';
 import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
-import { COMMUTE_LIMIT, estimateCommute, kakaoRouteUrl, type CommuteResult } from './commute';
+import { COMMUTE_LIMIT, estimateCommute, kakaoRouteUrl, type CommuteResult, type Geo } from './commute';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -853,7 +853,19 @@ function CommuteBadge({ c }: { c: Pick<CommuteResult, 'verdict' | 'min'> }) {
   return <Pill tone="gray">통근 확인 필요</Pill>;
 }
 
-function CommuteLine({ c, from, to }: { c: Pick<CommuteResult, 'verdict' | 'min' | 'area' | 'route'>; from: string; to: string }) {
+function CommuteLine({
+  c,
+  from,
+  to,
+  fromGeo,
+  toGeo,
+}: {
+  c: Pick<CommuteResult, 'verdict' | 'min' | 'area' | 'route'>;
+  from: string;
+  to: string;
+  fromGeo?: Geo | null;
+  toGeo?: Geo | null;
+}) {
   return (
     <div className="row wrap small commute-line">
       <CommuteBadge c={c} />
@@ -862,8 +874,8 @@ function CommuteLine({ c, from, to }: { c: Pick<CommuteResult, 'verdict' | 'min'
         {c.route ? ` · ${c.route}` : ''}
       </span>
       {from && to && (
-        <a href={kakaoRouteUrl(from, to)} target="_blank" rel="noreferrer noopener">
-          카카오맵 길찾기
+        <a href={kakaoRouteUrl(from, to, fromGeo, toGeo)} target="_blank" rel="noreferrer noopener">
+          {fromGeo && toGeo ? '카카오맵 대중교통 길찾기' : '카카오맵 길찾기'}
         </a>
       )}
     </div>
@@ -915,7 +927,7 @@ function JobCard({ it, store, fonts, onDrafted }: { it: JobItem; store: Store; f
         </div>
         <span className="small muted">{it.posted || ''}</span>
       </div>
-      <CommuteLine c={it.commute} from={store.profile.address} to={p.address || p.site} />
+      <CommuteLine c={it.commute} from={store.profile.address} to={p.address || p.site} fromGeo={store.prefs.home_geo} toGeo={it.geo} />
       <dl className="job-facts">
         <div>
           <dt>주소</dt>
@@ -2258,7 +2270,7 @@ function PrefsView({ store }: { store: Store }) {
   }, [store.prefs]);
 
   async function save() {
-    const s: Prefs = { near_keywords: splitList(kw), mail_signature: sig, sender_email: sender.trim().toLowerCase() };
+    const s: Prefs = { ...store.prefs, near_keywords: splitList(kw), mail_signature: sig, sender_email: sender.trim().toLowerCase() };
     try {
       await store.savePrefs(s);
       setMsg({ text: '저장했습니다.', level: 'ok' });

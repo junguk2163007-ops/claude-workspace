@@ -8,7 +8,7 @@ import path from 'node:path';
 import { chromium, type Browser } from 'playwright';
 import { parsePosting } from '../lib/parser';
 import { todaySeoul } from '../lib/util/date';
-import { estimateCommute, type CommuteResult } from '../artifact/src/commute';
+import { estimateCommute, type CommuteResult, type Geo } from '../artifact/src/commute';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140 Safari/537.36';
 const TEXT_MAX = 3500;
@@ -34,6 +34,8 @@ export interface JobItem {
   /** 이메일로 접수 가능한지 */
   email_apply: boolean;
   commute: CommuteResult;
+  /** 근무지 좌표 (카카오맵 길찾기용, 도로 단위 정확도). 못 찾으면 null */
+  geo: Geo | null;
   posted: string;
   text: string;
 }
@@ -106,6 +108,7 @@ function toItem(source: SourceId, id: string, url: string, listTitle: string, po
     apply_channels: p.apply_channels,
     email_apply: p.emails.length > 0,
     commute,
+    geo: null,
     posted,
     text: text.slice(0, TEXT_MAX),
   };
@@ -277,6 +280,42 @@ async function collectSaramin(): Promise<{ items: JobItem[]; scanned: number; er
   return { items, scanned, errors };
 }
 
+// ---------- 주소 → 좌표 (OpenStreetMap Nominatim, 1초에 1건 이하) ----------
+
+const GEO_UA = 'jobkit-collector/1.0 (personal job search tool)';
+const geoCache = new Map<string, Geo | null>();
+
+async function geocodeOnce(q: string): Promise<Geo | null> {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=kr&accept-language=ko`;
+  const res = await fetch(url, { headers: { 'User-Agent': GEO_UA } });
+  await sleep(1100);
+  if (!res.ok) return null;
+  const d = (await res.json()) as { lat: string; lon: string }[];
+  return d[0] ? { lat: Number(d[0].lat), lng: Number(d[0].lon) } : null;
+}
+
+/** 주소를 점점 줄여 가며 찾는다: 전체 → 괄호·건물명 뺀 도로명주소 → 구+동 */
+export async function geocode(address: string): Promise<Geo | null> {
+  const a = address.replace(/☎.*$/, '').replace(/\(\d{5}\)/, '').trim();
+  if (!a) return null;
+  if (geoCache.has(a)) return geoCache.get(a)!;
+  const road = a.match(/^(.*?(?:로|길)\s*\d+(?:-\d+)?)/)?.[1];
+  const dong = a.match(/\(([가-힣0-9]+동)/)?.[1];
+  const gu = a.match(/(북구|서구|중구|남구|동구|수성구|달서구|달성군|칠곡군)/)?.[1];
+  const tries = [a, road, gu && dong ? `대구 ${gu} ${dong}` : undefined].filter((x, i, arr): x is string => !!x && arr.indexOf(x) === i);
+  let found: Geo | null = null;
+  for (const q of tries) {
+    try {
+      found = await geocodeOnce(q);
+    } catch {
+      found = null;
+    }
+    if (found) break;
+  }
+  geoCache.set(a, found);
+  return found;
+}
+
 // ---------- 실행 ----------
 
 async function main() {
@@ -295,6 +334,7 @@ async function main() {
         r = { items: [], scanned: 0, errors: [`${source}: ${(e as Error).message}`] };
       }
       const kept = r.items.filter((it) => keep(it, today) === 'keep');
+      for (const it of kept) it.geo = await geocode(it.address);
       kept.sort((a, b) => (a.commute.min ?? 99) - (b.commute.min ?? 99));
       const result: SourceResult = {
         source,

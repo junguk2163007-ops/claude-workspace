@@ -122,7 +122,17 @@ export function estimateCommute(address: string, site: string, table: CommuteAre
   return { verdict: 'unknown', min: null, area: district ? `${district}(동 미상)` : null, route: null, matched: null };
 }
 
-export function kakaoRouteUrl(from: string, to: string): string {
+export interface Geo {
+  lat: number;
+  lng: number;
+}
+
+/** 카카오맵 대중교통 길찾기. 두 좌표가 있으면 경로 결과 화면으로 바로 열고, 없으면 이름으로 검색 화면을 연다. */
+export function kakaoRouteUrl(from: string, to: string, fromGeo?: Geo | null, toGeo?: Geo | null): string {
+  // 이름 안의 쉼표·슬래시는 링크 구분자와 겹치므로 공백으로 바꾼다
+  const nm = (s: string) => encodeURIComponent(s.replace(/[,/]/g, ' ').replace(/\s+/g, ' ').trim() || '위치');
+  if (fromGeo && toGeo)
+    return `https://map.kakao.com/link/by/traffic/${nm(from)},${fromGeo.lat},${fromGeo.lng}/${nm(to)},${toGeo.lat},${toGeo.lng}`;
   return `https://map.kakao.com/?sName=${encodeURIComponent(from)}&eName=${encodeURIComponent(to)}`;
 }
 
