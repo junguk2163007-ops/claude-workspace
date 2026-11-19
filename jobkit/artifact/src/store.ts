@@ -10,6 +10,7 @@ import type { Blocks, ProfileData, Qualification, Settings, ApplicationStatus, S
 import type { ParsedPosting } from '../../lib/parser';
 import type { LetterData, ResumeData } from '../../lib/render/compose';
 import { DEFAULT_BLOCKS, DEFAULT_PREFS, DEFAULT_QUALS } from './defaults';
+import type { TailorDoc } from './tailor';
 import { DEFAULT_CRITERIA, type ChatMessage, type Criteria } from './criteria';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -58,6 +59,10 @@ export interface AppRec {
   snapshot: Snapshot | null;
   /** 공고에 맞춰 다시 쓴 때 */
   tailored_at?: string | null;
+  /** 어느 공고로 만든 서류인지 (공고 id) */
+  job_id?: string | null;
+  /** 맞춤 글을 일부러 되돌렸으면 다시 저절로 입히지 않는다 */
+  tailor_off?: boolean;
   /** 서류 양식 버전 (오르면 작성중 서류를 최신 정보로 다시 만든다) */
   snapshot_v?: number;
   /** 최종확인 화면에서 Gmail 로 보낸 기록 */
@@ -140,6 +145,8 @@ export interface StoreData {
   jobEmails: Record<string, string>;
   /** 마지막 자동/수동 스캔 요약 */
   scanStatus: ScanStatus | null;
+  /** 미리 써 둔 공고 맞춤 글 (공고 id → 글) */
+  tailors: Record<string, TailorDoc>;
   /** 공고별 새로고침 요청 (공고 id → 요청 시각) */
   scanRequests: Record<string, string>;
 }
@@ -201,6 +208,7 @@ export function useStore(): Store {
     chat: [],
     jobEmails: {},
     scanStatus: null,
+    tailors: {},
     scanRequests: {},
   });
   const [mode, setMode] = useState<StoreMode>('loading');
@@ -261,6 +269,19 @@ export function useStore(): Store {
       sub('job_emails', (d) => ({ jobEmails: d && typeof d.map === 'object' && d.map ? (d.map as Record<string, string>) : {} }));
       sub('criteria_chat', (d) => ({ chat: d && Array.isArray(d.messages) ? (d.messages as ChatMessage[]) : [] }));
       sub('prefs', (d) => ({ prefs: d ? ({ ...DEFAULT_PREFS, ...(d as object) } as Prefs) : DEFAULT_PREFS }));
+      unsubs.push(
+        db
+          .doc(`${base}/tailor`)
+          .collection('list')
+          .onSnapshot(
+            (s: any) => {
+              const map: Record<string, TailorDoc> = {};
+              for (const d of s.docs) map[d.id] = d.data() as TailorDoc;
+              setData((prev) => ({ ...prev, tailors: map }));
+            },
+            () => {},
+          ),
+      );
       unsubs.push(
         db
           .doc(`${base}/apps`)

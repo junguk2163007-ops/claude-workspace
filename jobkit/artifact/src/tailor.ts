@@ -2,8 +2,12 @@
 // 메일 본문·자기소개서 다섯 항목·이력서 자기소개를 다시 쓴다.
 // 사실(경력·자격·학력·병역·숫자)은 바꾸지 못하게 검사하고, 어긋난 항목은 원래 글을 그대로 둔다.
 
-import type { LetterSection } from '../../lib/render/compose';
-import type { ProfileData, Qualification } from '../../lib/types';
+import { analyze } from '../../lib/analyze';
+import { mailBody, signature } from '../../lib/mail';
+import { parsePosting, type ParsedPosting } from '../../lib/parser';
+import { composeLetter, composeResume, type LetterData, type LetterSection, type ResumeData } from '../../lib/render/compose';
+import type { Blocks, ProfileData, Qualification, Settings } from '../../lib/types';
+import { todaySeoul } from '../../lib/util/date';
 
 export type SectionKey = LetterSection['key'];
 export const SECTION_KEYS: SectionKey[] = ['growth', 'strength', 'experience', 'motive', 'goal'];
@@ -144,4 +148,78 @@ export function checkTailored(raw: unknown, t: TailorInput): TailorResult {
     intro = joined === t.intro.join('\n') ? t.intro : joined.split('\n').map((x) => x.trim()).filter(Boolean);
   } else kept.push({ what: '이력서 자기소개', why: '형식이 맞지 않음' });
   return { mail_body: mail, sections, intro, summary: typeof r.summary === 'string' ? r.summary.slice(0, 300) : '', kept };
+}
+
+/** 공고 글 지문 (공고가 바뀌면 맞춤 글을 다시 쓴다) */
+export function textHash(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+/** 미리 써 둔 공고 맞춤 글 (shared/tailor/list/<공고 id>) */
+export interface TailorDoc {
+  job_id: string;
+  text_hash: string;
+  at: string;
+  mail_body: string;
+  sections: Record<SectionKey, string>;
+  intro: string[];
+  summary: string;
+  kept: { what: string; why: string }[];
+}
+
+/** 필수로 요구하는데 곧 딸 수도 없는 자격(기사급 등). 같은 줄에 대안(기능사 등)이 있으면 막지 않는다 */
+export function hardBlockers(rows: ReturnType<typeof analyze>['rows'], quals: Qualification[]): string[] {
+  const byLine = new Map<string, { block: boolean; name: string }[]>();
+  for (const r of rows) {
+    if (r.qualification_id == null || (r.category !== '필수(명시)' && r.category !== '필수로 보임')) continue;
+    const q = quals.find((x) => x.id === r.qualification_id);
+    if (!q) continue;
+    const block = !q.have && !q.promisable && r.verdict === '미충족-장벽' && !/경력/.test(q.name);
+    byLine.set(r.line, [...(byLine.get(r.line) ?? []), { block, name: q.name }]);
+  }
+  const out = new Set<string>();
+  for (const hits of byLine.values()) if (hits.every((h) => h.block)) hits.forEach((h) => out.add(h.name));
+  return [...out];
+}
+
+export interface BaseInput {
+  profile: ProfileData;
+  blocks: Blocks;
+  quals: Qualification[];
+  prefs: Settings;
+  item: { text: string; site: string; title: string; address: string; company: string };
+  near: boolean;
+  today?: string;
+}
+
+/** 공고 하나로 기본 서류(메일·자기소개서·이력서 자기소개)를 만든다 — 페이지의 [지원]과 같은 방식 */
+export function baseDocs(b: BaseInput): { parsed: ParsedPosting; letter: LetterData; resume: ResumeData; mailNoSig: string; sig: string; blockers: string[] } {
+  const today = b.today ?? todaySeoul();
+  const p0 = parsePosting(b.item.text, today);
+  const parsed: ParsedPosting = { ...p0, site: p0.site || b.item.site, title: p0.title || b.item.title, address: p0.address || b.item.address, company: p0.company || b.item.company };
+  const analysis = analyze(b.item.text, parsed, {
+    qualifications: b.quals,
+    settings: { ...b.prefs, near_keywords: b.near && parsed.address.trim() ? [parsed.address.trim()] : [] },
+    today,
+  });
+  const profile = { ...b.profile, photo_file: null };
+  const input = { profile, blocks: b.blocks, parsed, analysis, today };
+  const sig = signature(b.prefs, b.profile);
+  const mail = mailBody({ template: b.blocks.mail_body, parsed, profile: b.profile, settings: b.prefs, extraDocs: [] });
+  const mailNoSig = sig && mail.trimEnd().endsWith(sig) ? mail.trimEnd().slice(0, -sig.length).trimEnd() : mail.trimEnd();
+  return { parsed, letter: composeLetter(input), resume: composeResume(input), mailNoSig, sig, blockers: hardBlockers(analysis.rows, b.quals) };
+}
+
+/** 미리 써 둔 맞춤 글을 서류에 입힌다 */
+export function applyTailorDoc(t: TailorDoc, letter: LetterData, resume: ResumeData, sig: string): { letter: LetterData; resume: ResumeData; mail: string } {
+  return {
+    letter: { ...letter, sections: letter.sections.map((s) => ({ ...s, text: t.sections[s.key] ?? s.text })) },
+    resume: { ...resume, intro: t.intro.length ? t.intro : resume.intro },
+    mail: sig ? `${t.mail_body.trimEnd()}\n\n${sig}` : t.mail_body,
+  };
 }

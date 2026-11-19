@@ -5,7 +5,7 @@ import { parsePosting, parseSalaryAmount, type ParsedPosting, type Category } fr
 import { analyze, type Analysis, type HistoryEntry, type ReqRow, type Verdict } from '../../lib/analyze';
 import { checkProfile, composeLetter, composeResume, type LetterData, type ResumeData } from '../../lib/render/compose';
 import { gmailComposeUrl, isPortalOnly, mailBody, mailSubject, mailtoUrl, signature } from '../../lib/mail';
-import { checkTailored, tailorPrompt, type SectionKey, type TailorResult } from './tailor';
+import { applyTailorDoc, checkTailored, hardBlockers, tailorPrompt, textHash, type SectionKey, type TailorDoc, type TailorResult } from './tailor';
 import { koreanDate, todaySeoul } from '../../lib/util/date';
 import { docFileName } from '../../lib/util/filename';
 import { digitsOnly, normalizeSite } from '../../lib/util/text';
@@ -621,18 +621,36 @@ function analyzeFor(store: Store, text: string, parsed: ParsedPosting, currentId
 }
 
 /** 공고 하나로 이력서·자소서·메일을 만들어 "작성중" 지원 건으로 만든다 */
+/** 이 공고 글에 맞는 미리 써 둔 맞춤 글 (공고가 바뀌었으면 없음) */
+function tailorFor(store: Store, jobId: string | null | undefined, text: string): TailorDoc | null {
+  const h = textHash(text);
+  if (jobId) {
+    const t = store.tailors[jobId];
+    if (t && t.text_hash === h) return t;
+  }
+  return Object.values(store.tailors).find((t) => t.text_hash === h) ?? null;
+}
+
 /** 서류 양식 버전: 2 = 원본 이력서 부제 형식(「직책」)·경력 문구 바로잡음, 3 = 추가 서류 문장은 첨부할 때만 */
 const SNAPSHOT_V = 3;
 
-function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs: string[], reuse: AppRec | null, near?: boolean) {
+function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs: string[], reuse: AppRec | null, near?: boolean, jobId?: string | null, opts: { plain?: boolean } = {}) {
   const today = todaySeoul();
   const analysis = analyzeFor(store, text, parsed, reuse?.id ?? null, near);
   const profile = { ...store.profile, photo_file: store.photo ? 'photo' : null };
   const input = { profile, blocks: store.blocks, parsed, analysis, today };
-  const resumeData = composeResume(input);
-  const letterData = composeLetter(input);
+  let resumeData = composeResume(input);
+  let letterData = composeLetter(input);
   const subj = mailSubject(parsed, store.profile.name);
-  const mb = mailBody({ template: store.blocks.mail_body, parsed, profile: store.profile, settings: store.prefs, extraDocs });
+  let mb = mailBody({ template: store.blocks.mail_body, parsed, profile: store.profile, settings: store.prefs, extraDocs });
+  // 미리 써 둔 이 공고 맞춤 글이 있으면 입힌다
+  const tdoc = opts.plain ? null : tailorFor(store, jobId ?? reuse?.job_id, text);
+  if (tdoc) {
+    const t = applyTailorDoc(tdoc, letterData, resumeData, signature(store.prefs, store.profile));
+    letterData = t.letter;
+    resumeData = t.resume;
+    mb = t.mail;
+  }
   const recipient = parsed.emails[0] ?? '';
   const now = new Date().toISOString();
   const keep = reuse && reuse.status === '작성중' ? reuse : null;
@@ -660,6 +678,8 @@ function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs
     memo: keep ? keep.memo : '',
     snapshot: { resume: resumeData, letter: letterData, photo: store.photo },
     snapshot_v: SNAPSHOT_V,
+    job_id: jobId ?? reuse?.job_id ?? null,
+    tailored_at: tdoc ? tdoc.at : null,
   };
   return { rec, resumeData, letterData, subj, mb, recipient };
 }
@@ -1142,7 +1162,7 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
     setErr(null);
     try {
       // 추가 서류(자격증 사본 등)는 실제로 첨부할 때만 본문에 문장을 넣는다
-      const { rec } = buildDraft(store, text, p, [], draft ?? null, verdict === 'ok');
+      const { rec } = buildDraft(store, text, p, [], draft ?? null, verdict === 'ok', it.id);
       await store.saveApp(rec);
       onDrafted(rec.id);
     } catch {
@@ -1466,21 +1486,6 @@ function ChatPanel({ store, stats }: { store: Store; stats: string }) {
       </form>
     </aside>
   );
-}
-
-/** 필수로 요구하는데 곧 딸 수도 없는 자격(기사급 등). 같은 줄에 대안(기능사 등)이 있으면 막지 않는다 */
-function hardBlockers(rows: ReturnType<typeof analyze>['rows'], quals: Qualification[]): string[] {
-  const byLine = new Map<string, { block: boolean; name: string }[]>();
-  for (const r of rows) {
-    if (r.qualification_id == null || (r.category !== '필수(명시)' && r.category !== '필수로 보임')) continue;
-    const q = quals.find((x) => x.id === r.qualification_id);
-    if (!q) continue;
-    const block = !q.have && !q.promisable && r.verdict === '미충족-장벽' && !/경력/.test(q.name);
-    byLine.set(r.line, [...(byLine.get(r.line) ?? []), { block, name: q.name }]);
-  }
-  const out = new Set<string>();
-  for (const hits of byLine.values()) if (hits.every((h) => h.block)) hits.forEach((h) => out.add(h.name));
-  return [...out];
 }
 
 /** 직접 넣은 접수 이메일을 공고 글 끝에 붙인다 */
@@ -1947,11 +1952,22 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     sections: a.snapshot?.letter.sections ?? [],
     intro: a.snapshot?.resume.intro ?? [],
   });
+  const stored = tailorFor(store, a.job_id, a.posting_text);
   async function tailor() {
     setTailorErr(null);
     setProposal(null);
+    // 1) 미리 써 둔 이 공고 맞춤 글이 있으면 그것을 보여 준다 (어느 화면에서든 됨)
+    if (stored && a.tailored_at !== stored.at) {
+      return setProposal({ mail_body: stored.mail_body, sections: stored.sections, intro: stored.intro, summary: stored.summary, kept: stored.kept ?? [] });
+    }
+    // 2) 없으면 이 화면의 AI 로 새로 쓴다
     const sample = await capUse('sample');
-    if (!sample) return setTailorErr('이 화면에서는 AI 다시 쓰기를 쓸 수 없습니다. claude.ai 에서 이 페이지를 열어 주세요.');
+    if (!sample)
+      return setTailorErr(
+        stored
+          ? '이미 이 공고에 맞춘 글이 적용돼 있습니다.'
+          : '이 공고의 맞춤 글은 아직 준비되지 않았습니다. 매일 아침 자동 작업이 새 공고마다 써 둡니다. (지금 바로 쓰려면 claude.ai 에서 페이지 주인 계정으로 열어 다시 눌러 주세요.)',
+      );
     setTailoring(true);
     try {
       const t = tailorInput();
@@ -1971,20 +1987,29 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     const resume = { ...a.snapshot.resume, intro: proposal.intro };
     const nb = sig ? `${proposal.mail_body.trimEnd()}\n\n${sig}` : proposal.mail_body;
     setBody(nb);
-    await store.patchApp(a.id, { snapshot: { ...a.snapshot, letter, resume }, mail_body: nb, tailored_at: new Date().toISOString() }).catch(() => setTailorErr('저장하지 못했습니다.'));
+    const fromStored = !!stored && proposal.mail_body === stored.mail_body;
+    await store
+      .patchApp(a.id, { snapshot: { ...a.snapshot, letter, resume }, mail_body: nb, tailored_at: fromStored ? stored!.at : new Date().toISOString(), job_id: a.job_id ?? stored?.job_id ?? null, tailor_off: false })
+      .catch(() => setTailorErr('저장하지 못했습니다.'));
     setProposal(null);
   }
 
   // 최신 프로필·문구로 서류를 다시 만든다 (받는 사람은 유지)
   const [rebuilt, setRebuilt] = useState(false);
-  async function rebuild() {
-    const { rec } = buildDraft(store, a.posting_text, a.parsed, [], a);
+  async function rebuild(plain = false) {
+    const off = plain || !!a.tailor_off;
+    const { rec } = buildDraft(store, a.posting_text, a.parsed, [], a, undefined, a.job_id, { plain: off });
     setExtras([]);
-    await store.saveApp({ ...rec, selected_email: a.selected_email ?? rec.selected_email }).catch(() => {});
+    await store.saveApp({ ...rec, selected_email: a.selected_email ?? rec.selected_email, tailor_off: off }).catch(() => {});
     setSubject(rec.mail_subject);
     setBody(rec.mail_body);
     setRebuilt(true);
   }
+  // 미리 써 둔 맞춤 글이 있는데 아직 안 입힌 작성중 서류는 한 번 저절로 입힌다
+  useEffect(() => {
+    if (a.status === '작성중' && !a.tailored_at && !a.tailor_off && stored && store.access !== 'none' && store.mode === 'db' && (a.snapshot_v ?? 1) >= SNAPSHOT_V) void rebuild();
+  }, [a.id, stored?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 예전 양식으로 만든 작성중 서류는 한 번 저절로 새로 만든다
   useEffect(() => {
     if (a.status === '작성중' && (a.snapshot_v ?? 1) < SNAPSHOT_V && store.access !== 'none' && store.mode === 'db') void rebuild();
@@ -2116,13 +2141,20 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
 
       <div className="tailor stack-s">
         <div className="row wrap">
-          <Btn kind={a.tailored_at ? 'plain' : 'primary'} onClick={tailor} disabled={tailoring || !a.snapshot}>
-            {tailoring ? '✍️ 이 공고에 맞춰 쓰는 중… (20~40초)' : a.tailored_at ? '✍️ 다시 맞춰 쓰기' : '✍️ 이 공고에 맞춰 다시 쓰기'}
-          </Btn>
+          {!(stored && a.tailored_at === stored.at) && (
+            <Btn kind="primary" onClick={tailor} disabled={tailoring || !a.snapshot}>
+              {tailoring ? '✍️ 이 공고에 맞춰 쓰는 중… (20~40초)' : stored ? '✍️ 이 공고 맞춤 글 보기·적용' : '✍️ 이 공고에 맞춰 다시 쓰기'}
+            </Btn>
+          )}
+          {a.tailored_at && (
+            <Btn kind="quiet" onClick={() => rebuild(true)}>
+              기본 글로 되돌리기
+            </Btn>
+          )}
           <span className="small muted">
             {a.tailored_at
-              ? `✓ ${fmtKst(a.tailored_at)} 이 공고에 맞춰 다시 썼습니다.`
-              : '메일·자기소개서·이력서 자기소개를 이 단지·직무·근무형태·우대사항에 맞춰 새로 씁니다. 경력·자격·숫자는 바꾸지 않습니다.'}
+              ? `✓ 이 공고에 맞춘 메일·자기소개서·이력서 자기소개입니다.`
+              : '메일·자기소개서·이력서 자기소개를 이 단지·직무·근무형태·우대사항에 맞춰 씁니다. 경력·자격·숫자는 바꾸지 않습니다.'}
           </span>
         </div>
         {tailorErr && <Notice level="warn">{tailorErr}</Notice>}
@@ -2222,7 +2254,7 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
           <Btn kind="quiet" onClick={() => setShowDocs(!showDocs)}>
             {showDocs ? '서류 접기' : '서류 보기'}
           </Btn>
-          <Btn kind="quiet" onClick={rebuild} disabled={a.send_state === 'relay'}>
+          <Btn kind="quiet" onClick={() => rebuild()} disabled={a.send_state === 'relay'}>
             최신 정보로 다시 만들기
           </Btn>
           {rebuilt && <span className="small ok-text">✓ 최신 프로필·문구로 다시 만들었습니다</span>}

@@ -123,6 +123,11 @@ describe('보조 함수', () => {
     expect(p.phones).toContain('053-999-8888');
     expect(p.break_time).toBe('4시간');
   });
+  it('"지원하는 아파트명과 직책을 기재" 같은 설명은 필수 문구가 아니다', () => {
+    const p = parsePosting('5. 제출서류\n- 이력서 및 자격증 사본\n※ 지원 시 이력서 상단에 지원하는 아파트명과 직책을 꼭 기재하여 주시기 바랍니다.', TODAY);
+    expect(p.required_phrase).toBeNull();
+  });
+
   it('필수 기재 문구가 양식(○○)이면 추출하지 않는다', () => {
     const p = parsePosting('메일 제목에 "지원분야_성명" 필수 기재', TODAY);
     expect(p.required_phrase).toBeNull();

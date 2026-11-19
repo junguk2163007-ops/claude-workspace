@@ -309,7 +309,7 @@ function normalizePhone(p) {
   return p.trim();
 }
 var QUOTE_RES = [/“\s*([^”\n]{2,80}?)\s*”/, /"\s*([^"\n]{2,80}?)\s*"/, /‘\s*([^’\n]{2,80}?)\s*’/, /'\s*([^'\n]{2,80}?)\s*'/, /「\s*([^」\n]{2,80}?)\s*」/, /『\s*([^』\n]{2,80}?)\s*』/];
-var PLACEHOLDER_RE = /(지원\s*분야|지원\s*직종|성명|이름|단지명|지원자명|○○|OO|xx|XX|\{|\})/;
+var PLACEHOLDER_RE = /(지원\s*분야|지원\s*직종|성명|이름|단지\s*명|아파트\s*명|직책|지원하는|해당\s*(?:단지|아파트|직)|지원자명|○○|OO|xx|XX|\{|\})/;
 function extractRequiredPhrase(lines) {
   const isTrigger = (t) => /(기재|표기|명시|적어)/.test(t) || /필수/.test(t) && /(제목|상단)/.test(t);
   const texts = lines.map((l) => l.raw.trim());
