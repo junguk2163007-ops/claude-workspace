@@ -5,8 +5,9 @@ import { makeZip } from '@/lib/util/zip';
 
 describe('한글 파일명 다운로드 헤더', () => {
   it('파일명 정리 (특수문자·공백)', () => {
-    expect(docFileName('이력서', '정민욱', '힐스테이트데시앙 도남3단지', 'pdf')).toBe('이력서_정민욱_힐스테이트데시앙_도남3단지.pdf');
-    expect(docFileName('자기소개서', '정민욱', '동우/힐스테이트데시앙도남2단지', 'pdf')).toBe('자기소개서_정민욱_동우_힐스테이트데시앙도남2단지.pdf');
+    expect(docFileName('이력서', '정민욱', '힐스테이트데시앙 도남3단지', 'pdf')).toBe('정민욱_이력서.pdf');
+    expect(docFileName('자기소개서', '정민욱', '동우/힐스테이트데시앙도남2단지', 'pdf')).toBe('정민욱_자기소개서.pdf');
+    expect(docFileName('지원서류', '정민욱', '동우/힐스테이트데시앙도남2단지', 'zip')).toBe('정민욱_지원서류_동우_힐스테이트데시앙도남2단지.zip');
     expect(sanitizeFilePart('수성알파시티청아람 / 관리주임')).toBe('수성알파시티청아람_관리주임');
     expect(sanitizeFilePart('a:b*c?"d<e>f|g\\h')).toBe('a_b_c_d_e_f_g_h');
     expect(sanitizeFilePart('')).toBe('지원처');

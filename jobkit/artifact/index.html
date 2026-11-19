@@ -275,6 +275,10 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 .origin { display: inline-block; flex: none; font-size: 12.5px; font-weight: 700; line-height: 1; padding: 5px 8px; margin-right: 6px; border-radius: 6px; vertical-align: 2px; color: var(--src-fg, var(--b-fg)); background: var(--src-bg, var(--b-bg)); white-space: nowrap; }
 .new-badge { display: inline-block; font-size: 12px; font-weight: 800; line-height: 1; padding: 5px 7px; margin-right: 6px; border-radius: 6px; vertical-align: 2px; background: var(--r-bg); color: var(--r-fg); letter-spacing: .03em; }
 .why { color: var(--g-fg); font-weight: 600; }
+.toast { position: sticky; top: 64px; z-index: 30; display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 14px 18px; border-radius: 12px; font-size: 16px; font-weight: 700; box-shadow: var(--paper-shadow); margin-bottom: 14px; }
+.toast-ok { background: var(--g-bg); color: var(--g-fg); border: 1.5px solid var(--g-fg); }
+.toast-danger { background: var(--r-bg); color: var(--r-fg); border: 1.5px solid var(--r-fg); }
+.del-btn { padding: 3px 10px; font-size: 13px; }
 .why-warn { color: var(--o-fg); font-weight: 600; }
 .origin.origin-also { background: var(--surface); color: var(--src-fg); box-shadow: inset 0 0 0 1.5px var(--src-fg); }
 .source-name { font-weight: 800; font-size: 15.5px; }

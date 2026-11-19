@@ -38,7 +38,7 @@ describe('자기소개서 변형 슬롯', () => {
 
   it('F2: 아파트 접두어, 출근예정일 M3, 포부에 소방만 (기계설비 언급 금지)', () => {
     const { sec, letter } = compose('F2_donam2.txt');
-    expect(letter.target).toBe('동우/힐스테이트데시앙도남2단지 시설주임 지원');
+    expect(letter.target).toBe('동우/힐스테이트데시앙도남2단지 「시설주임」 지원');
     expect(sec('experience').startsWith('아파트 시설관리 실무 경력은 없지만, 건설현장에서')).toBe(true);
     expect(sec('motive')).toContain('안내해 주신 출근 예정일(2026년 10월 1일)에 맞춰 근무를 시작할 수 있습니다.');
     expect(sec('goal')).toContain(FIRE);
@@ -111,7 +111,7 @@ describe('이력서 데이터', () => {
     expect(salesYears(getProfile().careers)).toBe(5);
   });
   it('지원처 표기 기본값', () => {
-    expect(applyTarget({ required_phrase: null, site: '테스트단지', title: '관리주임' })).toBe('테스트단지 관리주임 지원');
+    expect(applyTarget({ required_phrase: null, site: '테스트단지', title: '관리주임' })).toBe('테스트단지 「관리주임」 지원');
   });
   it('필수 입력 검사 (사진 없음, 발급기관 비어 있음)', () => {
     const c = checkProfile(getProfile());

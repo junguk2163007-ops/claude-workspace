@@ -15,11 +15,12 @@ export interface ComposeInput {
   today: string;
 }
 
-/** 지원처 표기: 공고 필수 기재 문구가 있으면 글자 그대로, 없으면 "{site} {title} 지원" */
+/** 지원처 표기: 공고 필수 기재 문구가 있으면 글자 그대로, 없으면 "{site} 「{title}」 지원" (원본 이력서 형식) */
 export function applyTarget(parsed: Pick<ParsedPosting, 'required_phrase' | 'site' | 'title'>): string {
   const rp = parsed.required_phrase?.trim();
   if (rp) return rp;
-  return `${parsed.site.trim()} ${parsed.title.trim()} 지원`.replace(/\s+/g, ' ').trim();
+  const t = parsed.title.trim();
+  return `${parsed.site.trim()} ${t ? `「${t}」` : ''} 지원`.replace(/\s+/g, ' ').trim();
 }
 
 /** 분양 경력 기간(년) */

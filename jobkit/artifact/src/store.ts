@@ -56,6 +56,8 @@ export interface AppRec {
   status: ApplicationStatus;
   memo: string;
   snapshot: Snapshot | null;
+  /** 서류 양식 버전 (오르면 작성중 서류를 최신 정보로 다시 만든다) */
+  snapshot_v?: number;
   /** 최종확인 화면에서 Gmail 로 보낸 기록 */
   sent_at?: string | null;
   /** sent 보냄 / unknown 보냈는지 불확실 / queued 정민욱 계정에서 보내도록 넘김 */

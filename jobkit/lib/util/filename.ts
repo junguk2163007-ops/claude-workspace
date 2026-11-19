@@ -11,7 +11,8 @@ export function sanitizeFilePart(s: string | null | undefined): string {
 }
 
 export function docFileName(kind: '이력서' | '자기소개서' | '지원서류', name: string, site: string, ext: 'pdf' | 'zip'): string {
-  return `${kind}_${sanitizeFilePart(name)}_${sanitizeFilePart(site)}.${ext}`;
+  // 받는 쪽에서 보기 좋게 "정민욱_이력서.pdf". 묶음(zip)만 단지명을 붙여 구분한다
+  return ext === 'zip' ? `${sanitizeFilePart(name)}_${kind}_${sanitizeFilePart(site)}.zip` : `${sanitizeFilePart(name)}_${kind}.pdf`;
 }
 
 /** RFC 5987/6266: ASCII 대체 이름 + filename* (UTF-8). 대체 이름은 filename* 를 모르는 오래된 클라이언트용. */

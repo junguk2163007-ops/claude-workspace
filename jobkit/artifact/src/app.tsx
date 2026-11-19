@@ -26,7 +26,7 @@ import { EMPTY_PROFILE, useStore, type AppRec, type JobItem, type JobSource, typ
 import { DEFAULT_BLOCKS } from './defaults';
 import { SAMPLE_POSTING } from './sample';
 import { applyChanges, criteriaPrompt, filterJob, type ChatMessage, type Criteria, type FilterResult, type JobVerdict } from './criteria';
-import { newKey, pingUrl, relayScript, submitRelay, validRelayBase, RELAY_VERSION } from './relay';
+import { isRelaySignal, newKey, pingUrl, relayScript, submitRelay, validRelayBase, RELAY_VERSION } from './relay';
 import { recommend } from './criteria';
 import { estimateCommute, finalMinutes, kakaoRouteUrl, type CommuteResult, type Geo } from './commute';
 
@@ -619,6 +619,9 @@ function analyzeFor(store: Store, text: string, parsed: ParsedPosting, currentId
 }
 
 /** 공고 하나로 이력서·자소서·메일을 만들어 "작성중" 지원 건으로 만든다 */
+/** 서류 양식 버전: 2 = 원본 이력서 부제 형식(「직책」)·경력 문구 바로잡음 */
+const SNAPSHOT_V = 2;
+
 function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs: string[], reuse: AppRec | null, near?: boolean) {
   const today = todaySeoul();
   const analysis = analyzeFor(store, text, parsed, reuse?.id ?? null, near);
@@ -654,6 +657,7 @@ function buildDraft(store: Store, text: string, parsed: ParsedPosting, extraDocs
     status: '작성중',
     memo: keep ? keep.memo : '',
     snapshot: { resume: resumeData, letter: letterData, photo: store.photo },
+    snapshot_v: SNAPSHOT_V,
   };
   return { rec, resumeData, letterData, subj, mb, recipient };
 }
@@ -1670,6 +1674,20 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
     }
   }
 
+  // 최신 프로필·문구로 서류를 다시 만든다 (받는 사람은 유지)
+  const [rebuilt, setRebuilt] = useState(false);
+  async function rebuild() {
+    const { rec } = buildDraft(store, a.posting_text, a.parsed, a.extra_docs ?? [], a);
+    await store.saveApp({ ...rec, selected_email: a.selected_email ?? rec.selected_email }).catch(() => {});
+    setSubject(rec.mail_subject);
+    setBody(rec.mail_body);
+    setRebuilt(true);
+  }
+  // 예전 양식으로 만든 작성중 서류는 한 번 저절로 새로 만든다
+  useEffect(() => {
+    if (a.status === '작성중' && (a.snapshot_v ?? 1) < SNAPSHOT_V && store.access !== 'none' && store.mode === 'db') void rebuild();
+  }, [a.id, a.snapshot_v]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const relayReady = !!(store.prefs.relay_url && store.prefs.relay_key && store.prefs.sender_email);
   const [relayMsg, setRelayMsg] = useState<{ text: string; level: 'info' | 'warn' | 'danger' | 'ok' } | null>(null);
   // 버튼을 누른 순간 바로 보낼 수 있게 PDF 를 미리 만들어 둔다 (기다렸다 보내면 브라우저가 새 창을 막는다)
@@ -1714,19 +1732,19 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
       setRelayMsg({ text: '발송 창을 열지 못했습니다. 메일은 나가지 않았습니다.', level: 'danger' });
       return;
     }
-    store
-      .patchApp(a.id, {
-        status: '지원함',
-        mail_subject: subject,
-        mail_body: finalBody,
-        selected_email: to,
-        sent_at: new Date().toISOString(),
-        send_state: 'sent',
-        relay_job: rid,
-        gmail_url: `https://mail.google.com/mail/?authuser=${encodeURIComponent(store.prefs.sender_email ?? '')}#sent`,
-      })
-      .catch(() => {});
+    setRelayMsg(null);
+    // 발송기 창이 "보냈습니다" 신호를 보내면 그때 지원함으로 바꾼다 (App 의 신호 처리)
+    store.patchApp(a.id, { mail_subject: subject, mail_body: finalBody, selected_email: to, send_state: 'relay', relay_job: rid }).catch(() => {});
   }
+
+  // 보내는 중 상태가 오래가면 직접 확인하게 한다
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (a.send_state !== 'relay') return;
+    const t = setInterval(() => setTick((x) => x + 1), 5000);
+    return () => clearInterval(t);
+  }, [a.send_state]);
+  const pendingFor = a.send_state === 'relay' ? Date.now() - Date.parse(a.updated_at || a.created_at) : 0;
 
   async function markSent() {
     await store
@@ -1840,6 +1858,10 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
           <Btn kind="quiet" onClick={() => setShowDocs(!showDocs)}>
             {showDocs ? '서류 접기' : '서류 보기'}
           </Btn>
+          <Btn kind="quiet" onClick={rebuild} disabled={a.send_state === 'relay'}>
+            최신 정보로 다시 만들기
+          </Btn>
+          {rebuilt && <span className="small ok-text">✓ 최신 프로필·문구로 다시 만들었습니다</span>}
         </div>
         <div className="row wrap">
           <label className="btn btn-plain file-btn">
@@ -1949,8 +1971,8 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
       ) : relayReady ? (
         <div className="stack-s">
           <div className="row wrap">
-            <Btn kind="primary" className="big" disabled={!canSend || !ready} onClick={relaySend}>
-              {ready ? `📨 ${store.prefs.sender_email}로 보내기` : 'PDF 준비 중…'}
+            <Btn kind="primary" className="big" disabled={!canSend || !ready || a.send_state === 'relay'} onClick={relaySend}>
+              {a.send_state === 'relay' ? '보내는 중…' : ready ? `📨 ${store.prefs.sender_email}로 보내기` : 'PDF 준비 중…'}
             </Btn>
             {blocks.length > 0 && <span className="small warn-text">✕ 항목을 먼저 해결해야 보낼 수 있습니다.</span>}
           </div>
@@ -1958,6 +1980,28 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
             누르면 새 창이 열리며 {store.prefs.sender_email} Gmail에서 이력서·자기소개서를 첨부해 보내고, 정민욱 Drive의 &quot;jobkit 지원서&quot; 폴더에 사본을 남깁니다. 지원 이력에도 바로 기록됩니다.
           </span>
           {relayMsg && <Notice level={relayMsg.level}>{relayMsg.text}</Notice>}
+          {a.send_state === 'relay' && pendingFor < 25000 && <Notice level="info">보내는 중입니다… 새로 열린 창에서 발송기가 메일을 보내고 있습니다. 끝나면 여기에 &quot;완료했습니다&quot;가 뜹니다.</Notice>}
+          {a.send_state === 'relay' && pendingFor >= 25000 && (
+            <Notice level="warn">
+              완료 신호가 오지 않았습니다. 새로 열린 창을 확인해 주세요.
+              <span className="row wrap" style={{ marginTop: 8 }}>
+                <Btn
+                  kind="primary"
+                  onClick={() =>
+                    store
+                      .patchApp(a.id, { status: '지원함', send_state: 'sent', sent_at: new Date().toISOString(), gmail_url: `https://mail.google.com/mail/?authuser=${encodeURIComponent(store.prefs.sender_email ?? '')}#sent` })
+                      .catch(() => {})
+                  }
+                >
+                  &quot;보냈습니다 ✓&quot;가 떴어요
+                </Btn>
+                <Btn onClick={() => store.patchApp(a.id, { send_state: null, relay_job: null }).catch(() => {})}>안 됐어요 — 다시 보내기</Btn>
+              </span>
+              <span className="small">
+                창에 &quot;doPost&quot;나 &quot;함수를 찾을 수 없음&quot;이 보이면 발송기 코드가 옛 버전입니다. 설정 → 원클릭 발송 연결에서 코드를 다시 붙여넣고 새 버전으로 배포하세요.
+              </span>
+            </Notice>
+          )}
         </div>
       ) : (
         <div className="stack-s">
@@ -2053,7 +2097,8 @@ function FinalCard({ a, store, fonts }: { a: AppRec; store: Store; fonts: Fonts 
 
 function FinalView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   const drafts = store.apps.filter((a) => a.status === '작성중');
-  const sent = store.apps.filter((a) => a.send_state === 'sent').slice(0, 5);
+  const sent = store.apps.filter((a) => a.send_state === 'sent' || (a.status !== '작성중' && a.sent_at)).slice(0, 15);
+  const [delId, setDelId] = useState<string | null>(null);
   return (
     <div className="final stack">
       <section className="card stack-s">
@@ -2083,12 +2128,11 @@ function FinalView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
         </section>
       )}
       {fonts && drafts.map((a) => <FinalCard key={a.id} a={a} store={store} fonts={fonts} />)}
-      {sent.some((a) => a.relay_job && a.sent_at && Date.now() - Date.parse(a.sent_at) < 5 * 60 * 1000) && (
-        <Notice level="ok">방금 보낸 지원서가 있습니다. 새로 열린 창에 &quot;보냈습니다 ✓&quot;가 떴는지 확인하세요. 아래 &quot;최근 보낸 지원&quot;에 기록됐습니다.</Notice>
-      )}
+
       {sent.length > 0 && (
         <section className="card stack-s">
-          <h2>최근 보낸 지원</h2>
+          <h2>보낸 지원</h2>
+          <p className="small muted">기록을 삭제하면 지원 이력에서 빠지고, 그 공고가 공고 찾기에 다시 나옵니다. 이미 보낸 메일은 취소되지 않습니다.</p>
           {sent.map((a) => (
             <div key={a.id} className="row wrap small">
               <Pill tone="green">발송</Pill>
@@ -2100,13 +2144,25 @@ function FinalView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
                   Gmail에서 보기
                 </a>
               )}
-              {a.relay_job && a.sent_at && Date.now() - Date.parse(a.sent_at) < 30 * 60 * 1000 && (
-                <button
-                  className="linklike"
-                  onClick={() => store.patchApp(a.id, { status: '작성중', send_state: null, sent_at: null, relay_job: null, gmail_url: null }).catch(() => {})}
-                >
-                  새 창에 &quot;보내지 못했습니다&quot;가 떴다면 되돌리기
-                </button>
+              {delId === a.id ? (
+                <>
+                  <Btn
+                    kind="danger"
+                    onClick={() => {
+                      void store.deleteApp(a.id).catch(() => {});
+                      setDelId(null);
+                    }}
+                  >
+                    삭제 확인
+                  </Btn>
+                  <Btn kind="quiet" onClick={() => setDelId(null)}>
+                    취소
+                  </Btn>
+                </>
+              ) : (
+                <Btn kind="quiet" className="del-btn" onClick={() => setDelId(a.id)} aria-label={`${a.site} 지원 기록 삭제`}>
+                  삭제
+                </Btn>
               )}
             </div>
           ))}
@@ -3033,6 +3089,33 @@ function App() {
   const store = useStore();
   const { fonts, error: fontError } = useFonts();
   const [view, setView] = useState<ViewId>(readHash());
+  const [toast, setToast] = useState<{ level: 'ok' | 'danger'; text: string } | null>(null);
+  // 발송기 창이 보내는 완료 신호
+  const appsRef = useRef(store);
+  appsRef.current = store;
+  useEffect(() => {
+    const on = (e: MessageEvent) => {
+      if (!isRelaySignal(e.data)) return;
+      const st = appsRef.current;
+      const app = st.apps.find((x) => x.relay_job === e.data.rid);
+      if (!app) return;
+      if (e.data.ok) {
+        if (app.send_state !== 'sent')
+          st.patchApp(app.id, {
+            status: '지원함',
+            send_state: 'sent',
+            sent_at: new Date().toISOString(),
+            gmail_url: `https://mail.google.com/mail/?authuser=${encodeURIComponent(st.prefs.sender_email ?? '')}#sent`,
+          }).catch(() => {});
+        setToast({ level: 'ok', text: `완료했습니다 ✓ ${app.site} 지원서를 ${app.selected_email ?? ''}(으)로 보냈습니다. 지원 이력에 기록했습니다.` });
+      } else {
+        st.patchApp(app.id, { send_state: null, relay_job: null }).catch(() => {});
+        setToast({ level: 'danger', text: `보내지 못했습니다 — ${e.data.msg.slice(0, 200)}` });
+      }
+    };
+    window.addEventListener('message', on);
+    return () => window.removeEventListener('message', on);
+  }, []);
   useEffect(() => {
     const on = () => setView(readHash());
     window.addEventListener('hashchange', on);
@@ -3067,6 +3150,14 @@ function App() {
         )}
         {store.mode === 'memory' && <Notice level="warn">이 화면에서는 저장소를 쓸 수 없어 입력 내용이 저장되지 않습니다. claude.ai에 로그인한 상태로 열어 주세요.</Notice>}
         {store.error && <Notice level="danger">{store.error}</Notice>}
+        {toast && (
+          <div className={cx('toast', `toast-${toast.level}`)} role="status">
+            <span>{toast.text}</span>
+            <button className="linklike" onClick={() => setToast(null)}>
+              닫기
+            </button>
+          </div>
+        )}
         {fontError && <Notice level="danger">{fontError}</Notice>}
         {view === 'apply' && <ApplyView store={store} fonts={fonts} />}
         {view === 'jobs' && <JobsView store={store} fonts={fonts} />}
