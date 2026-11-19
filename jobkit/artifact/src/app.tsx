@@ -887,6 +887,21 @@ function ApplyView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
 /** 매일 자동 수집 예약 작업. 공고 새로고침도 같은 작업을 바로 한 번 돌린다 */
 const REFRESH_TRIGGER_ID = 'trig_01DCvdbv5etrFLjjJWaaAapT';
 const DAILY_SCAN = { hour: 6, minute: 40 }; // 한국 시간
+/** 남은 새로고침 요청을 확인하는 매시간 작업 (한국 시간 시각들). 비어 있으면 아침 자동 스캔 때 처리 */
+const HOURLY_CHECK: { hours: number[]; minute: number } | null = null;
+
+/** 요청을 처리할 다음 시각 */
+function nextRequestPickup(now = new Date()): string {
+  const daily = nextDailyScan(now);
+  if (!HOURLY_CHECK) return daily;
+  const k = new Date(now.getTime() + 9 * 3600 * 1000);
+  for (let d = 0; d < 2; d++)
+    for (const h of HOURLY_CHECK.hours) {
+      const t = Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate() + d, h, HOURLY_CHECK.minute) - 9 * 3600 * 1000;
+      if (t > now.getTime()) return new Date(Math.min(t, Date.parse(daily))).toISOString();
+    }
+  return daily;
+}
 
 function fmtKst(iso: string) {
   const d = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
@@ -899,21 +914,22 @@ function nextDailyScan(now = new Date()) {
   return new Date(t > now.getTime() ? t : t + 86400000).toISOString();
 }
 
-/** 예약 작업을 지금 한 번 돌린다 (공고 하나 또는 전체) */
-async function fireScan(text: string): Promise<string | null> {
-  if (!REFRESH_TRIGGER_ID) return '아직 자동 수집이 연결되지 않았습니다.';
+/**
+ * 수집 작업을 지금 바로 한 번 돌려 본다. 페이지 주인 계정의 claude.ai 화면에서만 된다.
+ * 안 되면 false — 요청은 공유 기록에 남아 있으니 다음 확인 때 처리된다.
+ */
+async function fireScan(text: string): Promise<boolean> {
+  if (!REFRESH_TRIGGER_ID) return false;
   try {
     const mcp = await (window as any).claude?.use?.('mcp');
-    if (!mcp) return '이 화면에서는 바로 새로고침을 시작할 수 없습니다(claude.ai 에서 페이지 주인 계정으로 열면 됩니다). 매일 아침 자동 스캔 때 갱신됩니다.';
+    if (!mcp) return false;
     await mcp.callTool('Claude Code Remote', 'fire_trigger', { trigger_id: REFRESH_TRIGGER_ID, text });
-    return null;
-  } catch (e) {
-    const code = (e as { code?: string })?.code;
-    return code === 'not_granted' || code === 'server_not_connected'
-      ? '새로고침을 시작할 권한이 없습니다. 매일 아침 자동 스캔 때 갱신됩니다.'
-      : '지금은 새로고침을 시작하지 못했습니다. 잠시 뒤 다시 누르거나, 아침 자동 스캔을 기다려 주세요.';
+    return true;
+  } catch {
+    return false;
   }
 }
+const queuedText = () => `새로고침을 요청해 두었습니다. ${fmtKst(nextRequestPickup())}에 반영됩니다. (누가 눌러도 요청은 함께 보입니다)`;
 
 /** 보내기 시험용 가짜 공고 (회사: 정욱) */
 const TEST_ROLES = [
@@ -1036,16 +1052,17 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
   const today = todaySeoul();
   const scannedAt = it.scanned_at || store.jobs[it.source]?.updated_at || '';
   const reqAt = store.scanRequests[it.id];
-  const refreshing = !!reqAt && (!store.scanStatus || store.scanStatus.last_scan_at < reqAt) && Date.now() - Date.parse(reqAt) < 30 * 60000;
+  const refreshing = !!reqAt && (!store.scanStatus || store.scanStatus.last_scan_at < reqAt) && Date.now() - Date.parse(reqAt) < 26 * 3600000;
   async function refreshOne() {
     setRefMsg(null);
     const at = new Date().toISOString();
-    await store.saveScanRequest(it.id, at).catch(() => {});
-    const e = await fireScan(`공고 새로고침 요청: source=${it.source} job=${it.id}`);
-    if (e) {
-      await store.saveScanRequest(it.id, null).catch(() => {});
-      return setRefMsg(e);
+    try {
+      await store.saveScanRequest(it.id, at);
+    } catch {
+      return setRefMsg('요청을 남기지 못했습니다. 잠시 뒤 다시 눌러 주세요.');
     }
+    const now = await fireScan(`공고 새로고침 요청: source=${it.source} job=${it.id}`);
+    if (!now) setRefMsg(queuedText());
   }
   // 공고에 없던 이메일을 직접 알아내 넣었으면 공고 글 끝에 붙여서 읽는다
   const extraEmail = store.jobEmails[it.id] ?? '';
@@ -1203,11 +1220,11 @@ function JobCard({ it, also, why, verdict, min, km, store, fonts, onDrafted }: {
         </a>
         {it.source !== 'manual' && (
           <Btn kind="quiet" onClick={refreshOne} disabled={refreshing} title="이 공고가 아직 있는지, 내용이 바뀌었는지 사이트에서 다시 확인합니다">
-            {refreshing ? '↻ 새로고침 중… (3~10분)' : '↻ 새로고침'}
+            {refreshing ? (Date.now() - Date.parse(reqAt!) < 15 * 60000 ? '↻ 새로고침 요청됨…' : `↻ ${fmtKst(nextRequestPickup())} 반영 예정`) : '↻ 새로고침'}
           </Btn>
         )}
       </div>
-      {refMsg && <Notice level="warn">{refMsg}</Notice>}
+      {refMsg && <Notice level="info">{refMsg}</Notice>}
     </article>
   );
 }
@@ -1495,13 +1512,13 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   async function runNow() {
     setRefresh(null);
     const at = new Date().toISOString();
-    await store.saveScanRequest('__all__', at).catch(() => {});
-    const err = await fireScan('전체 새로 찾기 (수동 요청)');
-    if (err) {
-      await store.saveScanRequest('__all__', null).catch(() => {});
-      return setRefresh({ level: 'warn', text: err });
+    try {
+      await store.saveScanRequest('__all__', at);
+    } catch {
+      return setRefresh({ level: 'danger', text: '요청을 남기지 못했습니다. 잠시 뒤 다시 눌러 주세요.' });
     }
-    setRefresh({ level: 'ok', text: '전체 새로 찾기를 시작했습니다. 5~10분 뒤 이 목록이 저절로 바뀝니다.' });
+    const now = await fireScan('전체 새로 찾기 (수동 요청)');
+    setRefresh({ level: 'ok', text: now ? '전체 새로 찾기를 시작했습니다. 5~10분 뒤 이 목록이 저절로 바뀝니다.' : queuedText() });
   }
 
   const testJobs = (store.jobs.manual?.items ?? []).filter((x) => x.id.startsWith('manual-test'));
@@ -1524,7 +1541,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
   }
   const ss = store.scanStatus;
   const lastScan = ss?.last_full_scan_at ?? ss?.last_scan_at ?? lastUpdate;
-  const allPending = store.scanRequests.__all__ && (!ss || ss.last_scan_at < store.scanRequests.__all__) && Date.now() - Date.parse(store.scanRequests.__all__) < 30 * 60000;
+  const allPending = store.scanRequests.__all__ && (!ss || ss.last_scan_at < store.scanRequests.__all__) && Date.now() - Date.parse(store.scanRequests.__all__) < 26 * 3600000;
 
   return (
     <div className="jobs-layout">
@@ -1557,7 +1574,7 @@ function JobsView({ store, fonts }: { store: Store; fonts: Fonts | null }) {
             </span>
             {REFRESH_TRIGGER_ID && (
               <Btn kind="quiet" onClick={runNow} disabled={!!allPending}>
-                {allPending ? '전체 새로 찾는 중…' : '↻ 지금 전체 새로 찾기'}
+                {allPending ? '전체 새로 찾기 요청됨…' : '↻ 지금 전체 새로 찾기'}
               </Btn>
             )}
           </div>
